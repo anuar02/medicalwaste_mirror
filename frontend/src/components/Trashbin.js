@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {AlertCircle, Clock, MapPin, ThermometerSun, Weight} from 'lucide-react';
+import GoogleMap from "./GoogleMap";
 
 const BinVisualization = ({ fullness }) => (
     <div className="relative w-48 h-64 mx-auto">
@@ -60,6 +61,7 @@ const TrashBin = () => {
         try {
             const response = await fetch('https://narutouzumaki.kz/api/waste-bins/MED-001');
             const data = await response.json();
+            data.fullness = Math.round( data.fullness )
             setBinData(data);
         } catch (error) {
             console.error('Error fetching bin data:', error);
@@ -70,7 +72,10 @@ const TrashBin = () => {
         try {
             const response = await fetch('https://narutouzumaki.kz/api/waste-bins/MED-001/history');
             const data = await response.json();
+            console.log(data)
+            data.fullness = Math.round( data.fullness )
             setHistoryData(data);
+
         } catch (error) {
             console.error('Error fetching history data:', error);
         }
@@ -169,6 +174,7 @@ const TrashBin = () => {
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
+                        <GoogleMap latitude={binData.latitude} longitude={binData.longitude}/>
                     </div>
 
                     <div className="space-y-6">
