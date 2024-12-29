@@ -74,7 +74,7 @@ const TrashBin = () => {
             const data = await response.json();
             console.log(data)
             data.fullness = Math.round( data.fullness )
-            setHistoryData(data);
+            setHistoryData(data.reverse());
 
         } catch (error) {
             console.error('Error fetching history data:', error);
