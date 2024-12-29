@@ -27,9 +27,9 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 // Schemas
 const wasteBinSchema = new mongoose.Schema({
-    binId: { type: String, default: 'МЕД-001' },
+    binId: { type: String, default: 'MED-001' },
     department: { type: String, default: 'Хирургическое Отделение' },
-    wasteType: { type: String, default: 'Острые Медицинские Отходы' },
+    wasteType: { type: String, default: 'Острые MEDицинские Отходы' },
     fullness: { type: Number, default: 0 },
     distance: { type: Number, default: 0 },
     weight: { type: Number, default: 0 },
@@ -77,7 +77,7 @@ const generateMockHistory = () => {
         baseFullness = Math.max(0, Math.min(100, baseFullness));
 
         history.push({
-            binId: 'МЕД-001',
+            binId: 'MED-001',
             time: moment(now).subtract(i, 'hours').format('HH:mm'),
             fullness: Math.round(baseFullness),
             timestamp: moment(now).subtract(i, 'hours').toDate()
@@ -89,11 +89,11 @@ const generateMockHistory = () => {
 // Initialize mock data with timeout
 const initializeMockData = async () => {
     try {
-        const existingBin = await WasteBin.findOne({ binId: 'МЕД-001' }).maxTimeMS(5000);
+        const existingBin = await WasteBin.findOne({ binId: 'MED-001' }).maxTimeMS(5000);
         if (!existingBin) {
             const mockData = generateMockData();
             await WasteBin.create({
-                binId: 'МЕД-001',
+                binId: 'MED-001',
                 ...mockData
             });
 
@@ -112,7 +112,7 @@ setInterval(async () => {
     try {
         const mockData = generateMockData();
         await WasteBin.findOneAndUpdate(
-            { binId: 'МЕД-001' },
+            { binId: 'MED-001' },
             {
                 ...mockData,
                 lastUpdate: new Date()
@@ -123,7 +123,7 @@ setInterval(async () => {
         );
 
         await History.create({
-            binId: 'МЕД-001',
+            binId: 'MED-001',
             time: moment().format('HH:mm'),
             fullness: mockData.fullness,
             timestamp: new Date()
@@ -173,37 +173,110 @@ app.get('/api/waste-bins/:binId/history', async (req, res) => {
     }
 });
 
+app.get('/api/waste-bins', async (req, res) => {
+    try {
+        const bins = await WasteBin.find({}).maxTimeMS(8000);
+        const formattedBins = bins.map(bin => ({
+            ...bin._doc,
+            lastCollection: moment(bin.lastCollection).format('DD.MM.YYYY HH:mm'),
+            estimatedFillTime: moment(bin.lastCollection).add(2, 'days').format('DD.MM.YYYY HH:mm')
+        }));
+        res.json(formattedBins);
+    } catch (error) {
+        console.error('Error fetching bins:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Create new container
+app.post('/api/waste-bins', async (req, res) => {
+    try {
+        const {
+            binId,
+            department,
+            wasteType,
+            latitude,
+            longitude
+        } = req.body;
+
+        const existingBin = await WasteBin.findOne({ binId }).maxTimeMS(5000);
+        if (existingBin) {
+            return res.status(400).json({ message: 'Container with this ID already exists' });
+        }
+
+        const newBin = await WasteBin.create({
+            binId,
+            department,
+            wasteType,
+            latitude: latitude || 43.2364,
+            longitude: longitude || 76.9457,
+            fullness: 0,
+            distance: 0,
+            weight: 0,
+            temperature: 22.7,
+            lastCollection: new Date(),
+            lastUpdate: new Date()
+        });
+
+        res.status(201).json(newBin);
+    } catch (error) {
+        console.error('Error creating bin:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Delete container
+app.delete('/api/waste-bins/:binId', async (req, res) => {
+    try {
+        const bin = await WasteBin.findOneAndDelete({ binId: req.params.binId }).maxTimeMS(5000);
+        if (!bin) {
+            return res.status(404).json({ message: 'Container not found' });
+        }
+        await History.deleteMany({ binId: req.params.binId }).maxTimeMS(5000);
+        res.json({ message: 'Container deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting bin:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Update waste level from ESP32
 app.post('/api/waste-level', async (req, res) => {
     try {
-        const { distance, latitude, longitude } = req.body;
+        const { binId, distance, latitude, longitude } = req.body;
 
-        const mockData = generateMockData();
-        const data = {
-            distance: distance || mockData.distance,
-            latitude: latitude || mockData.latitude,
-            longitude: longitude || mockData.longitude,
-            fullness: distance ? Math.max(0, Math.min(100, (1 - distance/100) * 100)) : mockData.fullness,
-            weight: distance ? ((1 - distance/100) * 5).toFixed(1) : mockData.weight,
-            temperature: mockData.temperature
-        };
+        if (!binId) {
+            return res.status(400).json({ message: 'Bin ID is required' });
+        }
+
+        // Calculate fullness (inverted from distance)
+        // Assuming max distance is 100cm
+        const fullness = Math.max(0, Math.min(100, (1 - distance/100) * 100));
+
+        // Calculate approximate weight based on fullness
+        const weight = (fullness/100 * 5).toFixed(1); // max weight 5kg
 
         const bin = await WasteBin.findOneAndUpdate(
-            { binId: 'МЕД-001' },
+            { binId },  // Use the provided binId
             {
-                ...data,
+                distance,
+                fullness,
+                weight,
+                latitude: latitude || 43.2364,
+                longitude: longitude || 76.9457,
                 lastUpdate: new Date()
             },
             {
-                upsert: true,
+                upsert: true,  // Create if doesn't exist
                 new: true,
                 maxTimeMS: 8000
             }
         );
 
         await History.create({
-            binId: 'МЕД-001',
+            binId,
             time: moment().format('HH:mm'),
-            fullness: data.fullness,
+            fullness,
             timestamp: new Date()
         });
 

@@ -58,7 +58,7 @@ const TrashBin = () => {
 
     const fetchBinData = async () => {
         try {
-            const response = await fetch('http://16.16.117.114:5000/api/waste-bins/МЕД-001');
+            const response = await fetch('https://16.16.117.114:5000/api/waste-bins/MED-001');
             const data = await response.json();
             setBinData(data);
         } catch (error) {
@@ -68,7 +68,7 @@ const TrashBin = () => {
 
     const fetchHistoryData = async () => {
         try {
-            const response = await fetch('http://16.16.117.114:5000/api/waste-bins/МЕД-001/history');
+            const response = await fetch('https://16.16.117.114:5000/api/waste-bins/MED-001/history');
             const data = await response.json();
             setHistoryData(data);
         } catch (error) {
