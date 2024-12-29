@@ -37,7 +37,7 @@ const ContainersList = () => {
     const fetchContainers = async () => {
         setLoading(true);
         try {
-            const response = await fetch('http://16.16.117.114:5000/api/waste-bins');
+            const response = await fetch('https://16.16.117.114:5000/api/waste-bins');
             const data = await response.json();
             setContainers(data);
             setLastUpdate(new Date());
@@ -60,7 +60,7 @@ const ContainersList = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch('http://16.16.117.114:5000/api/waste-bins', {
+            const response = await fetch('https://16.16.117.114:5000/api/waste-bins', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -90,7 +90,7 @@ const ContainersList = () => {
     const handleDelete = async (binId) => {
         if (window.confirm('Are you sure you want to delete this container?')) {
             try {
-                const response = await fetch(`http://16.16.117.114:5000/api/waste-bins/${binId}`, {
+                const response = await fetch(`https://16.16.117.114:5000/api/waste-bins/${binId}`, {
                     method: 'DELETE',
                 });
 
