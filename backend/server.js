@@ -2,52 +2,46 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const moment = require('moment');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
 const app = express();
+
+// CORS Configuration
 app.use(cors({
-    origin: ['https://narutouzumaki.kz', 'http://localhost:3000'], // Add your frontend domains
+    origin: ['https://narutouzumaki.kz', 'http://localhost:3000'], // Update with your frontend domains
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true // If using cookies or Authorization headers
+    credentials: true
 }));
+
+// JSON Parsing
 app.use(express.json());
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 15000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 15000,
-    writeConcern: {
-        w: 1,
-        j: false
+const connectDB = async () => {
+    try {
+        await mongoose.connect(process.env.MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 15000,
+            socketTimeoutMS: 45000,
+            connectTimeoutMS: 15000,
+            writeConcern: { w: 1, j: false },
+        });
+        console.log('Connected to MongoDB successfully');
+    } catch (error) {
+        console.error('MongoDB connection error:', error);
+        process.exit(1); // Exit process if DB connection fails
     }
-}).then(() => {
-    console.log('Connected to MongoDB successfully');
-}).catch((error) => {
-    console.error('MongoDB connection error:', error);
-});
+};
+connectDB();
 
-// Schemas
+// Schemas and Models
 const userSchema = new mongoose.Schema({
-    username: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    password: {
-        type: String,
-        required: true
-    },
-    role: {
-        type: String,
-        enum: ['admin', 'user'],
-        default: 'user'
-    }
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    role: { type: String, enum: ['admin', 'user'], default: 'user' }
 });
 
 const wasteBinSchema = new mongoose.Schema({
@@ -71,41 +65,32 @@ const historySchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now }
 });
 
+const User = mongoose.model('User', userSchema);
 const WasteBin = mongoose.model('WasteBin', wasteBinSchema);
 const History = mongoose.model('History', historySchema);
 
-const User = mongoose.model('User', userSchema);
-
-// Auth middleware
+// Middleware: Auth
 const auth = async (req, res, next) => {
     try {
         const token = req.header('Authorization')?.replace('Bearer ', '');
+        if (!token) throw new Error();
 
-        if (!token) {
-            throw new Error();
-        }
-
-        const decoded = jwt.verify(token, 'medical_waste_monitoring_system_2025_secure_key_8x4f9v2p');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret_key');
         const user = await User.findById(decoded.userId);
-
-        if (!user) {
-            throw new Error();
-        }
+        if (!user) throw new Error();
 
         req.user = user;
         next();
     } catch (error) {
-        res.status(401).json({ message: 'Please authenticate' });
+        res.status(401).json({ message: 'Authentication required' });
     }
 };
 
-// Admin middleware
+// Middleware: Admin Auth
 const adminAuth = async (req, res, next) => {
     try {
         await auth(req, res, () => {
-            if (req.user.role !== 'admin') {
-                throw new Error();
-            }
+            if (req.user.role !== 'admin') throw new Error();
             next();
         });
     } catch (error) {
@@ -113,41 +98,26 @@ const adminAuth = async (req, res, next) => {
     }
 };
 
-// Auth routes
+// Routes: Auth
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password, role } = req.body;
 
-        // Check if user already exists
         const existingUser = await User.findOne({ username });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Username already exists' });
-        }
+        if (existingUser) return res.status(400).json({ message: 'Username already exists' });
 
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create new user
-        const user = new User({
-            username,
-            password: hashedPassword,
-            role: role || 'user'
-        });
-
+        const user = new User({ username, password: hashedPassword, role: role || 'user' });
         await user.save();
 
-        // Generate token
         const token = jwt.sign(
             { userId: user._id },
-            'medical_waste_monitoring_system_2025_secure_key_8x4f9v2p',
+            process.env.JWT_SECRET || 'default_secret_key',
             { expiresIn: '24h' }
         );
 
-        res.status(201).json({
-            token,
-            username: user.username,
-            role: user.role
-        });
+        res.status(201).json({ token, username: user.username, role: user.role });
     } catch (error) {
         console.error('Registration error:', error);
         res.status(500).json({ message: error.message });
@@ -158,35 +128,36 @@ app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // Find user
         const user = await User.findOne({ username });
-        if (!user) {
-            return res.status(401).json({ message: 'Invalid credentials' });
-        }
+        if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
-        // Check password
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ message: 'Invalid credentials' });
-        }
+        if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
 
-        // Generate token
         const token = jwt.sign(
             { userId: user._id },
-            'medical_waste_monitoring_system_2025_secure_key_8x4f9v2p',
+            process.env.JWT_SECRET || 'default_secret_key',
             { expiresIn: '24h' }
         );
 
-        res.json({
-            token,
-            username: user.username,
-            role: user.role
-        });
+        res.json({ token, username: user.username, role: user.role });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ message: error.message });
     }
 });
 
-// Protect routes - add this before your waste bin routes
+// Protected Routes
 app.use('/api/waste-bins', auth);
+app.get('/api/waste-bins', async (req, res) => {
+    try {
+        const bins = await WasteBin.find();
+        res.json(bins);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching waste bins' });
+    }
+});
+
+// Start Server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
