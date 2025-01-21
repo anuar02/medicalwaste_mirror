@@ -7,7 +7,12 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: ['https://narutouzumaki.kz', 'http://localhost:3000'], // Add your frontend domains
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true // If using cookies or Authorization headers
+}));
 app.use(express.json());
 
 // MongoDB Connection
