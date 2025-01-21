@@ -1,8 +1,33 @@
-// After existing schemas (wasteBinSchema and historySchema)
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const mongoose = require('mongoose');
+const moment = require('moment');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-// User Schema
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 15000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 15000,
+    writeConcern: {
+        w: 1,
+        j: false
+    }
+}).then(() => {
+    console.log('Connected to MongoDB successfully');
+}).catch((error) => {
+    console.error('MongoDB connection error:', error);
+});
+
+// Schemas
 const userSchema = new mongoose.Schema({
     username: {
         type: String,
@@ -19,6 +44,30 @@ const userSchema = new mongoose.Schema({
         default: 'user'
     }
 });
+
+const wasteBinSchema = new mongoose.Schema({
+    binId: { type: String, default: 'MED-001' },
+    department: { type: String, default: 'Хирургическое Отделение' },
+    wasteType: { type: String, default: 'Острые MEDицинские Отходы' },
+    fullness: { type: Number, default: 0 },
+    distance: { type: Number, default: 0 },
+    weight: { type: Number, default: 0 },
+    temperature: { type: Number, default: 22.7 },
+    latitude: { type: Number, default: 43.2364 },
+    longitude: { type: Number, default: 76.9457 },
+    lastCollection: { type: Date, default: Date.now },
+    lastUpdate: { type: Date, default: Date.now }
+});
+
+const historySchema = new mongoose.Schema({
+    binId: String,
+    time: String,
+    fullness: Number,
+    timestamp: { type: Date, default: Date.now }
+});
+
+const WasteBin = mongoose.model('WasteBin', wasteBinSchema);
+const History = mongoose.model('History', historySchema);
 
 const User = mongoose.model('User', userSchema);
 
