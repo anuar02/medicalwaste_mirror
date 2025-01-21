@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, RefreshCcw, WifiOff, Wifi } from 'lucide-react';
+import React, {useState, useEffect} from 'react';
+import {Plus, Trash2, RefreshCcw, WifiOff, Wifi} from 'lucide-react';
 
-const Alert = ({ children, variant = 'default' }) => {
+const Alert = ({children, variant = 'default'}) => {
     const baseStyles = "p-4 rounded-lg mb-4";
     const variants = {
         default: "bg-slate-100 text-slate-800",
@@ -15,7 +15,7 @@ const Alert = ({ children, variant = 'default' }) => {
     );
 };
 
-const AlertDescription = ({ children }) => {
+const AlertDescription = ({children}) => {
     return <div className="text-sm">{children}</div>;
 };
 
@@ -37,7 +37,21 @@ const ContainersList = () => {
     const fetchContainers = async () => {
         setLoading(true);
         try {
-            const response = await fetch('https://narutouzumaki.kz/api/waste-bins');
+            // Retrieve the token
+            const token = localStorage.getItem('token'); // Replace with your token storage method
+
+            const response = await fetch('https://narutouzumaki.kz/api/waste-bins', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`, // Include the token
+                    'Content-Type': 'application/json' // Optional, but good practice
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch containers');
+            }
+
             const data = await response.json();
             setContainers(data);
             setLastUpdate(new Date());
@@ -60,12 +74,16 @@ const ContainersList = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            // Retrieve the token
+            const token = localStorage.getItem('token'); // Replace with your token storage method
+
             const response = await fetch('https://narutouzumaki.kz/api/waste-bins', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`, // Include the token
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(formData),
+                body: JSON.stringify(formData)
             });
 
             if (!response.ok) {
@@ -90,8 +108,15 @@ const ContainersList = () => {
     const handleDelete = async (binId) => {
         if (window.confirm('Are you sure you want to delete this container?')) {
             try {
+                // Retrieve the token
+                const token = localStorage.getItem('token'); // Replace with your token storage method
+
                 const response = await fetch(`https://narutouzumaki.kz/api/waste-bins/${binId}`, {
                     method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`, // Include the token
+                        'Content-Type': 'application/json'
+                    }
                 });
 
                 if (!response.ok) {
@@ -105,6 +130,7 @@ const ContainersList = () => {
             }
         }
     };
+
 
     // Check if container has been updated in the last minute
     const isContainerOnline = (lastUpdate) => {
@@ -130,14 +156,14 @@ const ContainersList = () => {
                             onClick={() => fetchContainers()}
                             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
                         >
-                            <RefreshCcw className="w-4 h-4" />
+                            <RefreshCcw className="w-4 h-4"/>
                             Обновить
                         </button>
                         <button
                             onClick={() => setShowForm(true)}
                             className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
                         >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="w-4 h-4"/>
                             Добавить Контейнер
                         </button>
                     </div>
@@ -155,7 +181,8 @@ const ContainersList = () => {
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">ID Контейнера</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">ID
+                                        Контейнера</label>
                                     <input
                                         type="text"
                                         value={formData.binId}
@@ -247,9 +274,9 @@ const ContainersList = () => {
                                             <div className="flex items-center gap-2">
                                                 <h3 className="text-lg font-semibold text-slate-800">{container.binId}</h3>
                                                 {isOnline ? (
-                                                    <Wifi className="w-4 h-4 text-teal-500" />
+                                                    <Wifi className="w-4 h-4 text-teal-500"/>
                                                 ) : (
-                                                    <WifiOff className="w-4 h-4 text-slate-400" />
+                                                    <WifiOff className="w-4 h-4 text-slate-400"/>
                                                 )}
                                             </div>
                                             <p className="text-sm text-slate-500">{container.department}</p>
@@ -258,7 +285,7 @@ const ContainersList = () => {
                                             onClick={() => handleDelete(container.binId)}
                                             className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="w-4 h-4"/>
                                         </button>
                                     </div>
 
@@ -306,7 +333,7 @@ const ContainersList = () => {
                                                         container.fullness > 60 ? 'bg-amber-500' :
                                                             'bg-teal-500'
                                                 }`}
-                                                style={{ width: `${Math.min(100, Math.max(0, container.fullness))}%` }}
+                                                style={{width: `${Math.min(100, Math.max(0, container.fullness))}%`}}
                                             />
                                         </div>
                                     </div>

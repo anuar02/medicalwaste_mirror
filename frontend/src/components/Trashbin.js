@@ -59,27 +59,60 @@ const TrashBin = () => {
 
     const fetchBinData = async () => {
         try {
-            const response = await fetch('https://narutouzumaki.kz/api/waste-bins/MED-001');
+            // Retrieve the token from storage
+            const token = localStorage.getItem('token'); // Replace with your token storage method
+
+            const response = await fetch('https://narutouzumaki.kz/api/waste-bins/MED-001', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`, // Include the token
+                    'Content-Type': 'application/json' // Optional, but good practice
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const data = await response.json();
-            data.fullness = Math.round( data.fullness )
+            data.fullness = Math.round(data.fullness);
             setBinData(data);
+
         } catch (error) {
             console.error('Error fetching bin data:', error);
         }
     };
 
+
     const fetchHistoryData = async () => {
         try {
-            const response = await fetch('https://narutouzumaki.kz/api/waste-bins/MED-001/history');
+            // Retrieve the token from storage
+            const token = localStorage.getItem('token'); // Replace with your token storage method
+
+            const response = await fetch('https://narutouzumaki.kz/api/waste-bins/MED-001/history', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`, // Include the token
+                    'Content-Type': 'application/json' // Optional, but good practice
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const data = await response.json();
-            console.log(data)
-            data.fullness = Math.round( data.fullness )
+            console.log(data);
+
+            // Process and reverse the data
+            data.fullness = Math.round(data.fullness);
             setHistoryData(data.reverse());
 
         } catch (error) {
             console.error('Error fetching history data:', error);
         }
     };
+
 
     useEffect(() => {
         // Initial fetch

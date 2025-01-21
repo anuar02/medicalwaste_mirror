@@ -1,6 +1,6 @@
-// Auth.js
 import React, { useState, createContext, useContext, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
+import axiosInstance from "../axiosInstance";
 
 const AuthContext = createContext(null);
 
@@ -18,61 +18,34 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (username, password) => {
         try {
-            const response = await fetch('https://narutouzumaki.kz/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password }),
-            });
+            const response = await axiosInstance.post('/auth/login', { username, password });
+            const { token, username: userName, role } = response.data;
 
-            if (!response.ok) {
-                throw new Error('Login failed');
-            }
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify({ username: userName, role }));
+            setUser({ username: userName, role });
 
-            const data = await response.json();
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify({
-                username: data.username,
-                role: data.role
-            }));
-            setUser({
-                username: data.username,
-                role: data.role
-            });
             navigate('/');
             return true;
         } catch (error) {
-            console.error('Login error:', error);
+            console.error('Login error:', error.response?.data?.message || error.message);
             return false;
         }
     };
 
     const register = async (username, password) => {
         try {
-            const response = await fetch('https://narutouzumaki.kz/api/auth/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password, role: 'user' }),
-            });
+            const response = await axiosInstance.post('/auth/register', { username, password });
+            const { token, username: userName, role } = response.data;
 
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.message || 'Registration failed');
-            }
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify({ username: userName, role }));
+            setUser({ username: userName, role });
 
-            const data = await response.json();
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify({
-                username: data.username,
-                role: data.role
-            }));
-            setUser({
-                username: data.username,
-                role: data.role
-            });
             navigate('/');
             return { success: true };
         } catch (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: error.response?.data?.message || 'Registration failed' };
         }
     };
 

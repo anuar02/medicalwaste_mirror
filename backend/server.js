@@ -9,7 +9,7 @@ const app = express();
 
 // CORS Configuration
 app.use(cors({
-    origin: ['https://narutouzumaki.kz', 'http://localhost:3000'], // Update with your frontend domains
+    origin: ['https://narutouzumaki.kz', 'http://localhost:3001'], // Update with your frontend domains
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
