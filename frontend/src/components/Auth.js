@@ -6,43 +6,18 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
     useEffect(() => {
         const token = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
+
         if (token && storedUser) {
+            axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
             setUser(JSON.parse(storedUser));
         }
-    }, []);
-
-    const checkAuthStatus = async () => {
-        const token = localStorage.getItem('token');
-        const storedUser = localStorage.getItem('user');
-
-        if (token && storedUser) {
-            try {
-                // Verify token is still valid
-                const response = await axiosInstance.get('/auth/verify');
-                if (response.data.valid) {
-                    setUser(JSON.parse(storedUser));
-                } else {
-                    // Token invalid, clear storage
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
-                    setUser(null);
-                }
-            } catch (error) {
-                console.error('Auth verification failed:', error);
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                setUser(null);
-            }
-        }
-    };
-
-    useEffect(() => {
-        checkAuthStatus();
+        setLoading(false);
     }, []);
 
     const login = async (username, password) => {
@@ -52,13 +27,13 @@ export const AuthProvider = ({ children }) => {
 
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify({ username: userName, role }));
+            axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
             setUser({ username: userName, role });
 
             navigate('/');
-            return true;
+            return { success: true };
         } catch (error) {
-            console.error('Login error:', error.response?.data?.message || error.message);
-            return false;
+            return { success: false, error: error.response?.data?.message || 'Login failed' };
         }
     };
 
@@ -69,6 +44,7 @@ export const AuthProvider = ({ children }) => {
 
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify({ username: userName, role }));
+            axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
             setUser({ username: userName, role });
 
             navigate('/');
@@ -81,9 +57,14 @@ export const AuthProvider = ({ children }) => {
     const logout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        delete axiosInstance.defaults.headers.common['Authorization'];
         setUser(null);
         navigate('/login');
     };
+
+    if (loading) {
+        return <div>Loading...</div>;
+    }
 
     return (
         <AuthContext.Provider value={{ user, login, logout, register }}>
@@ -92,6 +73,7 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
+export const useAuth = () => useContext(AuthContext);
 export const Login = () => {
     const [isLogin, setIsLogin] = useState(true);
     const [username, setUsername] = useState('');
@@ -211,5 +193,3 @@ export const ProtectedRoute = ({ children }) => {
 
     return children;
 };
-
-export const useAuth = () => useContext(AuthContext);
