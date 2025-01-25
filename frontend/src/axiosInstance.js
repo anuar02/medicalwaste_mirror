@@ -1,23 +1,22 @@
-import axios from 'axios';
-
-// Create an Axios instance
-const apiClient = axios.create({
-    baseURL: 'https://narutouzumaki.kz/api', // Base API URL
+// In axiosInstance.js
+const axiosInstance = axios.create({
+    baseURL: 'https://narutouzumaki.kz/api',
     headers: {
         'Content-Type': 'application/json'
     }
 });
 
-// Add a request interceptor
-apiClient.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token'); // Retrieve the token from storage
-    if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`; // Add the token to the header
+axiosInstance.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
     }
-    return config;
-}, (error) => {
-    return Promise.reject(error);
-});
+);
 
-// Export the API client
-export default apiClient;
+export default axiosInstance;

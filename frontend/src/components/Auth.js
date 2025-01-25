@@ -16,6 +16,35 @@ export const AuthProvider = ({ children }) => {
         }
     }, []);
 
+    const checkAuthStatus = async () => {
+        const token = localStorage.getItem('token');
+        const storedUser = localStorage.getItem('user');
+
+        if (token && storedUser) {
+            try {
+                // Verify token is still valid
+                const response = await axiosInstance.get('/auth/verify');
+                if (response.data.valid) {
+                    setUser(JSON.parse(storedUser));
+                } else {
+                    // Token invalid, clear storage
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    setUser(null);
+                }
+            } catch (error) {
+                console.error('Auth verification failed:', error);
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                setUser(null);
+            }
+        }
+    };
+
+    useEffect(() => {
+        checkAuthStatus();
+    }, []);
+
     const login = async (username, password) => {
         try {
             const response = await axiosInstance.post('/auth/login', { username, password });
