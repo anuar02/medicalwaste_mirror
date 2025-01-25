@@ -102,7 +102,6 @@ const TrashBin = () => {
             }
 
             const data = await response.json();
-            console.log(data);
 
             // Process and reverse the data
             data.fullness = Math.round(data.fullness);

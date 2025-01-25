@@ -158,13 +158,34 @@ app.get('/api/waste-bins', async (req, res) => {
     }
 });
 
-app.post('/api/waste-bins', auth, async (req, res) => {
+app.post('/api/waste-level', async (req, res) => {
     try {
-        const newBin = new WasteBin(req.body);
-        await newBin.save();
-        res.status(201).json(newBin);
+        const { binId, distance } = req.body;
+        const fullness = Math.max(0, Math.min(100, (1 - distance/100) * 100));
+
+        await WasteBin.findOneAndUpdate(
+            { binId },
+            {
+                $set: {
+                    distance,
+                    fullness,
+                    latitude: req.body.latitude,
+                    longitude: req.body.longitude,
+                    lastUpdate: new Date()
+                }
+            },
+            { upsert: true }
+        );
+
+        await History.create({
+            binId,
+            fullness,
+            time: new Date().toLocaleTimeString()
+        });
+
+        res.status(200).json({ success: true });
     } catch (error) {
-        res.status(500).json({message: 'Error creating waste bin'});
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
