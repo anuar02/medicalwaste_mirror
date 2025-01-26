@@ -47,7 +47,7 @@ const SystemStatus = ({ lastUpdate }) => {
         const lastUpdateTime = new Date(lastUpdate);
         const now = new Date();
         // Consider system offline if no updates in last 2 minutes
-        return (now - lastUpdateTime) < 120000;
+        return (now - lastUpdateTime) < 650000;
     };
 
     const online = isOnline();
