@@ -41,6 +41,43 @@ const BinVisualization = ({ fullness }) => (
     </div>
 );
 
+const SystemStatus = ({ lastUpdate }) => {
+    const isOnline = () => {
+        if (!lastUpdate) return false;
+        const lastUpdateTime = new Date(lastUpdate);
+        const now = new Date();
+        // Consider system offline if no updates in last 2 minutes
+        return (now - lastUpdateTime) < 120000;
+    };
+
+    const online = isOnline();
+
+    return (
+        <div className={`rounded-xl shadow-lg p-6 text-white ${
+            online
+                ? 'bg-gradient-to-br from-teal-600 to-teal-500'
+                : 'bg-gradient-to-br from-slate-600 to-slate-500'
+        }`}>
+            <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Статус Системы</h2>
+                <div className="flex items-center space-x-3">
+                    <div className={`w-3 h-3 rounded-full ${
+                        online
+                            ? 'bg-white animate-pulse'
+                            : 'bg-red-400'
+                    }`}></div>
+                    <span className="text-sm">
+                        {online ? 'Онлайн' : 'Офлайн'}
+                    </span>
+                </div>
+            </div>
+            <div className="mt-2 text-xs opacity-75">
+                {lastUpdate && `Последнее обновление: ${new Date(lastUpdate).toLocaleTimeString()}`}
+            </div>
+        </div>
+    );
+};
+
 const TrashBin = () => {
     const [binData, setBinData] = useState({
         fullness: 0,
@@ -206,15 +243,8 @@ const TrashBin = () => {
                     </div>
 
                     <div className="space-y-6">
-                        <div className="bg-gradient-to-br from-teal-600 to-teal-500 rounded-xl shadow-lg p-6 text-white">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold">Статус Системы</h2>
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-                                    <span className="text-sm">Онлайн</span>
-                                </div>
-                            </div>
-                        </div>
+                        <SystemStatus lastUpdate={binData.lastUpdate} />
+
 
                         <div className="bg-gradient-to-br from-slate-800 to-slate-700 rounded-xl shadow-lg p-6 text-white">
                             <div className="flex items-center justify-between mb-4">
