@@ -18,6 +18,11 @@ app.use(cors({
 // JSON Parsing
 app.use(express.json());
 
+app.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+});
+
 // MongoDB Connection
 const connectDB = async () => {
     try {
@@ -201,26 +206,26 @@ app.get('/api/auth/verify', auth, async (req, res) => {
     }
 });
 
-app.get('/api/waste-bins/:id', auth, async (req, res) => {
+app.get('/api/waste-bins/:id', async (req, res) => {
     try {
-        const bin = await WasteBin.findOne({binId: req.params.id});
-        if (!bin) {
-            return res.status(404).json({message: 'Bin not found'});
-        }
+        const bin = await WasteBin.findOne({ binId: req.params.id });
+        if (!bin) return res.status(404).json({ message: 'Bin not found' });
+        res.set('Cache-Control', 'no-store');
         res.json(bin);
     } catch (error) {
-        res.status(500).json({message: 'Error fetching waste bin'});
+        res.status(500).json({ message: 'Error fetching waste bin' });
     }
 });
 
-app.get('/api/waste-bins/:id/history', auth, async (req, res) => {
+app.get('/api/waste-bins/:id/history', async (req, res) => {
     try {
-        const history = await History.find({binId: req.params.id})
-            .sort({timestamp: -1})
-            .limit(24); // Last 24 records
+        const history = await History.find({ binId: req.params.id })
+            .sort({ timestamp: -1 })
+            .limit(24);
+        res.set('Cache-Control', 'no-store');
         res.json(history);
     } catch (error) {
-        res.status(500).json({message: 'Error fetching history'});
+        res.status(500).json({ message: 'Error fetching history' });
     }
 });
 

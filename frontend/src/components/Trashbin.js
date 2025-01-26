@@ -59,25 +59,21 @@ const TrashBin = () => {
 
     const fetchBinData = async () => {
         try {
-            // Retrieve the token from storage
-            const token = localStorage.getItem('token'); // Replace with your token storage method
-
+            const token = localStorage.getItem('token');
             const response = await fetch('https://narutouzumaki.kz/api/waste-bins/MED-001', {
-                method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${token}`, // Include the token
-                    'Content-Type': 'application/json' // Optional, but good practice
-                }
+                    'Authorization': `Bearer ${token}`,
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                },
+                // Force timestamp to prevent caching
+                cache: 'no-store'
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             data.fullness = Math.round(data.fullness);
             setBinData(data);
-
         } catch (error) {
             console.error('Error fetching bin data:', error);
         }
