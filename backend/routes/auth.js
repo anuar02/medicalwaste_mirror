@@ -1,67 +1,83 @@
+// routes/auth.js
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { body } = require('express-validator');
+const {
+    register,
+    login,
+    logout,
+    refreshToken,
+    forgotPassword,
+    resetPassword,
+    changePassword,
+    verifyToken
+} = require('../controllers/authController');
+const { auth } = require('../middleware/auth');
+const { validateRequest } = require('../middleware/validators');
 
-router.post('/register', async (req, res) => {
-    try {
-        const { username, password, role } = req.body;
+// Input validation for registration
+const registerValidation = [
+    body('username')
+        .trim()
+        .isLength({ min: 3, max: 30 })
+        .withMessage('Username must be between 3 and 30 characters')
+        .matches(/^[a-zA-Z0-9_-]+$/)
+        .withMessage('Username can only contain letters, numbers, underscores and hyphens'),
+    body('email')
+        .trim()
+        .isEmail()
+        .withMessage('Please provide a valid email')
+        .normalizeEmail(),
+    body('password')
+        .isLength({ min: 8 })
+        .withMessage('Password must be at least 8 characters long')
+        .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+        .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number and one special character'),
+    body('passwordConfirm')
+        .custom((value, { req }) => {
+            if (value !== req.body.password) {
+                throw new Error('Password confirmation does not match password');
+            }
+            return true;
+        })
+];
 
-        // Check if user already exists
-        const existingUser = await User.findOne({ username });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Username already exists' });
-        }
+// Input validation for login
+const loginValidation = [
+    body('email')
+        .trim()
+        .isEmail()
+        .withMessage('Please provide a valid email')
+        .normalizeEmail(),
+    body('password')
+        .notEmpty()
+        .withMessage('Password is required')
+];
 
-        // Create new user
-        const user = new User({
-            username,
-            password,
-            role: role || 'user'
-        });
+// Input validation for password reset
+const resetPasswordValidation = [
+    body('password')
+        .isLength({ min: 8 })
+        .withMessage('Password must be at least 8 characters long')
+        .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+        .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number and one special character'),
+    body('passwordConfirm')
+        .custom((value, { req }) => {
+            if (value !== req.body.password) {
+                throw new Error('Password confirmation does not match password');
+            }
+            return true;
+        })
+];
 
-        await user.save();
+// Routes
+router.post('/register', registerValidation, validateRequest, register);
+router.post('/login', loginValidation, validateRequest, login);
+router.post('/logout', auth, logout);
+router.post('/refresh-token', refreshToken);
+router.post('/forgot-password', body('email').isEmail(), validateRequest, forgotPassword);
+router.post('/reset-password/:token', resetPasswordValidation, validateRequest, resetPassword);
+router.post('/change-password', auth, resetPasswordValidation, validateRequest, changePassword);
+router.get('/verify', auth, verifyToken);
 
-        // Generate token
-        const token = jwt.sign(
-            { userId: user._id },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        res.status(201).json({ token, username: user.username, role: user.role });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-router.post('/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
-        // Find user
-        const user = await User.findOne({ username });
-        if (!user) {
-            return res.status(401).json({ message: 'Invalid credentials' });
-        }
-
-        // Check password
-        const isMatch = await user.comparePassword(password);
-        if (!isMatch) {
-            return res.status(401).json({ message: 'Invalid credentials' });
-        }
-
-        // Generate token
-        const token = jwt.sign(
-            { userId: user._id },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        res.json({ token, username: user.username, role: user.role });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-module.exports = { router, auth, adminAuth };
+module.exports = router;
