@@ -1,23 +1,78 @@
+// server.js - Main application file
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
+const rateLimit = require('express-rate-limit');
+const compression = require('compression');
+const morgan = require('morgan');
+const fs = require('fs');
+const path = require('path');
+
+// Import routes
+const authRoutes = require('./routes/auth');
+const wasteBinRoutes = require('./routes/wasteBins');
+const historyRoutes = require('./routes/history');
+const userRoutes = require('./routes/users');
+
+// Import middlewares
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
+const { requestLogger } = require('./middleware/loggers');
 
 const app = express();
 
+// Create a write stream for access logs
+const accessLogStream = fs.createWriteStream(
+    path.join(__dirname, 'logs', 'access.log'),
+    { flags: 'a' }
+);
+
+// Security Headers
+app.use(helmet());
+
+// Request logging
+app.use(morgan('combined', { stream: accessLogStream }));
+app.use(requestLogger);
+
 // CORS Configuration
 app.use(cors({
-    origin: ['https://narutouzumaki.kz', 'http://localhost:3001'], // Update with your frontend domains
+    origin: ['https://narutouzumaki.kz', 'http://localhost:3001'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    credentials: true,
+    maxAge: 86400 // 24 hours
 }));
 
-// JSON Parsing
-app.use(express.json());
+// Rate limiting
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
+// Apply rate limiter to all routes
+app.use(apiLimiter);
+
+// More strict rate limiting for authentication endpoints
+const authLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 10, // limit each IP to 10 login attempts per hour
+    message: 'Too many login attempts, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+// Body parsing
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Compression
+app.use(compression());
+
+// Cache control
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();
@@ -32,7 +87,7 @@ const connectDB = async () => {
             serverSelectionTimeoutMS: 15000,
             socketTimeoutMS: 45000,
             connectTimeoutMS: 15000,
-            writeConcern: {w: 1, j: false},
+            writeConcern: { w: 1, j: true },
         });
         console.log('Connected to MongoDB successfully');
     } catch (error) {
@@ -40,207 +95,53 @@ const connectDB = async () => {
         process.exit(1); // Exit process if DB connection fails
     }
 };
+
+// Handle MongoDB connection events
+mongoose.connection.on('error', (err) => {
+    console.error('MongoDB connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log('MongoDB disconnected, attempting to reconnect...');
+    setTimeout(connectDB, 5000);
+});
+
+// Connect to MongoDB
 connectDB();
 
-// Schemas and Models
-const userSchema = new mongoose.Schema({
-    username: {type: String, required: true, unique: true},
-    password: {type: String, required: true},
-    role: {type: String, enum: ['admin', 'user'], default: 'user'}
+// Mount routes
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/waste-bins', wasteBinRoutes);
+app.use('/api/history', historyRoutes);
+app.use('/api/users', userRoutes);
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
 });
 
-const wasteBinSchema = new mongoose.Schema({
-    binId: {type: String, default: 'MED-001'},
-    department: {type: String, default: 'Хирургическое Отделение'},
-    wasteType: {type: String, default: 'Острые MEDицинские Отходы'},
-    fullness: {type: Number, default: 0},
-    distance: {type: Number, default: 0},
-    weight: {type: Number, default: 0},
-    temperature: {type: Number, default: 22.7},
-    latitude: {type: Number, default: 43.2364},
-    longitude: {type: Number, default: 76.9457},
-    lastCollection: {type: Date, default: Date.now},
-    lastUpdate: {type: Date, default: Date.now}
-});
+// Error handling - must be after routes
+app.use(notFoundHandler);
+app.use(errorHandler);
 
-const historySchema = new mongoose.Schema({
-    binId: String,
-    time: String,
-    fullness: Number,
-    timestamp: {type: Date, default: Date.now}
-});
-
-const User = mongoose.model('User', userSchema);
-const WasteBin = mongoose.model('WasteBin', wasteBinSchema);
-const History = mongoose.model('History', historySchema);
-
-// Middleware: Auth
-const auth = async (req, res, next) => {
-    try {
-        const token = req.header('Authorization')?.replace('Bearer ', '');
-        if (!token) throw new Error();
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret_key');
-        const user = await User.findById(decoded.userId);
-        if (!user) throw new Error();
-
-        req.user = user;
-        next();
-    } catch (error) {
-        res.status(401).json({message: 'Authentication required'});
-    }
-};
-
-// Middleware: Admin Auth
-const adminAuth = async (req, res, next) => {
-    try {
-        await auth(req, res, () => {
-            if (req.user.role !== 'admin') throw new Error();
-            next();
-        });
-    } catch (error) {
-        res.status(403).json({message: 'Admin access required'});
-    }
-};
-
-// Routes: Auth
-app.post('/api/auth/register', async (req, res) => {
-    try {
-        const {username, password, role} = req.body;
-
-        const existingUser = await User.findOne({username});
-        if (existingUser) return res.status(400).json({message: 'Username already exists'});
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const user = new User({username, password: hashedPassword, role: role || 'user'});
-        await user.save();
-
-        const token = jwt.sign(
-            {userId: user._id},
-            process.env.JWT_SECRET || 'default_secret_key',
-            {expiresIn: '24h'}
-        );
-
-        res.status(201).json({token, username: user.username, role: user.role});
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({message: error.message});
-    }
-});
-
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const {username, password} = req.body;
-
-        const user = await User.findOne({username});
-        if (!user) return res.status(401).json({message: 'Invalid credentials'});
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(401).json({message: 'Invalid credentials'});
-
-        const token = jwt.sign(
-            {userId: user._id},
-            process.env.JWT_SECRET || 'default_secret_key',
-            {expiresIn: '24h'}
-        );
-
-        res.json({token, username: user.username, role: user.role});
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({message: error.message});
-    }
-});
-
-// Protected Routes
-app.use('/api/waste-bins', auth);
-app.get('/api/waste-bins', async (req, res) => {
-    try {
-        const bins = await WasteBin.find();
-        res.json(bins);
-    } catch (error) {
-        res.status(500).json({message: 'Error fetching waste bins'});
-    }
-});
-
-app.post('/api/waste-level', async (req, res) => {
-    try {
-        const { binId, distance } = req.body;
-        const fullness = Math.max(0, Math.min(100, (1 - distance/100) * 100));
-
-        await WasteBin.findOneAndUpdate(
-            { binId },
-            {
-                $set: {
-                    distance,
-                    fullness,
-                    latitude: req.body.latitude,
-                    longitude: req.body.longitude,
-                    lastUpdate: new Date()
-                }
-            },
-            { upsert: true }
-        );
-
-        await History.create({
-            binId,
-            fullness,
-            time: new Date().toLocaleTimeString()
-        });
-
-        res.status(200).json({ success: true });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.get('/api/auth/verify', auth, async (req, res) => {
-    try {
-        const user = await User.findById(req.user._id);
-        if (!user) {
-            return res.json({valid: false});
-        }
-        res.json({valid: true});
-    } catch (error) {
-        res.status(500).json({valid: false});
-    }
-});
-
-app.get('/api/waste-bins/:id', async (req, res) => {
-    try {
-        const bin = await WasteBin.findOne({ binId: req.params.id });
-        if (!bin) return res.status(404).json({ message: 'Bin not found' });
-        res.set('Cache-Control', 'no-store');
-        res.json(bin);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching waste bin' });
-    }
-});
-
-app.get('/api/waste-bins/:id/history', async (req, res) => {
-    try {
-        const history = await History.find({ binId: req.params.id })
-            .sort({ timestamp: -1 })
-            .limit(24);
-        res.set('Cache-Control', 'no-store');
-        res.json(history);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching history' });
-    }
-});
-
-app.delete('/api/waste-bins/:id', auth, async (req, res) => {
-    try {
-        const result = await WasteBin.deleteOne({binId: req.params.id});
-        if (result.deletedCount === 0) {
-            return res.status(404).json({message: 'Bin not found'});
-        }
-        res.status(204).send();
-    } catch (error) {
-        res.status(500).json({message: 'Error deleting waste bin'});
-    }
-});
-
-// Start Server
+// Server startup
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM signal received. Closing server...');
+    server.close(() => {
+        console.log('Server closed.');
+        mongoose.connection.close(false, () => {
+            console.log('MongoDB connection closed.');
+            process.exit(0);
+        });
+    });
+});
+
+module.exports = { app, server };

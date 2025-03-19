@@ -1,83 +1,155 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { LayoutDashboard, List, LogOut, User } from 'lucide-react';
-import TrashBin from "./components/Trashbin";
-import ContainersList from "./components/ContainerList";
-import { AuthProvider, Login, ProtectedRoute, useAuth } from './components/Auth';
+import React, { Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { QueryClient, QueryClientProvider } from 'react-query';
+import { ReactQueryDevtools } from 'react-query/devtools';
 
-const Navigation = () => {
-    const { user, logout } = useAuth();
+// Context Providers
+import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
-    if (!user) return null;
+// Layouts
+import DashboardLayout from './layouts/DashboardLayout';
+import AuthLayout from './layouts/AuthLayout';
 
-    return (
-        <nav className="bg-white shadow-sm border-b border-slate-200">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex justify-between h-16">
-                    <div className="flex space-x-8">
-                        <Link
-                            to="/"
-                            className="inline-flex items-center px-1 pt-1 text-sm font-medium text-slate-700 hover:text-slate-900"
-                        >
-                            <LayoutDashboard className="w-4 h-4 mr-2" />
-                            Панель Мониторинга
-                        </Link>
-                        <Link
-                            to="/containers"
-                            className="inline-flex items-center px-1 pt-1 text-sm font-medium text-slate-700 hover:text-slate-900"
-                        >
-                            <List className="w-4 h-4 mr-2" />
-                            Контейнеры
-                        </Link>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                        <div className="flex items-center text-sm text-slate-600">
-                            <User className="w-4 h-4 mr-2" />
-                            {user.username}
-                        </div>
-                        <button
-                            onClick={logout}
-                            className="inline-flex items-center px-3 py-1 text-sm font-medium text-red-600 hover:text-red-700"
-                        >
-                            <LogOut className="w-4 h-4 mr-2" />
-                            Выйти
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </nav>
-    );
+// Pages - Using lazy loading for improved performance
+const Login = React.lazy(() => import('./pages/auth/Login'));
+const Register = React.lazy(() => import('./pages/auth/Register'));
+const ForgotPassword = React.lazy(() => import('./pages/auth/ForgotPassword'));
+const ResetPassword = React.lazy(() => import('./pages/auth/ResetPassword'));
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const BinDetails = React.lazy(() => import('./pages/BinDetails'));
+const BinList = React.lazy(() => import('./pages/BinList'));
+const BinMap = React.lazy(() => import('./pages/BinMap'));
+const Reports = React.lazy(() => import('./pages/Reports'));
+const Settings = React.lazy(() => import('./pages/Settings'));
+const Profile = React.lazy(() => import('./pages/Profile'));
+const NotFound = React.lazy(() => import('./pages/NotFound'));
+
+// Loading component for suspense fallback
+const LoadingScreen = () => (
+    <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center space-y-4">
+            <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-teal-500"></div>
+            <p className="text-lg font-medium text-slate-700">Загрузка...</p>
+        </div>
+    </div>
+);
+
+// Protected Route wrapper
+const ProtectedRoute = ({ children }) => {
+    // Get auth status from context
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+        return <Navigate to="/login" replace />;
+    }
+
+    return children;
 };
 
-function App() {
+// Configure React Query
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            refetchOnWindowFocus: false,
+            retry: 1,
+            staleTime: 30000,
+        },
+    },
+});
+
+const App = () => {
     return (
-        <Router>
-            <AuthProvider>
-                <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-                    <Navigation />
-                    <Routes>
-                        <Route path="/login" element={<Login />} />
-                        <Route
-                            path="/"
-                            element={
-                                <ProtectedRoute>
-                                    <TrashBin />
-                                </ProtectedRoute>
-                            }
-                        />
-                        <Route
-                            path="/containers"
-                            element={
-                                <ProtectedRoute>
-                                    <ContainersList />
-                                </ProtectedRoute>
-                            }
-                        />
-                    </Routes>
-                </div>
-            </AuthProvider>
-        </Router>
+        <QueryClientProvider client={queryClient}>
+            <ThemeProvider>
+                <BrowserRouter>
+                    <AuthProvider> {/* Now inside BrowserRouter */}
+                        <Suspense fallback={<LoadingScreen />}>
+                            <Routes>
+                                {/* Auth Routes */}
+                                <Route element={<AuthLayout />}>
+                                    <Route path="/login" element={<Login />} />
+                                    <Route path="/register" element={<Register />} />
+                                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                                    <Route path="/reset-password/:token" element={<ResetPassword />} />
+                                </Route>
+
+                                {/* Dashboard Routes - Protected */}
+                                <Route element={<DashboardLayout />}>
+                                    <Route
+                                        path="/"
+                                        element={
+                                            <ProtectedRoute>
+                                                <Dashboard />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/bins"
+                                        element={
+                                            <ProtectedRoute>
+                                                <BinList />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/bins/:binId"
+                                        element={
+                                            <ProtectedRoute>
+                                                <BinDetails />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/map"
+                                        element={
+                                            <ProtectedRoute>
+                                                <BinMap />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/reports"
+                                        element={
+                                            <ProtectedRoute>
+                                                <Reports />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/settings"
+                                        element={
+                                            <ProtectedRoute>
+                                                <Settings />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/profile"
+                                        element={
+                                            <ProtectedRoute>
+                                                <Profile />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                </Route>
+
+                                {/* 404 Not Found */}
+                                <Route path="*" element={<NotFound />} />
+                            </Routes>
+                        </Suspense>
+
+                        {/* Toast notifications */}
+                        <Toaster position="top-right" />
+                    </AuthProvider>
+                </BrowserRouter>
+            </ThemeProvider>
+
+            {/* React Query Devtools - only in development */}
+            {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
+        </QueryClientProvider>
     );
-}
+};
 
 export default App;
