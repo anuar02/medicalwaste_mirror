@@ -127,6 +127,10 @@ router.get('/statistics', getStatistics);
 router.get('/:id', param('id').trim().notEmpty(), validateRequest, getBin);
 router.get('/:id/history', param('id').trim().notEmpty(), validateRequest, getBinHistory);
 
+// Register
+router.post('/register-device', registerDevice);
+router.get('/check-device', checkDeviceRegistration);
+
 // Routes for supervisors and admins only
 router.use(restrictTo('admin', 'supervisor'));
 router.post('/', createBinValidation, validateRequest, createBin);
@@ -136,8 +140,5 @@ router.patch('/:id', param('id').trim().notEmpty(), updateBinValidation, validat
 router.use(restrictTo('admin'));
 router.delete('/:id', param('id').trim().notEmpty(), validateRequest, deleteBin);
 
-// Register
-router.post('/register-device', registerDevice);
-router.get('/check-device', checkDeviceRegistration);
 
 module.exports = router;

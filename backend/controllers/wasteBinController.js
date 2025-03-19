@@ -463,5 +463,6 @@ module.exports = {
     updateBinLevel,
     getNearbyBins,
     getOverfilledBins,
-    getStatistics
+    getStatistics,
+    checkDeviceRegistration
 };
