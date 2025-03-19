@@ -10,6 +10,7 @@ const {
     getBinHistory,
     updateBinLevel,
     registerDevice,
+    checkDeviceRegistration,
     getNearbyBins,
     getOverfilledBins,
     getStatistics
