@@ -385,45 +385,44 @@ const getStatistics = asyncHandler(async (req, res) => {
     });
 });
 
-const registerDevice = asyncHandler(async (req, res, next) => {
-    const { binId, department, wasteType, latitude, longitude } = req.body;
+const registerDevice = asyncHandler(async (req, res) => {
+    const { macAddress, tempBinId, deviceType, latitude, longitude } = req.body;
 
-    // Validate input
-    if (!binId) {
-        return next(new AppError('Bin ID is required', 400));
-    }
-
-    // Check if bin with ID already exists
-    const existingBin = await WasteBin.findOne({ binId });
-    if (existingBin) {
-        return res.status(200).json({
-            status: 'success',
-            message: 'Device already registered',
-            data: { binId }
+    if (!macAddress) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'MAC address is required'
         });
     }
 
-    // Create location object
-    const location = {
-        coordinates: [longitude || 0, latitude || 0]
-    };
+    // Check if device already exists
+    let device = await Device.findOne({ macAddress });
 
-    // Create bin
-    const bin = await WasteBin.create({
-        binId,
-        department: department || 'Auto Registered',
-        wasteType: wasteType || 'Острые Медицинские Отходы',
-        capacity: 50,
-        alertThreshold: 80,
-        location,
-        lastCollection: new Date(),
-        lastUpdate: new Date()
+    if (device) {
+        return res.status(200).json({
+            status: 'success',
+            message: 'Device already registered',
+            data: { deviceId: device._id }
+        });
+    }
+
+    // Create a new device record (not a waste bin yet)
+    device = await Device.create({
+        macAddress,
+        tempBinId,
+        deviceType,
+        status: 'pending',
+        lastSeen: new Date(),
+        location: latitude && longitude ? {
+            type: 'Point',
+            coordinates: [longitude, latitude]
+        } : undefined
     });
 
     res.status(201).json({
         status: 'success',
         message: 'Device registered successfully',
-        data: { binId }
+        data: { deviceId: device._id }
     });
 });
 
