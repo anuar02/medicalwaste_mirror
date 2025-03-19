@@ -17,7 +17,7 @@ const AuthLayout = () => {
             <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12">
                 {/* Logo and branding */}
                 <div className="mb-8 text-center">
-                    <Logo size={48} className="mx-auto" />
+                    <Logo size={159} className="mx-auto" />
                     <h1 className="mt-4 text-2xl font-bold text-slate-800">
                         Система Мониторинга Медицинских Отходов
                     </h1>
