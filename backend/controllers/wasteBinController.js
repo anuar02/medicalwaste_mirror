@@ -385,6 +385,32 @@ const getStatistics = asyncHandler(async (req, res) => {
     });
 });
 
+const checkDeviceRegistration = asyncHandler(async (req, res) => {
+    const { binId, mac } = req.query;
+
+    if (!binId && !mac) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Either binId or mac address is required'
+        });
+    }
+
+    // Build the query - check by both binId and mac if available
+    const query = {};
+    if (binId) query.binId = binId;
+    if (mac) query['deviceInfo.macAddress'] = mac;
+
+    // Check if bin exists
+    const bin = await WasteBin.findOne(query);
+
+    res.status(200).json({
+        status: 'success',
+        exists: !!bin,
+        data: bin ? { binId: bin.binId } : null
+    });
+});
+
+
 const registerDevice = asyncHandler(async (req, res) => {
     const { macAddress, tempBinId, deviceType, latitude, longitude } = req.body;
 

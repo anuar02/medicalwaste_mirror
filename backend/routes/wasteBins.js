@@ -137,5 +137,6 @@ router.delete('/:id', param('id').trim().notEmpty(), validateRequest, deleteBin)
 
 // Register
 router.post('/register-device', registerDevice);
+router.get('/check-device', checkDeviceRegistration);
 
 module.exports = router;
