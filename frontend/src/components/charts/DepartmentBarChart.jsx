@@ -13,31 +13,43 @@ import {
     Cell,
 } from 'recharts';
 
-// Custom tooltip component
+// Custom tooltip component with extra safety checks
 const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-        return (
-            <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
-                <p className="mb-1 text-sm font-semibold text-slate-700">{label}</p>
-                <div className="space-y-1">
-                    <p className="text-sm text-teal-600">
-                        <span className="inline-block h-2 w-2 rounded-full bg-teal-500 mr-1"></span>
-                        Заполненность: <span className="font-semibold">{payload[0].value.toFixed(1)}%</span>
-                    </p>
-                    <p className="text-sm text-blue-600">
-                        <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-1"></span>
-                        Контейнеров: <span className="font-semibold">{payload[1].value}</span>
-                    </p>
-                    <p className="text-sm text-purple-600">
-                        <span className="inline-block h-2 w-2 rounded-full bg-purple-500 mr-1"></span>
-                        Общий вес: <span className="font-semibold">{payload[2].value.toFixed(1)} кг</span>
-                    </p>
-                </div>
-            </div>
-        );
+    if (!active || !payload || !payload.length) {
+        return null;
     }
 
-    return null;
+    return (
+        <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+            <p className="mb-1 text-sm font-semibold text-slate-700">{label || 'Unknown'}</p>
+            <div className="space-y-1">
+                {payload[0] && (
+                    <p className="text-sm text-teal-600">
+                        <span className="inline-block h-2 w-2 rounded-full bg-teal-500 mr-1"></span>
+                        Заполненность: <span className="font-semibold">
+                            {payload[0].value !== undefined ? `${payload[0].value.toFixed(1)}%` : 'N/A'}
+                        </span>
+                    </p>
+                )}
+                {payload[1] && (
+                    <p className="text-sm text-blue-600">
+                        <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-1"></span>
+                        Контейнеров: <span className="font-semibold">
+                            {payload[1].value !== undefined ? payload[1].value : 'N/A'}
+                        </span>
+                    </p>
+                )}
+                {payload[2] && (
+                    <p className="text-sm text-purple-600">
+                        <span className="inline-block h-2 w-2 rounded-full bg-purple-500 mr-1"></span>
+                        Общий вес: <span className="font-semibold">
+                            {payload[2].value !== undefined ? `${payload[2].value.toFixed(1)} кг` : 'N/A'}
+                        </span>
+                    </p>
+                )}
+            </div>
+        </div>
+    );
 };
 
 CustomTooltip.propTypes = {
@@ -47,13 +59,34 @@ CustomTooltip.propTypes = {
 };
 
 const DepartmentBarChart = ({ data }) => {
-    // Format department names (shorten if needed)
+    // Format department names and ensure data integrity
     const chartData = useMemo(() => {
-        return data.map(item => ({
-            ...item,
-            shortDepartment: shortenDepartmentName(item.department),
-        }));
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            return [];
+        }
+
+        return data.map(item => {
+            if (!item) return null;
+
+            return {
+                department: item.department || 'Unknown',
+                shortDepartment: shortenDepartmentName(item.department || 'Unknown'),
+                // Provide defaults for potentially missing data
+                binCount: item.binCount || 0,
+                avgFullness: item.avgFullness || 0,
+                totalWeight: item.totalWeight || 0
+            };
+        }).filter(Boolean); // Remove null items
     }, [data]);
+
+    // Don't render chart if no data
+    if (chartData.length === 0) {
+        return (
+            <div className="flex h-full w-full items-center justify-center text-slate-400">
+                Нет данных для отображения
+            </div>
+        );
+    }
 
     return (
         <ResponsiveContainer width="100%" height="100%">
@@ -124,7 +157,7 @@ const DepartmentBarChart = ({ data }) => {
                     {chartData.map((entry, index) => (
                         <Cell
                             key={`cell-${index}`}
-                            fill={getColorByFullness(entry.avgFullness)}
+                            fill={getColorByFullness(entry.avgFullness || 0)}
                         />
                     ))}
                 </Bar>
@@ -151,16 +184,18 @@ const DepartmentBarChart = ({ data }) => {
 DepartmentBarChart.propTypes = {
     data: PropTypes.arrayOf(
         PropTypes.shape({
-            department: PropTypes.string.isRequired,
-            binCount: PropTypes.number.isRequired,
-            avgFullness: PropTypes.number.isRequired,
-            totalWeight: PropTypes.number.isRequired,
+            department: PropTypes.string,
+            binCount: PropTypes.number,
+            avgFullness: PropTypes.number,
+            totalWeight: PropTypes.number,
         })
-    ).isRequired,
+    ),
 };
 
 // Helper functions
 const shortenDepartmentName = (name) => {
+    if (!name) return 'Unknown';
+
     const shortNames = {
         'Хирургическое Отделение': 'Хирургия',
         'Терапевтическое Отделение': 'Терапия',

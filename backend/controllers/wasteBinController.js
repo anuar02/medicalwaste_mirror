@@ -312,8 +312,9 @@ const getOverfilledBins = asyncHandler(async (req, res) => {
 /**
  * Get waste collection statistics
  */
+// In wasteBinController.js - getStatistics function
 const getStatistics = asyncHandler(async (req, res) => {
-    // Get aggregate stats
+    // Get aggregate stats with defaults if empty
     const stats = await WasteBin.aggregate([
         {
             $group: {
@@ -325,7 +326,22 @@ const getStatistics = asyncHandler(async (req, res) => {
                 totalWeight: { $sum: '$weight' }
             }
         }
-    ]);
+    ]) || [{
+        totalBins: 0,
+        avgFullness: 0,
+        maxFullness: 0,
+        minFullness: 0,
+        totalWeight: 0
+    }];
+
+    // Default stats object if none found
+    const overview = stats.length > 0 ? stats[0] : {
+        totalBins: 0,
+        avgFullness: 0,
+        maxFullness: 0,
+        minFullness: 0,
+        totalWeight: 0
+    };
 
     // Get stats by department
     const departmentStats = await WasteBin.aggregate([
@@ -338,7 +354,7 @@ const getStatistics = asyncHandler(async (req, res) => {
             }
         },
         { $sort: { binCount: -1 } }
-    ]);
+    ]) || [];
 
     // Get stats by waste type
     const wasteTypeStats = await WasteBin.aggregate([
@@ -351,17 +367,17 @@ const getStatistics = asyncHandler(async (req, res) => {
             }
         },
         { $sort: { binCount: -1 } }
-    ]);
+    ]) || [];
 
     // Count bins that need attention
     const alertCount = await WasteBin.countDocuments({
         $expr: { $gte: ['$fullness', '$alertThreshold'] }
-    });
+    }) || 0;
 
     res.status(200).json({
         status: 'success',
         data: {
-            overview: stats[0] || {},
+            overview,
             alertCount,
             departmentStats,
             wasteTypeStats

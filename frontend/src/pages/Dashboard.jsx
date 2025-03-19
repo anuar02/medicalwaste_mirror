@@ -151,14 +151,20 @@ const Dashboard = () => {
                     {/* Waste Level Chart */}
                     <DashboardCard title="Заполненность по Отделениям" icon={<BarChart3 />}>
                         <div className="h-80">
-                            <DepartmentBarChart
-                                data={departmentStats.map(stat => ({
-                                    department: stat._id,
-                                    binCount: stat.binCount,
-                                    avgFullness: stat.avgFullness,
-                                    totalWeight: stat.totalWeight
-                                }))}
-                            />
+                            {statsData && statsData.data && statsData.data.data && statsData.data.data.departmentStats ? (
+                                <DepartmentBarChart
+                                    data={statsData.data.data.departmentStats.map(stat => ({
+                                        department: stat._id || 'Unknown',
+                                        binCount: stat.binCount || 0,
+                                        avgFullness: stat.avgFullness || 0,
+                                        totalWeight: stat.totalWeight || 0
+                                    }))}
+                                />
+                            ) : (
+                                <div className="flex h-full items-center justify-center text-slate-400">
+                                    Загрузка данных...
+                                </div>
+                            )}
                         </div>
                     </DashboardCard>
 
