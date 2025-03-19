@@ -9,6 +9,7 @@ const {
     deleteBin,
     getBinHistory,
     updateBinLevel,
+    registerDevice,
     getNearbyBins,
     getOverfilledBins,
     getStatistics

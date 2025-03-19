@@ -417,6 +417,7 @@ module.exports = {
     createBin,
     updateBin,
     deleteBin,
+    registerDevice,
     getBinHistory,
     updateBinLevel,
     getNearbyBins,
