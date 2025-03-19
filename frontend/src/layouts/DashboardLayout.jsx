@@ -13,7 +13,7 @@ import {
     Bell,
     LogOut,
     ChevronDown,
-    Wifi
+    Wifi, Cpu
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useQuery } from 'react-query';
@@ -51,6 +51,12 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
             icon: <BarChart3 className="h-5 w-5" />,
             label: 'Отчеты',
             path: '/reports',
+        },
+        {
+            icon: <Cpu className="h-5 w-5" />,
+            label: 'Устройства',
+            path: '/admin/devices',
+            adminOnly: true,
         },
         {
             icon: <Settings className="h-5 w-5" />,

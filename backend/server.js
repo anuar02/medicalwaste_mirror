@@ -15,6 +15,7 @@ const authRoutes = require('./routes/auth');
 const wasteBinRoutes = require('./routes/wasteBins');
 const historyRoutes = require('./routes/history');
 const userRoutes = require('./routes/users');
+const deviceRoutes = require('./routes/devices');
 
 // Import middlewares
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
@@ -114,6 +115,7 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/waste-bins', wasteBinRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/devices', deviceRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
