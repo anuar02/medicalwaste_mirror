@@ -13,6 +13,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import AuthLayout from './layouts/AuthLayout';
 import UserManagement from "./pages/admin/UserManagement";
 import BinManagement from "./pages/admin/BinManagement";
+import DeviceManagement from "./pages/admin/DeviceManagement";
 
 // Pages - Using lazy loading for improved performance
 const Login = React.lazy(() => import('./pages/auth/Login'));
@@ -124,6 +125,14 @@ const App = () => {
                                         element={
                                             <ProtectedRoute>
                                                 <Settings />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/admin/devices"
+                                        element={
+                                            <ProtectedRoute>
+                                                <DeviceManagement />
                                             </ProtectedRoute>
                                         }
                                     />
