@@ -117,8 +117,8 @@ const wasteLevelValidation = [
 router.post('/waste-level', wasteLevelValidation, validateRequest, updateBinLevel);
 
 // Register
-router.post('/register-device', registerDevice);
 router.get('/check-device', checkDeviceRegistration);
+router.post('/register-device', registerDevice);
 
 // Protected routes (requires authentication)
 router.use(auth);

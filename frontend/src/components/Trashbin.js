@@ -85,7 +85,9 @@ const TrashBin = () => {
         latitude: 0,
         longitude: 0,
         temperature: 0,
+        batteryLevel: 0,
         lastCollection: "",
+        lastUpdated: 0,
         estimatedFillTime: "",
         weight: 0,
         wasteType: "Острые Медицинские Отходы",
@@ -185,7 +187,14 @@ const TrashBin = () => {
                                     </div>
                                     <div className="text-3xl font-bold text-teal-600">{binData.fullness}%</div>
                                 </div>
-                                <BinVisualization fullness={binData.fullness} />
+                                <BinVisualization
+                                    fullness={binData.fullness}
+                                    temperature={binData.temperature}
+                                    batteryLevel={binData.batteryLevel}
+                                    lastUpdated={binData.lastUpdated}
+                                    size="medium"
+                                    showLabels={true}
+                                />
                             </div>
 
                             <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-200 hover:shadow-md transition-shadow">

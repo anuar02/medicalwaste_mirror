@@ -279,12 +279,6 @@ const BinDetails = () => {
                         <div className="p-6">
                             <div className="flex flex-col items-center">
                                 <BinVisualization fullness={bin.fullness} />
-                                <div className="mt-4 text-center">
-                                    <p className="text-3xl font-bold text-slate-800">
-                                        {formatPercentage(bin.fullness)}
-                                    </p>
-                                    <p className="text-sm text-slate-500">Текущая заполненность</p>
-                                </div>
                                 <div className="mt-6 w-full">
                                     <div className="flex items-center justify-between">
                                         <span className="text-xs text-slate-500">0%</span>
