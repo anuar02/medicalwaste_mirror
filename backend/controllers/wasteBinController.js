@@ -210,54 +210,60 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
  * Update waste bin level from sensor data
  */
 const updateBinLevel = asyncHandler(async (req, res) => {
-    const { binId, distance, weight, temperature, latitude, longitude } = req.body;
+    const { binId, distance, fullness, temperature, weight, batteryVoltage, macAddress } = req.body;
 
-    // Calculate fullness based on distance
-    // Assuming max distance = 100cm (empty), min distance = 0cm (full)
-    const fullness = Math.max(0, Math.min(100, (1 - distance/100) * 100));
-
-    // Find and update bin
-    const bin = await WasteBin.findOne({ binId });
-
-    if (!bin) {
-        // If bin doesn't exist, create it with default values
-        await WasteBin.create({
-            binId,
-            fullness,
-            distance,
-            weight: weight || 0,
-            temperature: temperature || 22,
-            location: {
-                coordinates: [longitude || 0, latitude || 0]
-            },
-            lastUpdate: new Date()
-        });
-    } else {
-        // Update existing bin with sensor data
-        await bin.updateWithSensorData({
-            distance,
-            weight,
-            temperature,
-            latitude,
-            longitude
+    if (!binId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Bin ID is required'
         });
     }
 
-    // Create history entry
+    // Find the bin
+    let bin = await WasteBin.findOne({ binId });
+
+    // If bin not found but we have a MAC address, try finding by MAC
+    if (!bin && macAddress) {
+        bin = await WasteBin.findOne({ 'deviceInfo.macAddress': macAddress });
+    }
+
+    if (!bin) {
+        return res.status(404).json({
+            status: 'fail',
+            message: 'Bin not found'
+        });
+    }
+
+    // Update bin with sensor data
+    bin.fullness = fullness !== undefined ? fullness : (distance ? 100 - distance : bin.fullness);
+    bin.distance = distance !== undefined ? distance : bin.distance;
+
+    if (temperature !== undefined) bin.temperature = temperature;
+    if (weight !== undefined) bin.weight = weight || 0;
+
+    // Update device info if available
+    if (bin.deviceInfo) {
+        if (batteryVoltage !== undefined) bin.deviceInfo.batteryVoltage = batteryVoltage;
+        bin.deviceInfo.lastSeen = new Date();
+    }
+
+    bin.lastUpdate = new Date();
+    await bin.save();
+
+    // Create history record
     await History.create({
-        binId,
-        fullness,
+        binId: bin.binId,
+        fullness: bin.fullness,
+        temperature: bin.temperature,
+        weight: bin.weight,
+        distance: distance,
         time: new Date().toLocaleTimeString(),
         timestamp: new Date()
     });
 
     res.status(200).json({
         status: 'success',
-        data: {
-            binId,
-            fullness,
-            timestamp: new Date()
-        }
+        data: { binId: bin.binId }
     });
 });
 

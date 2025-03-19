@@ -56,6 +56,16 @@ const wasteBinSchema = new mongoose.Schema({
         type: Number,
         default: 22.0
     },
+    deviceInfo: {
+        macAddress: String,
+        batteryVoltage: Number,
+        lastSeen: Date,
+        status: {
+            type: String,
+            enum: ['active', 'offline', 'maintenance'],
+            default: 'active'
+        }
+    },
     capacity: {
         type: Number,
         default: 50, // Default capacity in liters
