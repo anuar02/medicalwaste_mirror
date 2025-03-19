@@ -1,47 +1,36 @@
 const mongoose = require('mongoose');
 
 const deviceSchema = new mongoose.Schema({
-    macAddress: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true
-    },
-    tempBinId: {
-        type: String,
-        trim: true
-    },
-    deviceType: {
-        type: String,
-        trim: true
-    },
-    binId: {
-        type: String,
-        trim: true
-    },
-    status: {
-        type: String,
-        enum: ['pending', 'configured', 'active', 'inactive'],
-        default: 'pending'
-    },
-    lastSeen: {
-        type: Date,
-        default: Date.now
-    },
-    sensors: [String],
-    location: {
-        type: {
+    deviceInfo: {
+        macAddress: {
             type: String,
-            enum: ['Point'],
-            default: 'Point'
+            trim: true
         },
-        coordinates: {
-            type: [Number],
-            default: [0, 0]
+        deviceType: {
+            type: String,
+            default: 'ESP32'
+        },
+        status: {
+            type: String,
+            enum: ['active', 'offline', 'maintenance'],
+            default: 'active'
+        },
+        batteryVoltage: {
+            type: Number
+        },
+        registeredAt: {
+            type: Date,
+            default: Date.now
+        },
+        lastSeen: {
+            type: Date,
+            default: Date.now
         }
-    }
+    },
 }, {
-    timestamps: true
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
 });
 
 deviceSchema.index({ macAddress: 1 });

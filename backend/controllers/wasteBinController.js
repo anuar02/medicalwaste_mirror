@@ -412,7 +412,7 @@ const checkDeviceRegistration = asyncHandler(async (req, res) => {
 
 
 const registerDevice = asyncHandler(async (req, res) => {
-    const { macAddress, tempBinId, deviceType, latitude, longitude } = req.body;
+    const { macAddress, tempBinId, deviceType } = req.body;
 
     if (!macAddress) {
         return res.status(400).json({
@@ -421,35 +421,59 @@ const registerDevice = asyncHandler(async (req, res) => {
         });
     }
 
-    // Check if device already exists
-    let device = await Device.findOne({ macAddress });
+    try {
+        let existingBin = await WasteBin.findOne({ 'deviceInfo.macAddress': macAddress });
 
-    if (device) {
-        return res.status(200).json({
+        if (existingBin) {
+            return res.status(200).json({
+                status: 'success',
+                message: 'Device already registered',
+                data: {
+                    binId: existingBin.binId,
+                    registered: true
+                }
+            });
+        }
+
+        // Generate a unique bin ID
+        const basePrefix = "MED";
+        const count = await WasteBin.countDocuments({ binId: { $regex: `^${basePrefix}` } });
+        const binId = `${basePrefix}-${(count + 1).toString().padStart(3, '0')}`;
+
+        // Create new bin
+        const newBin = await WasteBin.create({
+            binId,
+            department: 'Auto Registered',
+            wasteType: 'Острые Медицинские Отходы',
+            status: 'active',
+            fullness: 0,
+            capacity: 50,
+            alertThreshold: 80,
+            deviceInfo: {
+                macAddress,
+                deviceType: deviceType || 'ESP32',
+                status: 'active',
+                registeredAt: new Date()
+            },
+            lastUpdate: new Date()
+        });
+
+        // Return the new bin ID
+        res.status(201).json({
             status: 'success',
-            message: 'Device already registered',
-            data: { deviceId: device._id }
+            message: 'Device registered successfully',
+            data: {
+                binId,
+                registered: true
+            }
+        });
+    } catch (error) {
+        console.error("Error registering device:", error);
+        res.status(500).json({
+            status: 'error',
+            message: error.message || 'Error registering device'
         });
     }
-
-    // Create a new device record (not a waste bin yet)
-    device = await Device.create({
-        macAddress,
-        tempBinId,
-        deviceType,
-        status: 'pending',
-        lastSeen: new Date(),
-        location: latitude && longitude ? {
-            type: 'Point',
-            coordinates: [longitude, latitude]
-        } : undefined
-    });
-
-    res.status(201).json({
-        status: 'success',
-        message: 'Device registered successfully',
-        data: { deviceId: device._id }
-    });
 });
 
 module.exports = {
