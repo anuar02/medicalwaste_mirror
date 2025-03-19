@@ -134,4 +134,7 @@ router.patch('/:id', param('id').trim().notEmpty(), updateBinValidation, validat
 router.use(restrictTo('admin'));
 router.delete('/:id', param('id').trim().notEmpty(), validateRequest, deleteBin);
 
+// Register
+router.post('/register-device', registerDevice);
+
 module.exports = router;

@@ -198,6 +198,40 @@ const deactivateUser = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * Delete user (admin only)
+ */
+const deleteUser = asyncHandler(async (req, res, next) => {
+    const { userId } = req.params;
+
+    // Prevent deleting yourself
+    if (req.user.id.toString() === userId) {
+        return next(new AppError('You cannot delete your own account', 403));
+    }
+
+    // Find the user and make sure they exist
+    const user = await User.findById(userId);
+    if (!user) {
+        return next(new AppError('User not found', 404));
+    }
+
+    // Make sure we don't delete the last admin
+    if (user.role === 'admin') {
+        const adminCount = await User.countDocuments({ role: 'admin' });
+        if (adminCount <= 1) {
+            return next(new AppError('Cannot delete the last admin user', 400));
+        }
+    }
+
+    // Delete the user
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({
+        status: 'success',
+        message: 'User deleted successfully'
+    });
+});
+
+/**
  * Activate user (admin only)
  */
 const activateUser = asyncHandler(async (req, res, next) => {
@@ -226,5 +260,6 @@ module.exports = {
     updateUserRole,
     getAllUsers,
     deactivateUser,
+    deleteUser,
     activateUser
 };

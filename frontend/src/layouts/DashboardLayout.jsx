@@ -33,6 +33,12 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
         },
         {
             icon: <Trash2 className="h-5 w-5" />,
+            label: 'Управление контейнерами',
+            path: '/admin/bins',
+            adminOnly: true,
+        },
+        {
+            icon: <Trash2 className="h-5 w-5" />,
             label: 'Контейнеры',
             path: '/bins',
         },

@@ -9,9 +9,9 @@ const {
     updateUserRole,
     getAllUsers,
     deactivateUser,
-    activateUser
+    activateUser, deleteUser
 } = require('../controllers/userController');
-const { auth, adminAuth } = require('../middleware/auth');
+const { auth, adminAuth, restrictTo} = require('../middleware/auth');
 const { validateRequest } = require('../middleware/validators');
 
 // Input validation for profile update
@@ -64,6 +64,8 @@ router.get('/departments', getDepartments);
 
 // Admin-only routes
 router.use(adminAuth);
+
+router.delete('/:userId', restrictTo('admin'), deleteUser);
 
 // Get all users
 router.get('/', getAllUsers);
