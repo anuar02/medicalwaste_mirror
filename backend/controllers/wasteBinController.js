@@ -369,6 +369,48 @@ const getStatistics = asyncHandler(async (req, res) => {
     });
 });
 
+const registerDevice = asyncHandler(async (req, res, next) => {
+    const { binId, department, wasteType, latitude, longitude } = req.body;
+
+    // Validate input
+    if (!binId) {
+        return next(new AppError('Bin ID is required', 400));
+    }
+
+    // Check if bin with ID already exists
+    const existingBin = await WasteBin.findOne({ binId });
+    if (existingBin) {
+        return res.status(200).json({
+            status: 'success',
+            message: 'Device already registered',
+            data: { binId }
+        });
+    }
+
+    // Create location object
+    const location = {
+        coordinates: [longitude || 0, latitude || 0]
+    };
+
+    // Create bin
+    const bin = await WasteBin.create({
+        binId,
+        department: department || 'Auto Registered',
+        wasteType: wasteType || 'Острые Медицинские Отходы',
+        capacity: 50,
+        alertThreshold: 80,
+        location,
+        lastCollection: new Date(),
+        lastUpdate: new Date()
+    });
+
+    res.status(201).json({
+        status: 'success',
+        message: 'Device registered successfully',
+        data: { binId }
+    });
+});
+
 module.exports = {
     getAllBins,
     getBin,

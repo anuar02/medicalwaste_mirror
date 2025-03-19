@@ -11,6 +11,8 @@ import { ThemeProvider } from './contexts/ThemeContext';
 // Layouts
 import DashboardLayout from './layouts/DashboardLayout';
 import AuthLayout from './layouts/AuthLayout';
+import UserManagement from "./pages/admin/UserManagement";
+import BinManagement from "./pages/admin/BinManagement";
 
 // Pages - Using lazy loading for improved performance
 const Login = React.lazy(() => import('./pages/auth/Login'));
@@ -122,6 +124,22 @@ const App = () => {
                                         element={
                                             <ProtectedRoute>
                                                 <Settings />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/admin/bins"
+                                        element={
+                                            <ProtectedRoute>
+                                                <BinManagement />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/admin/users"
+                                        element={
+                                            <ProtectedRoute>
+                                                <UserManagement />
                                             </ProtectedRoute>
                                         }
                                     />

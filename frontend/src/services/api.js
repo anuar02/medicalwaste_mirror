@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 
 // Create Axios instance with common configuration
 const api = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+    baseURL:  'http://localhost:5000/api',
     headers: {
         'Content-Type': 'application/json',
     },
@@ -122,6 +122,9 @@ const apiService = {
         getProfile: () => api.get('/users/profile'),
         updateProfile: (data) => api.patch('/users/profile', data),
         getDepartments: () => api.get('/users/departments'),
+        getAllUsers: () => api.get('/users'),
+        deleteUser: (userId) => api.delete(`/users/${userId}`),
+        updateUserRole: (userId, data) => api.patch(`/users/${userId}/role`, data),
     },
 
     // Waste Bin endpoints
