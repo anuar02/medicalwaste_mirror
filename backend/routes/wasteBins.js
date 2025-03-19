@@ -116,6 +116,10 @@ const wasteLevelValidation = [
 // Public routes (requires just API key validation)
 router.post('/waste-level', wasteLevelValidation, validateRequest, updateBinLevel);
 
+// Register
+router.post('/register-device', registerDevice);
+router.get('/check-device', checkDeviceRegistration);
+
 // Protected routes (requires authentication)
 router.use(auth);
 
@@ -127,9 +131,7 @@ router.get('/statistics', getStatistics);
 router.get('/:id', param('id').trim().notEmpty(), validateRequest, getBin);
 router.get('/:id/history', param('id').trim().notEmpty(), validateRequest, getBinHistory);
 
-// Register
-router.post('/register-device', registerDevice);
-router.get('/check-device', checkDeviceRegistration);
+
 
 // Routes for supervisors and admins only
 router.use(restrictTo('admin', 'supervisor'));
