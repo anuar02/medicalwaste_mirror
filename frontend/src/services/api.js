@@ -126,6 +126,14 @@ const apiService = {
         deleteUser: (userId) => api.delete(`/users/${userId}`),
         updateUserRole: (userId, data) => api.patch(`/users/${userId}/role`, data),
     },
+    // Devices endpoints
+    devices: {
+        getPendingDevices: () => api.get('/devices/pending'),
+        configureDevice: (deviceId, data) => api.post(`/devices/${deviceId}/configure`, data),
+        getAll: () => api.get('/devices'),
+        getById: (deviceId) => api.get(`/devices/${deviceId}`),
+        delete: (deviceId) => api.delete(`/devices/${deviceId}`),
+    },
 
     // Waste Bin endpoints
     wasteBins: {
