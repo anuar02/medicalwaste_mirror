@@ -33,7 +33,7 @@ const configureDevice = asyncHandler(async (req, res, next) => {
     }
 
     // Validate bin ID format
-    if (!/^[A-Z]+-\d{3,}$/.test(binId)) {
+    if (!/^[A-Z]+-\d+$/.test(binId)) {
         return next(new AppError('Bin ID must be in format DEPT-123', 400));
     }
 
