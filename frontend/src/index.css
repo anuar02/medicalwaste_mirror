@@ -6,3 +6,7 @@
 .test-style {
     background-color: red;
 }
+
+.leaflet-container {
+    z-index: 0;
+}

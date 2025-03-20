@@ -192,11 +192,6 @@ const BinVisualization = ({
 
             {/* Alert threshold indicator */}
             <div className="mt-3 w-full max-w-xs">
-                <div className="flex justify-between text-xs text-slate-500">
-                    <span>0%</span>
-                    <span>Порог оповещения</span>
-                    <span>100%</span>
-                </div>
                 <div className="relative h-2 w-full rounded-full bg-slate-200 mt-1">
                     <div className="absolute h-full rounded-full bg-slate-400"
                          style={{ width: `${fullness}%` }}>

@@ -65,17 +65,7 @@ const Register = () => {
     };
 
     return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4 py-12">
-            <div className="mb-8 text-center">
-                <Logo size={48} className="mx-auto" />
-                <h1 className="mt-4 text-2xl font-bold text-slate-800">
-                    Система Мониторинга Медицинских Отходов
-                </h1>
-                <p className="mt-2 text-sm text-slate-500">
-                    Создание новой учетной записи
-                </p>
-            </div>
-
+        <div className="flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4 py-12">
             <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-sm">
                 <div className="border-b border-slate-100 p-6">
                     <div className="flex items-center justify-between">
