@@ -1,7 +1,7 @@
 // components/ui/Logo.jsx
 import React from 'react';
 import PropTypes from 'prop-types';
-import logoPng from '../../assets/logo2.png';
+import logoPng from '../../assets/logo3.svg';
 
 const Logo = ({ size = 24, className = '' }) => {
     return (
