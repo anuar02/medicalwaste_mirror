@@ -10,16 +10,12 @@ const AppError = require('../utils/appError');
  */
 const validateRequest = (req, res, next) => {
     const errors = validationResult(req);
-
     if (!errors.isEmpty()) {
-        // Extract error messages
-        const errorMessages = errors.array().map(err =>
-            `${err.param}: ${err.msg}`
-        ).join('. ');
-
-        return next(new AppError(errorMessages, 400));
+        return res.status(400).json({
+            status: 'fail',
+            errors: errors.array()
+        });
     }
-
     next();
 };
 

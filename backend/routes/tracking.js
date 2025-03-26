@@ -58,8 +58,7 @@ const locationRecordValidation = [
         .withMessage('Timestamp must be a valid ISO date')
 ];
 
-// Public routes (requires just API key validation)
-router.post('/record', validateApiKey, locationRecordValidation, validateRequest, recordLocation);
+router.post('/record', locationRecordValidation, validateRequest, recordLocation);
 
 // Protected routes (requires authentication)
 router.use(auth);
