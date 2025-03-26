@@ -10,6 +10,7 @@ import {
     User,
     Menu,
     X,
+    Truck,
     Bell,
     Navigation,
     LogOut,
