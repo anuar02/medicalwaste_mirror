@@ -11,6 +11,7 @@ import {
     Menu,
     X,
     Bell,
+    Navigation,
     LogOut,
     ChevronDown,
     Wifi, Cpu
@@ -31,12 +32,12 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
             label: 'Панель Мониторинга',
             path: '/',
         },
-        {
-            icon: <Trash2 className="h-5 w-5" />,
-            label: 'Управление контейнерами',
-            path: '/admin/bins',
-            adminOnly: true,
-        },
+        // {
+        //     icon: <Trash2 className="h-5 w-5" />,
+        //     label: 'Управление контейнерами',
+        //     path: '/admin/bins',
+        //     adminOnly: true,
+        // },
         {
             icon: <Trash2 className="h-5 w-5" />,
             label: 'Контейнеры',
@@ -57,6 +58,11 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
             label: 'Устройства',
             path: '/admin/devices',
             adminOnly: true,
+        },
+        {
+            icon: <Navigation className="h-5 w-5" />,
+            label: 'Отслеживание',
+            path: '/tracking',
         },
         {
             icon: <Settings className="h-5 w-5" />,

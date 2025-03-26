@@ -147,6 +147,14 @@ const apiService = {
         getOverfilled: () => api.get('/waste-bins/overfilled'),
         getStatistics: () => api.get('/waste-bins/statistics'),
     },
+
+    // Device tracking endpoints
+    tracking: {
+        getAllDevices: () => api.get('/tracking/devices'),
+        getDeviceLocation: (deviceId) => api.get(`/tracking/devices/${deviceId}`),
+        getDeviceHistory: (deviceId, params) => api.get(`/tracking/history/${deviceId}`, { params }),
+    }
+
 };
 
 export default apiService;

@@ -1,7 +1,7 @@
 // components/map/Map.jsx
 import React, { useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Circle, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -18,7 +18,7 @@ ChangeView.propTypes = {
 };
 
 // Custom marker icon for waste bins
-const createBinIcon = (fullness) => {
+const createBinIcon = (fullness, isSelected = false) => {
     // Choose color based on fullness
     let color = '#0d9488'; // teal for normal levels
     if (fullness > 80) {
@@ -26,6 +26,10 @@ const createBinIcon = (fullness) => {
     } else if (fullness > 60) {
         color = '#f59e0b'; // amber for medium levels
     }
+
+    // Add border for selected markers
+    const borderColor = isSelected ? '#3b82f6' : 'white';
+    const borderWidth = isSelected ? 3 : 2;
 
     return L.divIcon({
         className: 'custom-bin-icon',
@@ -35,7 +39,7 @@ const createBinIcon = (fullness) => {
         width: 24px;
         height: 24px;
         border-radius: 50%;
-        border: 2px solid white;
+        border: ${borderWidth}px solid ${borderColor};
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         display: flex;
         align-items: center;
@@ -52,12 +56,43 @@ const createBinIcon = (fullness) => {
     });
 };
 
+// Icon for tracking devices
+const createDeviceIcon = (isSelected = false) => {
+    const color = isSelected ? '#3b82f6' : '#0d9488';
+    const size = isSelected ? 32 : 24;
+
+    return L.divIcon({
+        className: 'device-icon',
+        html: `
+      <div style="
+        background-color: ${color};
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size*0.6}" height="${size*0.6}" fill="white">
+          <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+        </svg>
+      </div>
+    `,
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2],
+        popupAnchor: [0, -size/2],
+    });
+};
+
 const Map = ({
                  center = [43.2364, 76.9457],
                  zoom = 13,
                  markers = [],
                  showRadius = false,
-                 radiusInMeters = 500
+                 radiusInMeters = 500,
+                 historyPath = null
              }) => {
     // Fix for leaflet marker images - moved inside the component
     useEffect(() => {
@@ -83,14 +118,14 @@ const Map = ({
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
+            {/* Display markers */}
             {markers.map((marker) => (
                 <Marker
                     key={marker.id}
                     position={marker.position}
-                    icon={createBinIcon(marker.fullness || 0)}
-                    eventHandlers={{
-                        click: marker.onClick ? () => marker.onClick() : undefined
-                    }}
+                    icon={marker.binId ?
+                        createBinIcon(marker.fullness || 0, marker.isSelected) :
+                        createDeviceIcon(marker.isSelected)}
                 >
                     <Popup>
                         <div dangerouslySetInnerHTML={{ __html: marker.popup }} />
@@ -98,6 +133,21 @@ const Map = ({
                 </Marker>
             ))}
 
+            {/* Display history path if available */}
+            {historyPath && historyPath.length > 0 && (
+                <Polyline
+                    positions={historyPath}
+                    pathOptions={{
+                        color: '#3b82f6',
+                        weight: 4,
+                        opacity: 0.7,
+                        dashArray: '10, 10',
+                        dashOffset: '0'
+                    }}
+                />
+            )}
+
+            {/* Show radius circle if enabled */}
             {showRadius && (
                 <Circle
                     center={center}
@@ -122,11 +172,12 @@ Map.propTypes = {
             position: PropTypes.array.isRequired,
             popup: PropTypes.string,
             fullness: PropTypes.number,
-            onClick: PropTypes.func
+            isSelected: PropTypes.bool
         })
     ),
     showRadius: PropTypes.bool,
     radiusInMeters: PropTypes.number,
+    historyPath: PropTypes.array
 };
 
 export default Map;

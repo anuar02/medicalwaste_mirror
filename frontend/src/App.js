@@ -28,6 +28,7 @@ const Reports = React.lazy(() => import('./pages/Reports'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const Profile = React.lazy(() => import('./pages/Profile'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
+const DeviceTracking = React.lazy(() => import('./pages/DeviceTracking'));
 
 // Loading component for suspense fallback
 const LoadingScreen = () => (
@@ -149,6 +150,14 @@ const App = () => {
                                         element={
                                             <ProtectedRoute>
                                                 <UserManagement />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/tracking"
+                                        element={
+                                            <ProtectedRoute>
+                                                <DeviceTracking />
                                             </ProtectedRoute>
                                         }
                                     />
