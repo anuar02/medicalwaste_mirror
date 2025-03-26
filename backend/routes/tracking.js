@@ -1,4 +1,4 @@
-// routes/tracking.js
+// routes/tracking.js - Updated with checkpoint routes
 const express = require('express');
 const router = express.Router();
 const { body, param, query } = require('express-validator');
@@ -6,7 +6,8 @@ const {
     recordLocation,
     getDeviceHistory,
     getLastLocation,
-    getAllDevicesLocations
+    getAllDevicesLocations,
+    getDeviceCheckpoints
 } = require('../controllers/trackingController');
 const { auth, validateApiKey } = require('../middleware/auth');
 const { validateRequest } = require('../middleware/validators');
@@ -39,28 +40,26 @@ const locationRecordValidation = [
         .optional()
         .isInt({ min: 0, max: 100 })
         .withMessage('Battery must be between 0 and 100 percent'),
+    body('isCollecting')
+        .optional()
+        .isBoolean()
+        .withMessage('isCollecting must be a boolean value'),
+    body('isCheckpoint')
+        .optional()
+        .isBoolean()
+        .withMessage('isCheckpoint must be a boolean value'),
+    body('checkpointType')
+        .optional()
+        .isIn(['waste_collection', 'maintenance', 'other'])
+        .withMessage('Invalid checkpoint type'),
     body('timestamp')
         .optional()
         .isISO8601()
         .withMessage('Timestamp must be a valid ISO date')
 ];
 
-// Check if validateApiKey middleware exists, if not create a simple version
-const checkApiKey = validateApiKey || ((req, res, next) => {
-    const apiKey = req.headers['x-api-key'];
-
-    if (!apiKey || apiKey !== process.env.API_KEY) {
-        return res.status(401).json({
-            status: 'fail',
-            message: 'API key is missing or invalid'
-        });
-    }
-
-    next();
-});
-
 // Public routes (requires just API key validation)
-router.post('/record', checkApiKey, locationRecordValidation, validateRequest, recordLocation);
+router.post('/record', validateApiKey, locationRecordValidation, validateRequest, recordLocation);
 
 // Protected routes (requires authentication)
 router.use(auth);
@@ -76,7 +75,16 @@ router.get('/history/:deviceId', [
     param('deviceId').trim().notEmpty().withMessage('Device ID is required'),
     query('limit').optional().isInt({ min: 1, max: 1000 }).withMessage('Limit must be between 1 and 1000'),
     query('from').optional().isISO8601().withMessage('From date must be valid ISO date'),
-    query('to').optional().isISO8601().withMessage('To date must be valid ISO date')
+    query('to').optional().isISO8601().withMessage('To date must be valid ISO date'),
+    query('checkpointsOnly').optional().isBoolean().withMessage('checkpointsOnly must be a boolean')
 ], validateRequest, getDeviceHistory);
+
+// New route for checkpoints
+router.get('/checkpoints/:deviceId', [
+    param('deviceId').trim().notEmpty().withMessage('Device ID is required'),
+    query('limit').optional().isInt({ min: 1, max: 1000 }).withMessage('Limit must be between 1 and 1000'),
+    query('from').optional().isISO8601().withMessage('From date must be valid ISO date'),
+    query('to').optional().isISO8601().withMessage('To date must be valid ISO date')
+], validateRequest, getDeviceCheckpoints);
 
 module.exports = router;

@@ -1,3 +1,4 @@
+// controllers/trackingController.js - Updated version
 const TrackingData = require('../models/TrackingData');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -6,7 +7,19 @@ const { asyncHandler } = require('../utils/asyncHandler');
  * Record device location data
  */
 const recordLocation = asyncHandler(async (req, res) => {
-    const { deviceId, latitude, longitude, altitude, speed, course, battery, timestamp } = req.body;
+    const {
+        deviceId,
+        latitude,
+        longitude,
+        altitude,
+        speed,
+        course,
+        battery,
+        isCollecting,
+        isCheckpoint,
+        checkpointType,
+        timestamp
+    } = req.body;
 
     if (!deviceId) {
         return res.status(400).json({
@@ -33,6 +46,9 @@ const recordLocation = asyncHandler(async (req, res) => {
         speed: speed || 0,
         course: course || 0,
         battery: battery || 100,
+        isCollecting: !!isCollecting,
+        isCheckpoint: !!isCheckpoint,
+        checkpointType: checkpointType || null,
         timestamp: timestamp ? new Date(timestamp) : new Date()
     });
 
@@ -49,7 +65,7 @@ const recordLocation = asyncHandler(async (req, res) => {
  */
 const getDeviceHistory = asyncHandler(async (req, res) => {
     const { deviceId } = req.params;
-    const { limit = 100, from, to } = req.query;
+    const { limit = 100, from, to, checkpointsOnly = false } = req.query;
 
     // Build query
     const query = { deviceId };
@@ -59,6 +75,11 @@ const getDeviceHistory = asyncHandler(async (req, res) => {
         query.timestamp = {};
         if (from) query.timestamp.$gte = new Date(from);
         if (to) query.timestamp.$lte = new Date(to);
+    }
+
+    // Add checkpoint filter if requested
+    if (checkpointsOnly === 'true') {
+        query.isCheckpoint = true;
     }
 
     // Get tracking data with pagination
@@ -114,6 +135,9 @@ const getAllDevicesLocations = asyncHandler(async (req, res) => {
                 speed: { $first: '$speed' },
                 course: { $first: '$course' },
                 battery: { $first: '$battery' },
+                isCollecting: { $first: '$isCollecting' },
+                isCheckpoint: { $first: '$isCheckpoint' },
+                checkpointType: { $first: '$checkpointType' },
                 timestamp: { $first: '$timestamp' }
             }
         }
@@ -126,9 +150,42 @@ const getAllDevicesLocations = asyncHandler(async (req, res) => {
     });
 });
 
+/**
+ * Get all checkpoints for a specific device
+ */
+const getDeviceCheckpoints = asyncHandler(async (req, res) => {
+    const { deviceId } = req.params;
+    const { limit = 100, from, to } = req.query;
+
+    // Build query for checkpoints only
+    const query = {
+        deviceId,
+        isCheckpoint: true
+    };
+
+    // Add date range if provided
+    if (from || to) {
+        query.timestamp = {};
+        if (from) query.timestamp.$gte = new Date(from);
+        if (to) query.timestamp.$lte = new Date(to);
+    }
+
+    // Get checkpoint data
+    const checkpoints = await TrackingData.find(query)
+        .sort({ timestamp: -1 })
+        .limit(parseInt(limit));
+
+    res.status(200).json({
+        status: 'success',
+        results: checkpoints.length,
+        data: { checkpoints }
+    });
+});
+
 module.exports = {
     recordLocation,
     getDeviceHistory,
     getLastLocation,
-    getAllDevicesLocations
+    getAllDevicesLocations,
+    getDeviceCheckpoints
 };

@@ -1,4 +1,4 @@
-// components/map/Map.jsx
+// components/map/Map.jsx - With properly scoped hooks
 import React, { useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle, Polyline } from 'react-leaflet';
@@ -17,7 +17,7 @@ ChangeView.propTypes = {
     zoom: PropTypes.number.isRequired,
 };
 
-// Custom marker icon for waste bins
+// Custom marker icon for bins
 const createBinIcon = (fullness, isSelected = false) => {
     // Choose color based on fullness
     let color = '#0d9488'; // teal for normal levels
@@ -57,9 +57,10 @@ const createBinIcon = (fullness, isSelected = false) => {
 };
 
 // Icon for tracking devices
-const createDeviceIcon = (isSelected = false) => {
-    const color = isSelected ? '#3b82f6' : '#0d9488';
-    const size = isSelected ? 32 : 24;
+const createDeviceIcon = (isSelected = false, isCollecting = false) => {
+    // Use different colors based on status
+    const color = isCollecting ? '#059669' : (isSelected ? '#3b82f6' : '#0d9488');
+    const size = isSelected ? 30 : 24;
 
     return L.divIcon({
         className: 'device-icon',
@@ -86,6 +87,51 @@ const createDeviceIcon = (isSelected = false) => {
     });
 };
 
+// Icon for checkpoints
+const createCheckpointIcon = (checkpointType = 'waste_collection') => {
+    // Different colors for different checkpoint types
+    const colorMap = {
+        'waste_collection': '#059669', // emerald-600
+        'maintenance': '#f59e0b',      // amber-500
+        'other': '#6366f1'             // indigo-500
+    };
+
+    const color = colorMap[checkpointType] || colorMap.other;
+    const size = 22;
+
+    return L.divIcon({
+        className: 'checkpoint-icon',
+        html: `
+      <div style="
+        background-color: ${color};
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 4px;
+        transform: rotate(45deg);
+        border: 2px solid white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      ">
+        <div style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(-45deg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size*0.6}" height="${size*0.6}" fill="white">
+            <path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6h-5.6z"/>
+          </svg>
+        </div>
+      </div>
+    `,
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2],
+        popupAnchor: [0, -size/2],
+    });
+};
+
 const Map = ({
                  center = [43.2364, 76.9457],
                  zoom = 13,
@@ -102,7 +148,7 @@ const Map = ({
             iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
             shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
         });
-    }, []);
+    }, []); // Empty dependency array ensures this runs only once on mount
 
     return (
         <MapContainer
@@ -119,19 +165,29 @@ const Map = ({
             />
 
             {/* Display markers */}
-            {markers.map((marker) => (
-                <Marker
-                    key={marker.id}
-                    position={marker.position}
-                    icon={marker.binId ?
-                        createBinIcon(marker.fullness || 0, marker.isSelected) :
-                        createDeviceIcon(marker.isSelected)}
-                >
-                    <Popup>
-                        <div dangerouslySetInnerHTML={{ __html: marker.popup }} />
-                    </Popup>
-                </Marker>
-            ))}
+            {markers.map((marker) => {
+                // Determine which icon to use based on marker type
+                let icon;
+                if (marker.type === 'checkpoint' || marker.isCheckpoint) {
+                    icon = createCheckpointIcon(marker.checkpointType);
+                } else if (marker.binId) {
+                    icon = createBinIcon(marker.fullness || 0, marker.isSelected);
+                } else {
+                    icon = createDeviceIcon(marker.isSelected, marker.isCollecting);
+                }
+
+                return (
+                    <Marker
+                        key={marker.id}
+                        position={marker.position}
+                        icon={icon}
+                    >
+                        <Popup>
+                            <div dangerouslySetInnerHTML={{ __html: marker.popup }} />
+                        </Popup>
+                    </Marker>
+                );
+            })}
 
             {/* Display history path if available */}
             {historyPath && historyPath.length > 0 && (
@@ -172,7 +228,12 @@ Map.propTypes = {
             position: PropTypes.array.isRequired,
             popup: PropTypes.string,
             fullness: PropTypes.number,
-            isSelected: PropTypes.bool
+            isSelected: PropTypes.bool,
+            isCheckpoint: PropTypes.bool,
+            type: PropTypes.string,
+            checkpointType: PropTypes.string,
+            binId: PropTypes.string,
+            isCollecting: PropTypes.bool
         })
     ),
     showRadius: PropTypes.bool,

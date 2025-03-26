@@ -153,6 +153,7 @@ const apiService = {
         getAllDevices: () => api.get('/tracking/devices'),
         getDeviceLocation: (deviceId) => api.get(`/tracking/devices/${deviceId}`),
         getDeviceHistory: (deviceId, params) => api.get(`/tracking/history/${deviceId}`, { params }),
+        getDeviceCheckpoints: (deviceId, params) => api.get(`/tracking/checkpoints/${deviceId}`, { params }),
     }
 
 };

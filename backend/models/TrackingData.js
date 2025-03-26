@@ -1,4 +1,4 @@
-// models/TrackingData.js
+// models/TrackingData.js - Updated with collection fields
 const mongoose = require('mongoose');
 
 const trackingDataSchema = new mongoose.Schema({
@@ -46,6 +46,20 @@ const trackingDataSchema = new mongoose.Schema({
         max: 100,
         default: 100
     },
+    // Collection mode fields
+    isCollecting: {
+        type: Boolean,
+        default: false
+    },
+    isCheckpoint: {
+        type: Boolean,
+        default: false
+    },
+    checkpointType: {
+        type: String,
+        enum: [null, 'waste_collection', 'maintenance', 'other'],
+        default: null
+    },
     timestamp: {
         type: Date,
         default: Date.now,
@@ -60,6 +74,9 @@ trackingDataSchema.index({ location: '2dsphere' });
 
 // Compound index for efficient queries
 trackingDataSchema.index({ deviceId: 1, timestamp: -1 });
+
+// Compound index for checkpoints
+trackingDataSchema.index({ deviceId: 1, isCheckpoint: 1, timestamp: -1 });
 
 // TTL index to automatically delete old data after 30 days
 trackingDataSchema.index({ timestamp: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
