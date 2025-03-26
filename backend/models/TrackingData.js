@@ -1,4 +1,3 @@
-// models/TrackingData.js - Updated with collection fields
 const mongoose = require('mongoose');
 
 const trackingDataSchema = new mongoose.Schema({
@@ -46,19 +45,9 @@ const trackingDataSchema = new mongoose.Schema({
         max: 100,
         default: 100
     },
-    // Collection mode fields
     isCollecting: {
         type: Boolean,
         default: false
-    },
-    isCheckpoint: {
-        type: Boolean,
-        default: false
-    },
-    checkpointType: {
-        type: String,
-        enum: [null, 'waste_collection', 'maintenance', 'other'],
-        default: null
     },
     timestamp: {
         type: Date,
@@ -75,11 +64,35 @@ trackingDataSchema.index({ location: '2dsphere' });
 // Compound index for efficient queries
 trackingDataSchema.index({ deviceId: 1, timestamp: -1 });
 
-// Compound index for checkpoints
-trackingDataSchema.index({ deviceId: 1, isCheckpoint: 1, timestamp: -1 });
-
 // TTL index to automatically delete old data after 30 days
 trackingDataSchema.index({ timestamp: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
+
+// Static method to get history for a specific device
+trackingDataSchema.statics.getHistoryForDevice = async function(deviceId, limit = 100) {
+    return this.find({ deviceId })
+        .sort({ timestamp: -1 })
+        .limit(limit);
+};
+
+// Static method to get last known position of a device
+trackingDataSchema.statics.getLastPosition = async function(deviceId) {
+    return this.findOne({ deviceId })
+        .sort({ timestamp: -1 });
+};
+
+// Method to calculate distance between two points
+trackingDataSchema.statics.calculateDistanceBetween = function(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c; // Distance in km
+    return distance;
+};
 
 const TrackingData = mongoose.model('TrackingData', trackingDataSchema);
 

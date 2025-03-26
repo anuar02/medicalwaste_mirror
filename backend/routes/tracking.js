@@ -1,13 +1,17 @@
-// routes/tracking.js - Updated with checkpoint routes
+// routes/tracking.js - Updated with collection functionality
 const express = require('express');
 const router = express.Router();
 const { body, param, query } = require('express-validator');
 const {
     recordLocation,
+    checkCommands,
+    confirmCommand,
+    sendCommand,
     getDeviceHistory,
     getLastLocation,
     getAllDevicesLocations,
-    getDeviceCheckpoints
+    getCollectionPoints,
+    getDriverStats
 } = require('../controllers/trackingController');
 const { auth, validateApiKey } = require('../middleware/auth');
 const { validateRequest } = require('../middleware/validators');
@@ -43,22 +47,35 @@ const locationRecordValidation = [
     body('isCollecting')
         .optional()
         .isBoolean()
-        .withMessage('isCollecting must be a boolean value'),
+        .withMessage('isCollecting must be a boolean'),
     body('isCheckpoint')
         .optional()
         .isBoolean()
-        .withMessage('isCheckpoint must be a boolean value'),
-    body('checkpointType')
-        .optional()
-        .isIn(['waste_collection', 'maintenance', 'other'])
-        .withMessage('Invalid checkpoint type'),
+        .withMessage('isCheckpoint must be a boolean'),
     body('timestamp')
         .optional()
         .isISO8601()
         .withMessage('Timestamp must be a valid ISO date')
 ];
 
-router.post('/record', locationRecordValidation, validateRequest, recordLocation);
+// Input validation for command
+const commandValidation = [
+    body('deviceId')
+        .trim()
+        .notEmpty()
+        .withMessage('Device ID is required'),
+    body('command')
+        .trim()
+        .notEmpty()
+        .withMessage('Command is required')
+        .isIn(['setCollectingMode', 'restart', 'updateConfig', 'requestLocation', 'sleep'])
+        .withMessage('Invalid command')
+];
+
+// Routes for device communication (API key validation)
+router.post('/record', validateApiKey, locationRecordValidation, validateRequest, recordLocation);
+router.get('/check-commands', validateApiKey, checkCommands);
+router.post('/confirm-command', validateApiKey, confirmCommand);
 
 // Protected routes (requires authentication)
 router.use(auth);
@@ -74,16 +91,18 @@ router.get('/history/:deviceId', [
     param('deviceId').trim().notEmpty().withMessage('Device ID is required'),
     query('limit').optional().isInt({ min: 1, max: 1000 }).withMessage('Limit must be between 1 and 1000'),
     query('from').optional().isISO8601().withMessage('From date must be valid ISO date'),
-    query('to').optional().isISO8601().withMessage('To date must be valid ISO date'),
-    query('checkpointsOnly').optional().isBoolean().withMessage('checkpointsOnly must be a boolean')
+    query('to').optional().isISO8601().withMessage('To date must be valid ISO date')
 ], validateRequest, getDeviceHistory);
 
-// New route for checkpoints
-router.get('/checkpoints/:deviceId', [
-    param('deviceId').trim().notEmpty().withMessage('Device ID is required'),
-    query('limit').optional().isInt({ min: 1, max: 1000 }).withMessage('Limit must be between 1 and 1000'),
+// Collection-specific routes
+router.get('/collection-points', getCollectionPoints);
+router.get('/driver-stats/:driverId', [
+    param('driverId').trim().notEmpty().withMessage('Driver ID is required'),
     query('from').optional().isISO8601().withMessage('From date must be valid ISO date'),
     query('to').optional().isISO8601().withMessage('To date must be valid ISO date')
-], validateRequest, getDeviceCheckpoints);
+], validateRequest, getDriverStats);
+
+// Admin routes for sending commands
+router.post('/send-command', commandValidation, validateRequest, sendCommand);
 
 module.exports = router;

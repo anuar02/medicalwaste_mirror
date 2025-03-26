@@ -153,8 +153,12 @@ const apiService = {
         getAllDevices: () => api.get('/tracking/devices'),
         getDeviceLocation: (deviceId) => api.get(`/tracking/devices/${deviceId}`),
         getDeviceHistory: (deviceId, params) => api.get(`/tracking/history/${deviceId}`, { params }),
-        getDeviceCheckpoints: (deviceId, params) => api.get(`/tracking/checkpoints/${deviceId}`, { params }),
+        getCollectionPoints: (params) => api.get('/tracking/collection-points', { params }),
+        getDriverStats: (driverId, params) => api.get(`/tracking/driver-stats/${driverId}`, { params }),
+        sendCommand: (data) => api.post('/tracking/send-command', data)
     }
+
+// This should be placed within your existing apiService object
 
 };
 

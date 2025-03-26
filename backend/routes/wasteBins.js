@@ -113,6 +113,39 @@ const wasteLevelValidation = [
         .withMessage('Weight must be a positive number')
 ];
 
+router.post('/set-collecting-mode', auth, async (req, res) => {
+    const { deviceId, isCollecting } = req.body;
+
+    // Проверяем наличие необходимых данных
+    if (!deviceId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Device ID is required'
+        });
+    }
+
+    // Сохраняем команду в базе данных для последующего получения устройством
+    try {
+        await DeviceCommand.create({
+            deviceId,
+            command: 'setCollectingMode',
+            params: { isCollecting },
+            executed: false,
+            createdAt: new Date()
+        });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Command sent to device'
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to send command'
+        });
+    }
+});
+
 // Public routes (requires just API key validation)
 router.post('/waste-level', wasteLevelValidation, validateRequest, updateBinLevel);
 

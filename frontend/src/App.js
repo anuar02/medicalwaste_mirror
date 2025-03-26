@@ -106,6 +106,14 @@ const App = () => {
                                         }
                                     />
                                     <Route
+                                        path="/drivers"
+                                        element={
+                                            <ProtectedRoute>
+                                                <DriverTracking />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
                                         path="/map"
                                         element={
                                             <ProtectedRoute>

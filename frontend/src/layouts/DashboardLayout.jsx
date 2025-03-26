@@ -65,6 +65,11 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
             path: '/tracking',
         },
         {
+            icon: <Truck className="h-5 w-5" />,
+            label: 'Водители',
+            path: '/drivers',
+        },
+        {
             icon: <Settings className="h-5 w-5" />,
             label: 'Настройки',
             path: '/settings',
