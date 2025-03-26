@@ -73,9 +73,9 @@ const commandValidation = [
 ];
 
 // Routes for device communication (API key validation)
-router.post('/record', locationRecordValidation, recordLocation);
-router.get('/check-commands', checkCommands);
-router.post('/confirm-command', confirmCommand);
+router.post('/record', validateApiKey, locationRecordValidation, validateRequest, recordLocation);
+router.get('/check-commands', validateApiKey, checkCommands);
+router.post('/confirm-command', validateApiKey, confirmCommand);
 
 // Protected routes (requires authentication)
 router.use(auth);
