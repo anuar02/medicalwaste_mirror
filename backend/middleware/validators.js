@@ -1,4 +1,5 @@
 // middleware/validators.js
+const ApiKey = require('../models/apiKey'); // Adjust based on your model structure
 const { validationResult } = require('express-validator');
 const AppError = require('../utils/appError');
 
@@ -82,19 +83,57 @@ const sanitizeData = (req, res, next) => {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
-const validateApiKey = (req, res, next) => {
-    const apiKey = req.headers['x-api-key'];
 
-    if (!apiKey) {
-        return next(new AppError('API key is missing', 401));
+
+// API key validation middleware
+const jwt = require('jsonwebtoken');
+const auth = (req, res, next) => {
+    try {
+        const token = req.header('Authorization')?.replace('Bearer ', '');
+
+        if (!token) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        res.status(401).json({ error: 'Invalid authentication token' });
     }
+};
 
-    // Check if API key is valid (from database or environment variable)
-    if (apiKey !== process.env.API_KEY) {
-        return next(new AppError('Invalid API key', 401));
+// API key validation middleware (for IoT devices)
+const validateApiKey = async (req, res, next) => {
+    try {
+        // Get API key from header
+        const apiKey = req.header('X-API-Key');
+
+        if (!apiKey) {
+            return res.status(401).json({ error: 'API key is required' });
+        }
+
+        // Find API key in database
+        const validKey = await ApiKey.findOne({ key: apiKey, active: true });
+
+        if (!validKey) {
+            return res.status(403).json({ error: 'Invalid or inactive API key' });
+        }
+
+        // Add device info to request
+        req.deviceId = validKey.deviceId;
+
+        // Update last used timestamp
+        await ApiKey.updateOne(
+            { _id: validKey._id },
+            { $set: { lastUsed: new Date() } }
+        );
+
+        next();
+    } catch (error) {
+        console.error('API key validation error:', error);
+        res.status(500).json({ error: 'Server error during API key validation' });
     }
-
-    next();
 };
 
 module.exports = {

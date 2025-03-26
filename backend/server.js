@@ -17,6 +17,8 @@ const historyRoutes = require('./routes/history');
 const userRoutes = require('./routes/users');
 const deviceRoutes = require('./routes/devices');
 const trackingRoutes = require('./routes/tracking');
+const adminRoutes = require('./routes/admin');
+
 
 // Import middlewares
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
@@ -118,6 +120,7 @@ app.use('/api/history', historyRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/tracking', trackingRoutes); // Add this new route
+app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
