@@ -22,6 +22,7 @@ const ForgotPassword = React.lazy(() => import('./pages/auth/ForgotPassword'));
 const ResetPassword = React.lazy(() => import('./pages/auth/ResetPassword'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const BinDetails = React.lazy(() => import('./pages/BinDetails'));
+const DriverTracking = React.lazy(() => import('./pages/DriverTracking'));
 const BinList = React.lazy(() => import('./pages/BinList'));
 const BinMap = React.lazy(() => import('./pages/BinMap'));
 const Reports = React.lazy(() => import('./pages/Reports'));
