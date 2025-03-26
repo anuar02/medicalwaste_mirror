@@ -13,8 +13,8 @@ const {
     getCollectionPoints,
     getDriverStats
 } = require('../controllers/trackingController');
-const { auth, validateApiKey } = require('../middleware/auth');
-const { validateRequest } = require('../middleware/validators');
+const { auth } = require('../middleware/auth');
+const { validateRequest, validateApiKey} = require('../middleware/validators');
 
 // Input validation for location recording
 const locationRecordValidation = [
