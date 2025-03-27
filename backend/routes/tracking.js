@@ -1,4 +1,4 @@
-// routes/tracking.js - Updated with collection functionality
+// routes/tracking.js - Fixed routes to match ESP8266 client
 const express = require('express');
 const router = express.Router();
 const { body, param, query } = require('express-validator');
@@ -73,6 +73,7 @@ const commandValidation = [
 ];
 
 // Routes for device communication (API key validation)
+// These match the URLs used by the ESP8266 device
 router.post('/record', validateApiKey, locationRecordValidation, validateRequest, recordLocation);
 router.get('/check-commands', validateApiKey, checkCommands);
 router.post('/confirm-command', validateApiKey, confirmCommand);
