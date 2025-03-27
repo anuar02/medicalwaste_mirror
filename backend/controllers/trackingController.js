@@ -132,9 +132,10 @@ const checkCommands = asyncHandler(async (req, res) => {
         });
     }
 
-    // This would typically fetch from a commands collection or queue
-    // For now, we'll just return a dummy command as an example
-    // In a real implementation, you'd fetch pending commands for the device
+    // Log the command check in development mode
+    if (process.env.NODE_ENV === 'development') {
+        console.log(`Command check from device: ${deviceId}`);
+    }
 
     // Check if there are any pending commands for this device
     const pendingCommand = await DeviceCommand.findOne({
@@ -143,11 +144,31 @@ const checkCommands = asyncHandler(async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (pendingCommand) {
+        // Convert command data to string if it's an object
+        let commandData = pendingCommand.data;
+        if (typeof commandData === 'object') {
+            commandData = JSON.stringify(commandData);
+        }
+
         return res.status(200).json({
             status: 'success',
             command: pendingCommand.command,
             commandId: pendingCommand._id,
-            data: pendingCommand.data
+            data: commandData
+        });
+    }
+
+    // For testing: Automatically send a command to toggle collection mode
+    // This is for testing only and should be removed in production
+    if (req.query.test === 'true') {
+        const testCommandId = "test-command-" + Date.now();
+        const isCurrentlyCollecting = req.query.isCollecting === 'true';
+
+        return res.status(200).json({
+            status: 'success',
+            command: 'setCollectingMode',
+            commandId: testCommandId,
+            data: { isCollecting: !isCurrentlyCollecting }
         });
     }
 
