@@ -1,9 +1,13 @@
-// controllers/trackingController.js - Enhanced with collection functionality
+// controllers/trackingController.js - Simplified version without DeviceCommand dependency
 const TrackingData = require('../models/TrackingData');
 const WasteBin = require('../models/WasteBin');
-const CollectionPoint = require('../models/CollectionPoint');
+const Device = require('../models/Device'); // Use your existing Device model
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
+
+// Simple in-memory command queue for testing (will be lost on server restart)
+// In production, you would use a database
+const pendingCommands = {};
 
 /**
  * Record device location data
@@ -19,7 +23,6 @@ const recordLocation = asyncHandler(async (req, res) => {
         battery,
         isCollecting,
         isCheckpoint,
-        checkpointType,
         timestamp
     } = req.body;
 
@@ -52,63 +55,56 @@ const recordLocation = asyncHandler(async (req, res) => {
         timestamp: timestamp ? new Date(timestamp) : new Date()
     });
 
-    // If this is a collection checkpoint, record it separately
-    if (isCheckpoint && checkpointType === 'waste_collection') {
-        // Find waste bins near this location (within 50 meters)
-        const nearbyBins = await WasteBin.find({
-            location: {
-                $near: {
-                    $geometry: {
-                        type: 'Point',
-                        coordinates: [longitude, latitude]
-                    },
-                    $maxDistance: 50 // 50 meters
-                }
+    // Update device lastSeen timestamp if device exists
+    try {
+        await Device.findOneAndUpdate(
+            { 'deviceInfo.macAddress': deviceId },
+            {
+                'deviceInfo.lastSeen': new Date(),
+                'deviceInfo.batteryVoltage': battery
             }
-        });
+        );
+    } catch (error) {
+        console.log('Device update error (non-critical):', error.message);
+    }
 
-        // Create a collection point record
-        const collectionPoint = await CollectionPoint.create({
-            deviceId,
-            driverId: deviceId, // Using deviceId as driver ID for now
-            location: {
-                type: 'Point',
-                coordinates: [longitude, latitude]
-            },
-            timestamp: new Date(),
-            binIds: nearbyBins.map(bin => bin.binId),
-            binCount: nearbyBins.length
-        });
+    // Process if this is a collection checkpoint
+    if (isCheckpoint) {
+        console.log(`Collection checkpoint recorded for device ${deviceId}`);
 
-        // Update the lastCollection field for each nearby bin
-        if (nearbyBins.length > 0) {
-            const updatePromises = nearbyBins.map(bin => {
-                // Reset bin fullness to 0 since it was just collected
-                return WasteBin.findByIdAndUpdate(bin._id, {
-                    fullness: 0,
-                    lastCollection: new Date(),
-                    $push: {
-                        collectionHistory: {
-                            collectedAt: new Date(),
-                            collectedBy: deviceId,
-                            fullnessAtCollection: bin.fullness,
-                            weightAtCollection: bin.weight || 0
-                        }
+        // Find nearby bins if this is a collection checkpoint
+        try {
+            const nearbyBins = await WasteBin.find({
+                location: {
+                    $near: {
+                        $geometry: {
+                            type: 'Point',
+                            coordinates: [longitude, latitude]
+                        },
+                        $maxDistance: 50 // Within 50 meters
                     }
-                });
+                }
             });
 
-            await Promise.all(updatePromises);
-        }
+            // Update bins as collected
+            if (nearbyBins && nearbyBins.length > 0) {
+                for (const bin of nearbyBins) {
+                    bin.fullness = 0; // Reset fullness when collected
+                    bin.lastCollection = new Date();
+                    bin.collectionHistory.push({
+                        collectedAt: new Date(),
+                        collectedBy: deviceId,
+                        fullnessAtCollection: bin.fullness,
+                        weightAtCollection: bin.weight || 0
+                    });
+                    await bin.save();
+                }
 
-        return res.status(201).json({
-            status: 'success',
-            data: {
-                trackingData,
-                collectionPoint,
-                binsCollected: nearbyBins.length
+                console.log(`Updated ${nearbyBins.length} bins as collected by ${deviceId}`);
             }
-        });
+        } catch (error) {
+            console.log('Error updating bins:', error.message);
+        }
     }
 
     res.status(201).json({
@@ -132,34 +128,9 @@ const checkCommands = asyncHandler(async (req, res) => {
         });
     }
 
-    // Log the command check in development mode
-    if (process.env.NODE_ENV === 'development') {
-        console.log(`Command check from device: ${deviceId}`);
-    }
+    console.log(`Command check from device: ${deviceId}`);
 
-    // Check if there are any pending commands for this device
-    const pendingCommand = await DeviceCommand.findOne({
-        deviceId,
-        status: 'pending'
-    }).sort({ createdAt: -1 });
-
-    if (pendingCommand) {
-        // Convert command data to string if it's an object
-        let commandData = pendingCommand.data;
-        if (typeof commandData === 'object') {
-            commandData = JSON.stringify(commandData);
-        }
-
-        return res.status(200).json({
-            status: 'success',
-            command: pendingCommand.command,
-            commandId: pendingCommand._id,
-            data: commandData
-        });
-    }
-
-    // For testing: Automatically send a command to toggle collection mode
-    // This is for testing only and should be removed in production
+    // Testing mode - Send test command based on query params
     if (req.query.test === 'true') {
         const testCommandId = "test-command-" + Date.now();
         const isCurrentlyCollecting = req.query.isCollecting === 'true';
@@ -169,6 +140,18 @@ const checkCommands = asyncHandler(async (req, res) => {
             command: 'setCollectingMode',
             commandId: testCommandId,
             data: { isCollecting: !isCurrentlyCollecting }
+        });
+    }
+
+    // Check in-memory queue for pending commands
+    if (pendingCommands[deviceId] && pendingCommands[deviceId].length > 0) {
+        const command = pendingCommands[deviceId].shift();
+
+        return res.status(200).json({
+            status: 'success',
+            command: command.type,
+            commandId: command.id,
+            data: command.data
         });
     }
 
@@ -192,15 +175,11 @@ const confirmCommand = asyncHandler(async (req, res) => {
         });
     }
 
-    // Update command status
-    await DeviceCommand.findByIdAndUpdate(commandId, {
-        status: status || 'executed',
-        executedAt: new Date()
-    });
+    console.log(`Command confirmation received: ${commandId} for ${deviceId} - Status: ${status || 'executed'}`);
 
     res.status(200).json({
         status: 'success',
-        message: 'Command status updated'
+        message: 'Command confirmation received'
     });
 });
 
@@ -217,19 +196,31 @@ const sendCommand = asyncHandler(async (req, res) => {
         });
     }
 
-    // Create new command
-    const newCommand = await DeviceCommand.create({
-        deviceId,
-        command,
+    // Initialize queue for this device if needed
+    if (!pendingCommands[deviceId]) {
+        pendingCommands[deviceId] = [];
+    }
+
+    // Create command ID
+    const commandId = `cmd-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    // Add command to queue
+    pendingCommands[deviceId].push({
+        id: commandId,
+        type: command,
         data: data || {},
-        status: 'pending',
-        createdAt: new Date()
+        created: new Date()
     });
+
+    console.log(`Command queued for ${deviceId}: ${command}`);
 
     res.status(201).json({
         status: 'success',
         data: {
-            command: newCommand
+            commandId,
+            deviceId,
+            command,
+            data: data || {}
         }
     });
 });
@@ -318,13 +309,19 @@ const getAllDevicesLocations = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get collection points history
+ * Get collection points (simplified)
  */
 const getCollectionPoints = asyncHandler(async (req, res) => {
-    const { limit = 100, from, to } = req.query;
+    // Get checkpoints by finding tracking data marked as checkpoints
+    // This is a simplified version since we don't have a dedicated collections table
+    const { driverId, from, to } = req.query;
 
     // Build query
-    const query = {};
+    const query = { isCheckpoint: true };
+
+    if (driverId) {
+        query.deviceId = driverId;
+    }
 
     // Add date range if provided
     if (from || to) {
@@ -333,10 +330,20 @@ const getCollectionPoints = asyncHandler(async (req, res) => {
         if (to) query.timestamp.$lte = new Date(to);
     }
 
-    // Get collection points with pagination
-    const collectionPoints = await CollectionPoint.find(query)
+    // Get tracking points marked as checkpoints
+    const checkpoints = await TrackingData.find(query)
         .sort({ timestamp: -1 })
-        .limit(parseInt(limit));
+        .limit(100);
+
+    // Format as collection points
+    const collectionPoints = checkpoints.map(point => ({
+        _id: point._id,
+        driverId: point.deviceId,
+        location: point.location,
+        timestamp: point.timestamp,
+        binIds: [], // We don't have this info in this simplified version
+        binCount: 0  // We don't have this info in this simplified version
+    }));
 
     res.status(200).json({
         status: 'success',
@@ -352,69 +359,49 @@ const getDriverStats = asyncHandler(async (req, res) => {
     const { driverId } = req.params;
     const { from, to } = req.query;
 
-    // Build date range
-    const dateRange = {};
-    if (from) dateRange.$gte = new Date(from);
-    if (to) dateRange.$lte = new Date(to);
+    // Build query for all tracking data
+    const query = { deviceId: driverId };
 
-    // Query parameters
-    const matchStage = { driverId };
-    if (Object.keys(dateRange).length > 0) {
-        matchStage.timestamp = dateRange;
+    // Add date range if provided
+    if (from || to) {
+        query.timestamp = {};
+        if (from) query.timestamp.$gte = new Date(from);
+        if (to) query.timestamp.$lte = new Date(to);
     }
 
-    // Get collection statistics
-    const collectionStats = await CollectionPoint.aggregate([
-        { $match: matchStage },
-        {
-            $group: {
-                _id: "$driverId",
-                totalCollections: { $sum: 1 },
-                totalBinsCollected: { $sum: "$binCount" },
-                firstCollection: { $min: "$timestamp" },
-                lastCollection: { $max: "$timestamp" }
-            }
-        }
-    ]);
+    // Get tracking data
+    const trackingData = await TrackingData.find(query).sort({ timestamp: 1 });
 
-    // Get distance traveled
-    const trackingQuery = { deviceId: driverId };
-    if (Object.keys(dateRange).length > 0) {
-        trackingQuery.timestamp = dateRange;
-    }
+    // Count collection points
+    const collectionPoints = await TrackingData.countDocuments({
+        ...query,
+        isCheckpoint: true
+    });
 
-    const trackingData = await TrackingData.find(trackingQuery)
-        .sort({ timestamp: 1 });
-
-    // Calculate distance using Haversine formula
+    // Calculate distance (simplified estimate)
     let totalDistance = 0;
     let activeTime = 0;
-    let lastActiveTimestamp = null;
 
     for (let i = 1; i < trackingData.length; i++) {
         const prevPoint = trackingData[i-1];
         const currentPoint = trackingData[i];
 
-        // Calculate distance between consecutive points
         if (prevPoint.location && currentPoint.location) {
+            // Calculate distance between points
             const [prevLng, prevLat] = prevPoint.location.coordinates;
             const [currLng, currLat] = currentPoint.location.coordinates;
 
-            const distance = calculateHaversineDistance(
-                prevLat, prevLng,
-                currLat, currLng
-            );
-
+            // Simple distance calculation (approximation)
+            const distance = calculateDistance(prevLat, prevLng, currLat, currLng);
             totalDistance += distance;
-        }
 
-        // Calculate active time when in collecting mode
-        if (currentPoint.isCollecting) {
-            const timeDiff = new Date(currentPoint.timestamp) - new Date(prevPoint.timestamp);
-            if (timeDiff > 0 && timeDiff < 3600000) { // Less than 1 hour gap
-                activeTime += timeDiff;
+            // Calculate active time
+            if (prevPoint.isCollecting || currentPoint.isCollecting) {
+                const timeDiff = new Date(currentPoint.timestamp) - new Date(prevPoint.timestamp);
+                if (timeDiff > 0 && timeDiff < 3600000) { // Less than 1 hour gap
+                    activeTime += timeDiff;
+                }
             }
-            lastActiveTimestamp = currentPoint.timestamp;
         }
     }
 
@@ -423,36 +410,44 @@ const getDriverStats = asyncHandler(async (req, res) => {
         data: {
             driver: driverId,
             statistics: {
-                collections: collectionStats.length > 0 ? collectionStats[0] : { totalCollections: 0, totalBinsCollected: 0 },
+                collections: {
+                    totalCollections: collectionPoints,
+                    totalBinsCollected: 0 // We don't track this in the simplified version
+                },
                 distance: {
-                    totalKilometers: totalDistance,
+                    totalKilometers: parseFloat(totalDistance.toFixed(2)),
                     unit: "kilometers"
                 },
                 activity: {
                     activeTimeMillis: activeTime,
-                    activeTimeHours: activeTime / 3600000,
-                    lastActive: lastActiveTimestamp
+                    activeTimeHours: parseFloat((activeTime / 3600000).toFixed(2)),
+                    lastActive: trackingData.length > 0 ?
+                        trackingData[trackingData.length - 1].timestamp : null
                 }
             }
         }
     });
 });
 
-// Helper function to calculate distance using Haversine formula
-function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
+// Helper function to calculate distance between coordinates
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
 
     const a =
         Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
         Math.sin(dLon/2) * Math.sin(dLon/2);
 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c; // Distance in kilometers
+    const distance = R * c; // Distance in km
 
     return distance;
+}
+
+function deg2rad(deg) {
+    return deg * (Math.PI/180);
 }
 
 module.exports = {
