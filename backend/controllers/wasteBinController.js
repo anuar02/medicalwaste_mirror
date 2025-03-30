@@ -210,7 +210,7 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
  * Update waste bin level from sensor data
  */
 const updateBinLevel = asyncHandler(async (req, res) => {
-    const { binId, distance, fullness, temperature, weight, batteryVoltage, macAddress } = req.body;
+    const { binId, distance, fullness, temperature, weight, batteryVoltage, macAddress, latitude, longitude } = req.body;
 
     if (!binId) {
         return res.status(400).json({
@@ -225,6 +225,11 @@ const updateBinLevel = asyncHandler(async (req, res) => {
     // If bin not found but we have a MAC address, try finding by MAC
     if (!bin && macAddress) {
         bin = await WasteBin.findOne({ 'deviceInfo.macAddress': macAddress });
+    }
+
+    if (latitude || longitude) {
+        if (latitude) bin.location.coordinates[1] = latitude;
+        if (longitude) bin.location.coordinates[0] = longitude;
     }
 
     if (!bin) {
