@@ -405,12 +405,12 @@ const BinDetails = () => {
                         </div>
                         <div className="h-96">
                             <Map
-                                center={[51.082187, 71.421357]}
+                                center={[bin.location.coordinates[1], bin.location.coordinates[0]]}
                                 zoom={16}
                                 markers={[
                                     {
                                         id: bin.binId,
-                                        position: [51.082187, 71.421357],
+                                        position: [bin.location.coordinates[1], bin.location.coordinates[0]],
                                         popup: `
                       <strong>${bin.binId}</strong><br/>
                       ${bin.department}<br/>
