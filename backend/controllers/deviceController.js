@@ -68,7 +68,7 @@ const configureDevice = asyncHandler(async (req, res, next) => {
 
 // Update device data (for ESP32 data reporting)
 const updateDeviceData = asyncHandler(async (req, res, next) => {
-    const { macAddress, deviceId } = req.body;
+    const { macAddress, deviceId, latitude, longitude } = req.body;
 
     if (!macAddress && !deviceId) {
         return next(new AppError('Device identifier is required', 400));
@@ -89,7 +89,14 @@ const updateDeviceData = asyncHandler(async (req, res, next) => {
                 macAddress,
                 deviceType: req.body.deviceType || 'ESP32',
                 status: 'pending',
-                lastSeen: new Date()
+                lastSeen: new Date(),
+                // Store location if provided
+                ...(latitude && longitude ? {
+                    location: {
+                        type: 'Point',
+                        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+                    }
+                } : {})
             });
 
             return res.status(201).json({
@@ -105,12 +112,14 @@ const updateDeviceData = asyncHandler(async (req, res, next) => {
     // Update device data
     device.lastSeen = new Date();
 
-    // Update location if provided
-    if (req.body.latitude && req.body.longitude) {
+    // Update location if provided - ensure coordinates format is consistent
+    if (latitude !== undefined && longitude !== undefined) {
         device.location = {
             type: 'Point',
-            coordinates: [req.body.longitude, req.body.latitude]
+            coordinates: [parseFloat(longitude), parseFloat(latitude)]
         };
+
+        console.log(`Updated device location: [${longitude}, ${latitude}]`);
     }
 
     await device.save();
@@ -140,6 +149,15 @@ const updateDeviceData = asyncHandler(async (req, res, next) => {
 
             if (typeof weight === 'number') {
                 bin.weight = weight;
+            }
+
+            // Update bin location from device location if available
+            if (device.location && device.location.coordinates) {
+                bin.location = {
+                    type: 'Point',
+                    coordinates: device.location.coordinates
+                };
+                console.log(`Updated bin location from device: [${device.location.coordinates}]`);
             }
 
             bin.lastUpdate = new Date();

@@ -70,7 +70,7 @@ const recordLocation = asyncHandler(async (req, res) => {
 
     // Process if this is a collection checkpoint
     if (isCheckpoint) {
-        console.log(`Collection checkpoint recorded for device ${deviceId}`);
+        console.log(`Collection checkpoint recorded for device ${deviceId} at coordinates [${longitude}, ${latitude}]`);
 
         // Find nearby bins if this is a collection checkpoint
         try {
@@ -79,12 +79,14 @@ const recordLocation = asyncHandler(async (req, res) => {
                     $near: {
                         $geometry: {
                             type: 'Point',
-                            coordinates: [longitude, latitude]
+                            coordinates: [parseFloat(longitude), parseFloat(latitude)]
                         },
                         $maxDistance: 50 // Within 50 meters
                     }
                 }
             });
+
+            console.log(`Found ${nearbyBins.length} bins near checkpoint [${longitude}, ${latitude}]`);
 
             // Update bins as collected
             if (nearbyBins && nearbyBins.length > 0) {
