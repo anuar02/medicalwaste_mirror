@@ -268,7 +268,7 @@ const updateBinLevel = asyncHandler(async (req, res) => {
 
     res.status(200).json({
         status: 'success',
-        data: { binId: bin.binId }
+        data: { bin }
     });
 });
 
