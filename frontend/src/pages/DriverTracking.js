@@ -331,6 +331,56 @@ const DriverTracking = () => {
                     {selectedDriver && (
                         <>
                             <DashboardCard
+                                title="Статистика Водителя"
+                                icon={<FileText className="h-5 w-5" />}
+                            >
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+                                        <span className="text-sm text-slate-600">Точек сбора:</span>
+                                        <span className="font-semibold">{stats.collections.totalCollections}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+                                        <span className="text-sm text-slate-600">Собрано контейнеров:</span>
+                                        <span className="font-semibold">{stats.collections.totalBinsCollected}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+                                        <span className="text-sm text-slate-600">Пройдено км:</span>
+                                        <span className="font-semibold">{stats.distance.totalKilometers.toFixed(1)} км</span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+                                        <span className="text-sm text-slate-600">Активное время:</span>
+                                        <span className="font-semibold">{stats.activity.activeTimeHours.toFixed(1)} ч</span>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4">
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        Период статистики
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-xs text-slate-500">От</label>
+                                            <input
+                                                type="date"
+                                                value={dateRange.from}
+                                                onChange={(e) => setDateRange({...dateRange, from: e.target.value})}
+                                                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-500">До</label>
+                                            <input
+                                                type="date"
+                                                value={dateRange.to}
+                                                onChange={(e) => setDateRange({...dateRange, to: e.target.value})}
+                                                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </DashboardCard>
+
+                            <DashboardCard
                                 title="Управление"
                                 icon={<UserCheck className="h-5 w-5" />}
                             >
@@ -414,58 +464,6 @@ const DriverTracking = () => {
                                     )}
                                 </div>
                             </DashboardCard>
-
-                            <DashboardCard
-                                title="Статистика Водителя"
-                                icon={<FileText className="h-5 w-5" />}
-                            >
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50">
-                                        <span className="text-sm text-slate-600">Точек сбора:</span>
-                                        <span className="font-semibold">{stats.collections.totalCollections}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50">
-                                        <span className="text-sm text-slate-600">Собрано контейнеров:</span>
-                                        <span className="font-semibold">{stats.collections.totalBinsCollected}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50">
-                                        <span className="text-sm text-slate-600">Пройдено км:</span>
-                                        <span className="font-semibold">{stats.distance.totalKilometers.toFixed(1)} км</span>
-                                    </div>
-                                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50">
-                                        <span className="text-sm text-slate-600">Активное время:</span>
-                                        <span className="font-semibold">{stats.activity.activeTimeHours.toFixed(1)} ч</span>
-                                    </div>
-                                </div>
-
-                                <div className="mt-4">
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                                        Период статистики
-                                    </label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="text-xs text-slate-500">От</label>
-                                            <input
-                                                type="date"
-                                                value={dateRange.from}
-                                                onChange={(e) => setDateRange({...dateRange, from: e.target.value})}
-                                                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-slate-500">До</label>
-                                            <input
-                                                type="date"
-                                                value={dateRange.to}
-                                                onChange={(e) => setDateRange({...dateRange, to: e.target.value})}
-                                                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </DashboardCard>
-
-
                         </>
                     )}
                 </div>
