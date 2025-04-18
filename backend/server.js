@@ -26,7 +26,7 @@ const { requestLogger } = require('./middleware/loggers');
 
 const app = express();
 
-app.set('trust proxy', true);
+app.set('trust proxy', 'loopback');
 
 // Create a write stream for access logs
 const accessLogStream = fs.createWriteStream(
