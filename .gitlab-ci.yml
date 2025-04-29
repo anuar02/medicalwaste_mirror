@@ -6,8 +6,6 @@ variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
   FF_USE_DIRECT_DOWNLOAD: "true"
-  # Add this to help debug shell profile issues
-  FF_SCRIPT_SECTIONS: "true"
 
 # Common settings for all build jobs
 .build_template: &build_definition
@@ -17,10 +15,9 @@ variables:
     - name: docker:20.10.16-dind
       command: ["--tls=false"]
   before_script:
-    - echo "Logging in to GitLab Registry..."
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   tags:
-    - docker # Use tags that match runners with Docker executor
+    - docker
 
 # Build frontend Docker image
 build-frontend:
@@ -62,54 +59,27 @@ build-nginx:
 deploy-swarm:
   stage: deploy
   tags:
-    - docker-swarm-runner # Ensure this matches your swarm-capable runner
+    - docker-swarm-runner
   variables:
-    # These will be used in the docker-compose.yml
     MONGODB_URI: ${MONGODB_URI}
   script:
     - echo "Preparing for deployment..."
-    - 'which docker || (echo "Docker not found. Make sure the runner has Docker installed" && exit 1)'
-    - 'docker version'
-    - 'docker node ls || (echo "This runner cannot access Docker Swarm. Make sure it has the right permissions" && exit 1)'
-
-    # Get worker hostnames - with error handling
-    - echo "Collecting worker hostnames..."
-    - WORKER1_HOSTNAME=$(docker node ls --format "{{.Hostname}}" | grep -v $(hostname) | head -1 || echo "")
-    - WORKER2_HOSTNAME=$(docker node ls --format "{{.Hostname}}" | grep -v $(hostname) | grep -v $WORKER1_HOSTNAME | head -1 || echo "")
-
+    - docker version
+    - docker node ls
+    - WORKER1_HOSTNAME=$(docker node ls --format "{{.Hostname}}" | grep -v $(hostname) | head -1)
+    - WORKER2_HOSTNAME=$(docker node ls --format "{{.Hostname}}" | grep -v $(hostname) | grep -v $WORKER1_HOSTNAME | head -1)
     - echo "Worker 1: $WORKER1_HOSTNAME"
     - echo "Worker 2: $WORKER2_HOSTNAME"
-
-    - if [ -z "$WORKER1_HOSTNAME" ]; then echo "Warning: Could not find Worker 1"; fi
-    - if [ -z "$WORKER2_HOSTNAME" ]; then echo "Warning: Could not find Worker 2"; fi
-
-    # Set environment variables for docker-compose
     - export WORKER1_HOSTNAME=$WORKER1_HOSTNAME
     - export WORKER2_HOSTNAME=$WORKER2_HOSTNAME
     - export CI_REGISTRY_IMAGE=$CI_REGISTRY_IMAGE
     - export CI_COMMIT_SHA=$CI_COMMIT_SHA
-
-    # Login to GitLab Docker registry
-    - echo "Logging in to GitLab Registry..."
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
-
-    # Process docker-compose.yml with environment variables
-    - echo "Preparing docker-compose file..."
-    - 'which envsubst || (echo "envsubst not found. Installing gettext package..." && apt-get update && apt-get install -y gettext-base)'
     - envsubst < docker-compose.yml > docker-compose.prod.yml
     - cat docker-compose.prod.yml
-
-    # Deploy the stack with proper error handling
-    - echo "Deploying stack to swarm..."
     - docker stack deploy -c docker-compose.prod.yml --with-registry-auth smart-bin
-
-    # Verify deployment with timeout
-    - echo "Verifying deployment..."
-    - for i in $(seq 1 12); do echo "Checking services ($i/12)..."; docker stack services smart-bin; if [ $? -eq 0 ]; then break; fi; sleep 10; done
-
-    # Final verification
+    - sleep 10
     - docker stack services smart-bin
-    - echo "Deployment complete!"
   environment:
     name: production
   only:
