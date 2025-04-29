@@ -59,12 +59,16 @@ deploy-swarm:
     - swarm
   script:
     - echo "Preparing for deployment..."
+    # Get worker node hostnames
     - WORKER1_HOSTNAME=$(docker node ls --format "{{.Hostname}}" | grep -v $(hostname) | head -1)
     - WORKER2_HOSTNAME=$(docker node ls --format "{{.Hostname}}" | grep -v $(hostname) | grep -v $WORKER1_HOSTNAME | head -1)
     - export WORKER1_HOSTNAME=$WORKER1_HOSTNAME
     - export WORKER2_HOSTNAME=$WORKER2_HOSTNAME
+    # Login to Docker registry
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    # Generate docker-compose.prod.yml from template
     - envsubst < docker-compose.yml > docker-compose.prod.yml
+    # Deploy the stack to Docker Swarm
     - docker stack deploy -c docker-compose.prod.yml --with-registry-auth smart-bin
     - sleep 10
     - docker stack services smart-bin
