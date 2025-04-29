@@ -5,53 +5,49 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
-  FF_USE_DIRECT_DOWNLOAD: "true"
-
-# Common settings for all build jobs
-.build_template: &build_definition
-  stage: build
-  image: docker:20.10.16
-  services:
-    - name: docker:20.10.16-dind
-      command: ["--tls=false"]
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
-  tags:
-    - docker
 
 # Build frontend Docker image
 build-frontend:
-  <<: *build_definition
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - echo "Building frontend image..."
-    - cd frontend || exit 1
-    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -t $CI_REGISTRY_IMAGE/frontend:latest .
+    - cd frontend
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA .
     - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
-    - docker push $CI_REGISTRY_IMAGE/frontend:latest
   only:
     - main
 
 # Build backend Docker image
 build-backend:
-  <<: *build_definition
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - echo "Building backend image..."
-    - cd backend || exit 1
-    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -t $CI_REGISTRY_IMAGE/backend:latest .
+    - cd backend
+    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA .
     - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
-    - docker push $CI_REGISTRY_IMAGE/backend:latest
   only:
     - main
 
 # Build nginx Docker image
 build-nginx:
-  <<: *build_definition
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - echo "Building nginx image..."
-    - cd nginx || exit 1
-    - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA -t $CI_REGISTRY_IMAGE/nginx:latest .
+    - cd nginx
+    - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA .
     - docker push $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
-    - docker push $CI_REGISTRY_IMAGE/nginx:latest
   only:
     - main
 
@@ -59,24 +55,16 @@ build-nginx:
 deploy-swarm:
   stage: deploy
   tags:
-    - docker-swarm-runner
-  variables:
-    MONGODB_URI: ${MONGODB_URI}
+    - docker
+    - swarm
   script:
     - echo "Preparing for deployment..."
-    - docker version
-    - docker node ls
     - WORKER1_HOSTNAME=$(docker node ls --format "{{.Hostname}}" | grep -v $(hostname) | head -1)
     - WORKER2_HOSTNAME=$(docker node ls --format "{{.Hostname}}" | grep -v $(hostname) | grep -v $WORKER1_HOSTNAME | head -1)
-    - echo "Worker 1: $WORKER1_HOSTNAME"
-    - echo "Worker 2: $WORKER2_HOSTNAME"
     - export WORKER1_HOSTNAME=$WORKER1_HOSTNAME
     - export WORKER2_HOSTNAME=$WORKER2_HOSTNAME
-    - export CI_REGISTRY_IMAGE=$CI_REGISTRY_IMAGE
-    - export CI_COMMIT_SHA=$CI_COMMIT_SHA
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
     - envsubst < docker-compose.yml > docker-compose.prod.yml
-    - cat docker-compose.prod.yml
     - docker stack deploy -c docker-compose.prod.yml --with-registry-auth smart-bin
     - sleep 10
     - docker stack services smart-bin
