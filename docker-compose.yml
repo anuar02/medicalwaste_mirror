@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   frontend:
-    image: ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
+    image: registry.gitlab.com/anuar021/trashbin/frontend:15cbc9ca7454b8a0ab0d58f93b57d590e035ff24
     deploy:
       replicas: 1
       placement:
