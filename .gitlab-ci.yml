@@ -1,0 +1,94 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+
+# Build frontend Docker image
+build-frontend:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - cd frontend
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA .
+    - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
+  only:
+    - main
+
+# Build backend Docker image
+build-backend:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - cd backend
+    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA .
+    - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
+  only:
+    - main
+
+# Build nginx Docker image
+build-nginx:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - cd nginx
+    - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA .
+    - docker push $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
+  only:
+    - main
+
+# Deploy to Docker Swarm
+deploy-swarm:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client bash
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H $SWARM_MANAGER_IP >> ~/.ssh/known_hosts
+  script:
+    - echo "Preparing deployment files..."
+    - ssh ubuntu@$SWARM_MANAGER_IP "mkdir -p ~/smart-bin"
+    - scp docker-compose.yml ubuntu@$SWARM_MANAGER_IP:~/smart-bin/
+    - ssh ubuntu@$SWARM_MANAGER_IP "cd ~/smart-bin && bash -c '
+        # Login to GitLab Registry
+        echo \"$CI_REGISTRY_PASSWORD\" | docker login -u \"$CI_REGISTRY_USER\" --password-stdin $CI_REGISTRY
+        
+        # Get worker hostnames
+        WORKER1_HOSTNAME=\$(docker node ls --format \"{{.Hostname}}\" | grep -v \$(hostname) | head -1)
+        WORKER2_HOSTNAME=\$(docker node ls --format \"{{.Hostname}}\" | grep -v \$(hostname) | grep -v \$WORKER1_HOSTNAME | head -1)
+        
+        # Create environment file for deployment
+        cat > .env << EOF
+        CI_REGISTRY_IMAGE=$CI_REGISTRY_IMAGE
+        CI_COMMIT_SHA=$CI_COMMIT_SHA
+        MONGODB_URI=$MONGODB_URI
+        WORKER1_HOSTNAME=\$WORKER1_HOSTNAME
+        WORKER2_HOSTNAME=\$WORKER2_HOSTNAME
+        EOF
+        
+        # Deploy the stack
+        export \$(cat .env | xargs)
+        envsubst < docker-compose.yml > docker-compose.prod.yml
+        docker stack deploy -c docker-compose.prod.yml --with-registry-auth smart-bin
+      '"
+  environment:
+    name: production
+    url: http://$SWARM_MANAGER_IP
+  only:
+    - main
