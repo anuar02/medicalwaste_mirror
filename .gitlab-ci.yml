@@ -9,12 +9,11 @@ variables:
 # Build frontend Docker image
 build-frontend:
   stage: build
-  image: docker:20.10.16
-  services:
-    - docker:20.10.16-dind
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  tags:
+    - docker
+    - swarm
   script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
     - cd frontend
     - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA .
     - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
@@ -24,12 +23,11 @@ build-frontend:
 # Build backend Docker image
 build-backend:
   stage: build
-  image: docker:20.10.16
-  services:
-    - docker:20.10.16-dind
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  tags:
+    - docker
+    - swarm
   script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
     - cd backend
     - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA .
     - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
@@ -39,12 +37,11 @@ build-backend:
 # Build nginx Docker image
 build-nginx:
   stage: build
-  image: docker:20.10.16
-  services:
-    - docker:20.10.16-dind
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  tags:
+    - docker
+    - swarm
   script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
     - cd nginx
     - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA .
     - docker push $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
