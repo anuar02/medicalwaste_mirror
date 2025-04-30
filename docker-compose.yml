@@ -56,8 +56,8 @@ services:
     networks:
       - app-network
     environment:
-      - FRONTEND_HOST=frontend
-      - BACKEND_HOST=backend
+      - FRONTEND_HOST=myapp_frontend
+      - BACKEND_HOST=myapp_backend
 
 networks:
   app-network:
