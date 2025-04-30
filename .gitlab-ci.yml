@@ -6,71 +6,256 @@ variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
 
-# Build frontend Docker image
+# Build images separately to avoid context issues
 build-frontend:
   stage: build
   image: docker:20.10.16
   services:
     - docker:20.10.16-dind
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - cd frontend
-    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA .
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA ./frontend
     - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
-  only:
-    - main
+    - docker tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/frontend:latest
+    - docker push $CI_REGISTRY_IMAGE/frontend:latest
 
-# Build backend Docker image
 build-backend:
   stage: build
   image: docker:20.10.16
   services:
     - docker:20.10.16-dind
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - cd backend
-    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA .
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA ./backend
     - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
-  only:
-    - main
+    - docker tag $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/backend:latest
+    - docker push $CI_REGISTRY_IMAGE/backend:latest
 
-# Build nginx Docker image
 build-nginx:
   stage: build
   image: docker:20.10.16
   services:
     - docker:20.10.16-dind
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - cd nginx
-    - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA .
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - |
+      cat > wait-for.sh << 'EOF'
+      #!/bin/bash
+      set -e
+      host="$1"
+      port="$2"
+      shift 2
+      cmd="$@"
+      until nc -z "$host" "$port"; do
+        >&2 echo "Service $host:$port is unavailable - sleeping"
+        sleep 1
+      done
+      >&2 echo "Service $host:$port is up - executing command"
+      exec $cmd
+      EOF
+    - |
+      cat > default.conf << 'EOF'
+      server {
+          listen 80;
+          server_name localhost;
+      
+          # Increase timeout for Docker Swarm network
+          proxy_connect_timeout 300s;
+          proxy_send_timeout 300s;
+          proxy_read_timeout 300s;
+      
+          # Enable compression
+          gzip on;
+          gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+      
+          # API requests
+          location /api/ {
+              proxy_pass http://${BACKEND_HOST}:5000/;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection 'upgrade';
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_cache_bypass $http_upgrade;
+          }
+      
+          # Frontend
+          location / {
+              proxy_pass http://${FRONTEND_HOST}:4000;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection 'upgrade';
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_cache_bypass $http_upgrade;
+          }
+      
+          # Health check endpoint
+          location /health {
+              access_log off;
+              return 200 "healthy\n";
+          }
+      }
+      EOF
+    - |
+      cat > docker-entrypoint.sh << 'EOF'
+      #!/bin/bash
+      set -e
+      
+      # Replace environment variables in the nginx config
+      envsubst '${FRONTEND_HOST} ${BACKEND_HOST}' < /etc/nginx/conf.d/default.conf > /etc/nginx/conf.d/default.conf.tmp
+      mv /etc/nginx/conf.d/default.conf.tmp /etc/nginx/conf.d/default.conf
+      
+      # Wait for frontend and backend services to be available
+      echo "Waiting for frontend service..."
+      /wait-for.sh ${FRONTEND_HOST} 4000 -t 60
+      
+      echo "Waiting for backend service..."
+      /wait-for.sh ${BACKEND_HOST} 5000 -t 60
+      
+      # Start nginx
+      echo "Starting Nginx..."
+      exec "$@"
+      EOF
+    - |
+      cat > Dockerfile.nginx << 'EOF'
+      FROM nginx:1.25
+      
+      # Install dependencies
+      RUN apt-get update && apt-get install -y \
+          curl \
+          bash \
+          netcat-openbsd \
+          gettext-base \
+          && rm -rf /var/lib/apt/lists/*
+      
+      # Copy wait-for script to wait for other services
+      COPY wait-for.sh /wait-for.sh
+      RUN chmod +x /wait-for.sh
+      
+      # Copy configuration
+      COPY default.conf /etc/nginx/conf.d/default.conf
+      
+      # Create an entrypoint script
+      COPY docker-entrypoint.sh /docker-entrypoint-custom.sh
+      RUN chmod +x /docker-entrypoint-custom.sh
+      
+      ENTRYPOINT ["/docker-entrypoint-custom.sh"]
+      CMD ["nginx", "-g", "daemon off;"]
+      EOF
+    - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA -f Dockerfile.nginx .
     - docker push $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
-  only:
-    - main
+    - docker tag $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/nginx:latest
+    - docker push $CI_REGISTRY_IMAGE/nginx:latest
 
-# Deploy to Docker Swarm
-deploy-swarm:
+deploy:
   stage: deploy
-  tags:
-    - docker
-    - swarm
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  variables:
+    DOCKER_HOST: ssh://user@your-swarm-manager
+  before_script:
+    # Set up SSH for Docker context
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
   script:
-    - echo "Preparing for deployment..."
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
-    - envsubst < docker-compose.yml > docker-compose.prod.yml
-    - docker stack deploy -c docker-compose.prod.yml --with-registry-auth smart-bin
-    - sleep 20
-    - echo "Checking service status:"
-    - docker stack services smart-bin
-    - echo "Checking service logs:"
-    - for service in $(docker stack services smart-bin --format "{{.Name}}"); do
-    -   echo "=== Logs for $service ==="
-    -   docker service logs --tail 20 $service || echo "Could not get logs"
-    - done
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - |
+      cat > docker-compose.prod.yml << EOF
+      version: '3.8'
+      
+      services:
+        frontend:
+          image: ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
+          deploy:
+            replicas: 1
+            restart_policy:
+              condition: on-failure
+              max_attempts: 3
+            resources:
+              limits:
+                cpus: '0.5'
+                memory: 512M
+          networks:
+            - app-network
+          environment:
+            - PORT=4000
+            - REACT_APP_API_URL=/api
+            - NODE_ENV=production
+          healthcheck:
+            test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
+      
+        backend:
+          image: ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
+          deploy:
+            replicas: 1
+            restart_policy:
+              condition: on-failure
+              max_attempts: 3
+            resources:
+              limits:
+                cpus: '0.5'
+                memory: 512M
+          networks:
+            - app-network
+          environment:
+            - PORT=5000
+            - MONGODB_URI=${MONGODB_URI}
+            - NODE_ENV=production
+          healthcheck:
+            test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 20s
+      
+        nginx:
+          image: ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
+          deploy:
+            replicas: 1
+            restart_policy:
+              condition: on-failure
+              delay: 10s
+              max_attempts: 5
+            resources:
+              limits:
+                cpus: '0.2'
+                memory: 128M
+          ports:
+            - "80:80"
+          networks:
+            - app-network
+          environment:
+            - FRONTEND_HOST=frontend
+            - BACKEND_HOST=backend
+          healthcheck:
+            test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 5s
+      
+      networks:
+        app-network:
+          driver: overlay
+          attachable: true
+          driver_opts:
+            com.docker.network.driver.mtu: "1450"
+      EOF
+    - docker stack deploy -c docker-compose.prod.yml myapp
+  only:
+    - main  # Only deploy from the main branch
   environment:
     name: production
-  only:
-    - main
