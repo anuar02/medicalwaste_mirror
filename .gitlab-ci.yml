@@ -103,31 +103,8 @@ build-backend:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
 
-    # Create a proper server.js file for the backend
+    # Create the modified Dockerfile for backend - WITHOUT overriding server.js
     - mkdir -p temp
-    - |
-      cat > temp/server.js << 'EOF'
-      const express = require("express");
-      const app = express();
-      const PORT = process.env.PORT || 5000;
-
-      // Health check endpoint
-      app.get("/health", (req, res) => {
-        res.status(200).send("OK");
-      });
-
-      // Example API endpoint
-      app.get("/api", (req, res) => {
-        res.json({ message: "API is working" });
-      });
-
-      // Start server on all interfaces
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Backend server running on port ${PORT}`);
-      });
-      EOF
-
-    # Create a simplified Dockerfile
     - |
       cat > temp/Dockerfile.backend << 'EOF'
       FROM node:18-alpine
@@ -140,6 +117,9 @@ build-backend:
 
       # Install dependencies
       RUN npm ci --only=production || npm install --production
+
+      # Make sure logs directory exists
+      RUN mkdir -p logs
 
       # Copy application code
       COPY . .
@@ -155,10 +135,7 @@ build-backend:
     - mkdir -p temp/backend
     - cp -r backend/* temp/backend/ || echo "No backend files to copy"
 
-    # Copy our server.js to the backend directory
-    - cp temp/server.js temp/backend/
-
-    # Build the Docker image
+    # Build the Docker image - using original server.js from repo
     - cd temp/backend
     - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -f ../Dockerfile.backend .
     - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
@@ -323,6 +300,11 @@ deploy:
             - PORT=5000
             - MONGODB_URI=mongodb://mongodb:27017/myapp
             - NODE_ENV=production
+          logging:
+            driver: "json-file"
+            options:
+              max-size: "10m"
+              max-file: "3"
 
         # Add MongoDB service for the backend
         mongodb:
@@ -381,6 +363,9 @@ deploy:
       # Check service logs
       echo "Checking frontend logs..."
       docker service logs --tail 5 myapp_frontend
+      
+      echo "Checking backend logs..."
+      docker service logs --tail 20 myapp_backend
       
       echo "Deployment completed!"
       EOF
