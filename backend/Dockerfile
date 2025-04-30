@@ -5,9 +5,32 @@ build-backend:
     - docker:20.10.16-dind
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    # Create a fixed Dockerfile that properly escapes the content
+    # Create a proper minimal server.js file first
+    - mkdir -p temp
     - |
-      cat > Dockerfile.backend << 'EOF'
+      cat > temp/minimal-server.js << 'EOF'
+      const express = require("express");
+      const app = express();
+      const PORT = process.env.PORT || 5000;
+
+      // Health check endpoint
+      app.get("/health", (req, res) => {
+        res.status(200).send("OK");
+      });
+
+      // Example API endpoint
+      app.get("/api", (req, res) => {
+        res.json({ message: "API is working" });
+      });
+
+      // Start server on all interfaces
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Backend server running on port ${PORT}`);
+      });
+      EOF
+    # Create Dockerfile without the problematic RUN echo part
+    - |
+      cat > temp/Dockerfile.backend << 'EOF'
       FROM node:18-alpine
 
       # Create app directory
@@ -22,26 +45,9 @@ build-backend:
       # Copy application code
       COPY . .
 
-      # Create a minimal server if one doesn't exist
+      # Use the pre-created server.js if none exists in the repo
       RUN if [ ! -f server.js ]; then \
-          echo 'const express = require("express");\n\
-      const app = express();\n\
-      const PORT = process.env.PORT || 5000;\n\
-      \n\
-      // Health check endpoint\n\
-      app.get("/health", (req, res) => {\n\
-        res.status(200).send("OK");\n\
-      });\n\
-      \n\
-      // Example API endpoint\n\
-      app.get("/api", (req, res) => {\n\
-        res.json({ message: "API is working" });\n\
-      });\n\
-      \n\
-      // Start server on all interfaces\n\
-      app.listen(PORT, "0.0.0.0", () => {\n\
-        console.log(`Backend server running on port ${PORT}`);\n\
-      });' > server.js; \
+          cp minimal-server.js server.js; \
       fi
 
       # Add a health check endpoint if it doesn't exist
@@ -59,7 +65,15 @@ build-backend:
       # Start the application
       CMD ["node", "server.js"]
       EOF
-    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -f Dockerfile.backend .
+    # Copy the repo contents to our temp directory
+    - mkdir -p temp/backend
+    - cp -r backend/* temp/backend/ || echo "No backend files to copy"
+    # Copy our minimal server.js to the build context
+    - cp temp/minimal-server.js temp/backend/
+    # Build the Docker image
+    - cd temp/backend
+    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -f ../Dockerfile.backend .
     - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
     - docker tag $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/backend:latest
     - docker push $CI_REGISTRY_IMAGE/backend:latest
+    - cd ../..

@@ -14,9 +14,36 @@ build-frontend:
     - docker:20.10.16-dind
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    # Create a fixed Dockerfile that properly escapes the content
+    # Create a proper server.js file first
+    - mkdir -p temp
     - |
-      cat > Dockerfile.frontend << 'EOF'
+      cat > temp/server.js << 'EOF'
+      const express = require("express");
+      const path = require("path");
+      const app = express();
+      const PORT = process.env.PORT || 4000;
+
+      // Health check endpoint
+      app.get("/health", (req, res) => {
+        res.status(200).send("OK");
+      });
+
+      // Serve static files from the React build
+      app.use(express.static(path.join(__dirname, "build")));
+
+      // Handle React routing, return all requests to React app
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(__dirname, "build", "index.html"));
+      });
+
+      // Make sure to listen on all interfaces
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Frontend server running on port ${PORT}`);
+      });
+      EOF
+    # Create Dockerfile without the problematic RUN echo part
+    - |
+      cat > temp/Dockerfile.frontend << 'EOF'
       # Build stage
       FROM node:18-alpine as build
 
@@ -42,33 +69,12 @@ build-frontend:
       # Copy build files
       COPY --from=build /app/build ./build
 
+      # Copy our prewritten server.js
+      COPY server.js .
+
       # Install express for serving
       RUN npm init -y && \
           npm install express@4.18.2
-
-      # Create server file
-      RUN echo 'const express = require("express");\n\
-      const path = require("path");\n\
-      const app = express();\n\
-      const PORT = process.env.PORT || 4000;\n\
-      \n\
-      // Health check endpoint\n\
-      app.get("/health", (req, res) => {\n\
-        res.status(200).send("OK");\n\
-      });\n\
-      \n\
-      // Serve static files from the React build\n\
-      app.use(express.static(path.join(__dirname, "build")));\n\
-      \n\
-      // Handle React routing, return all requests to React app\n\
-      app.get("*", (req, res) => {\n\
-        res.sendFile(path.join(__dirname, "build", "index.html"));\n\
-      });\n\
-      \n\
-      // Make sure to listen on all interfaces\n\
-      app.listen(PORT, "0.0.0.0", () => {\n\
-        console.log(`Frontend server running on port ${PORT}`);\n\
-      });' > server.js
 
       # Expose port
       EXPOSE 4000
@@ -76,7 +82,15 @@ build-frontend:
       # Start the server
       CMD ["node", "server.js"]
       EOF
-    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -f Dockerfile.frontend .
+    # Copy the repo contents to our temp directory
+    - mkdir -p temp/frontend
+    - cp -r frontend/* temp/frontend/ || echo "No frontend files to copy"
+    # Copy our server.js to the build context
+    - cp temp/server.js temp/frontend/
+    # Build the Docker image
+    - cd temp/frontend
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -f ../Dockerfile.frontend .
     - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
     - docker tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/frontend:latest
     - docker push $CI_REGISTRY_IMAGE/frontend:latest
+    - cd ../..
