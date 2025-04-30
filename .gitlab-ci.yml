@@ -95,8 +95,9 @@ deploy:
   stage: deploy
   image: alpine:latest
   variables:
-    # Your actual Swarm manager hostname and SSH user
-    SWARM_MANAGER: "ip-10-0-1-50"
+    # Replace this with your server's PUBLIC IP or DNS name
+    # For example: "13.55.44.10" or "ec2-13-55-44-10.compute-1.amazonaws.com"
+    SWARM_MANAGER: "13.48.178.39"
     SSH_USER: "ubuntu"
   before_script:
     # Set up SSH for connecting to the Swarm manager
