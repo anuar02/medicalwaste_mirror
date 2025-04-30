@@ -5,7 +5,6 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
-  REGISTRY_IMAGE: registry.gitlab.com/anuar021/trashbin
 
 # Build images separately to avoid context issues
 build-frontend:
@@ -15,7 +14,7 @@ build-frontend:
     - docker:20.10.16-dind
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    # Use the improved Dockerfile content
+    # Create a fixed Dockerfile that properly escapes the content
     - |
       cat > Dockerfile.frontend << 'EOF'
       # Build stage
@@ -43,32 +42,32 @@ build-frontend:
       # Copy build files
       COPY --from=build /app/build ./build
 
-      # Install express (for serving)
+      # Install express for serving
       RUN npm init -y && \
           npm install express@4.18.2
 
       # Create server file
-      RUN echo 'const express = require("express");
-      const path = require("path");
-      const app = express();
-      const PORT = process.env.PORT || 4000;
-
-      // Health check endpoint
-      app.get("/health", (req, res) => {
-        res.status(200).send("OK");
-      });
-
-      // Serve static files from the React build
-      app.use(express.static(path.join(__dirname, "build")));
-
-      // Handle React routing, return all requests to React app
-      app.get("*", (req, res) => {
-        res.sendFile(path.join(__dirname, "build", "index.html"));
-      });
-
-      // Make sure to listen on all interfaces
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Frontend server running on port ${PORT}`);
+      RUN echo 'const express = require("express");\n\
+      const path = require("path");\n\
+      const app = express();\n\
+      const PORT = process.env.PORT || 4000;\n\
+      \n\
+      // Health check endpoint\n\
+      app.get("/health", (req, res) => {\n\
+        res.status(200).send("OK");\n\
+      });\n\
+      \n\
+      // Serve static files from the React build\n\
+      app.use(express.static(path.join(__dirname, "build")));\n\
+      \n\
+      // Handle React routing, return all requests to React app\n\
+      app.get("*", (req, res) => {\n\
+        res.sendFile(path.join(__dirname, "build", "index.html"));\n\
+      });\n\
+      \n\
+      // Make sure to listen on all interfaces\n\
+      app.listen(PORT, "0.0.0.0", () => {\n\
+        console.log(`Frontend server running on port ${PORT}`);\n\
       });' > server.js
 
       # Expose port
@@ -77,11 +76,15 @@ build-frontend:
       # Start the server
       CMD ["node", "server.js"]
       EOF
-    - cp frontend/* . || echo "No frontend files to copy"
-    - docker build -t $REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -f Dockerfile.frontend .
-    - docker push $REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
-    - docker tag $REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $REGISTRY_IMAGE/frontend:latest
-    - docker push $REGISTRY_IMAGE/frontend:latest
+    # Copy actual frontend files
+    - mkdir -p frontend-temp
+    - cp -r frontend/* frontend-temp/ || echo "No frontend files to copy"
+    - cd frontend-temp
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -f ../Dockerfile.frontend .
+    - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
+    - docker tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/frontend:latest
+    - docker push $CI_REGISTRY_IMAGE/frontend:latest
+    - cd ..
 
 build-backend:
   stage: build
@@ -90,7 +93,7 @@ build-backend:
     - docker:20.10.16-dind
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    # Use the improved Dockerfile content
+    # Create a fixed Dockerfile that properly escapes the content
     - |
       cat > Dockerfile.backend << 'EOF'
       FROM node:18-alpine
@@ -109,23 +112,23 @@ build-backend:
 
       # Create a minimal server if one doesn't exist
       RUN if [ ! -f server.js ]; then \
-          echo 'const express = require("express");
-      const app = express();
-      const PORT = process.env.PORT || 5000;
-
-      // Health check endpoint
-      app.get("/health", (req, res) => {
-        res.status(200).send("OK");
-      });
-
-      // Example API endpoint
-      app.get("/api", (req, res) => {
-        res.json({ message: "API is working" });
-      });
-
-      // Start server on all interfaces
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Backend server running on port ${PORT}`);
+          echo 'const express = require("express");\n\
+      const app = express();\n\
+      const PORT = process.env.PORT || 5000;\n\
+      \n\
+      // Health check endpoint\n\
+      app.get("/health", (req, res) => {\n\
+        res.status(200).send("OK");\n\
+      });\n\
+      \n\
+      // Example API endpoint\n\
+      app.get("/api", (req, res) => {\n\
+        res.json({ message: "API is working" });\n\
+      });\n\
+      \n\
+      // Start server on all interfaces\n\
+      app.listen(PORT, "0.0.0.0", () => {\n\
+        console.log(`Backend server running on port ${PORT}`);\n\
       });' > server.js; \
       fi
 
@@ -144,11 +147,15 @@ build-backend:
       # Start the application
       CMD ["node", "server.js"]
       EOF
-    - cp backend/* . || echo "No backend files to copy"
-    - docker build -t $REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -f Dockerfile.backend .
-    - docker push $REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
-    - docker tag $REGISTRY_IMAGE/backend:$CI_COMMIT_SHA $REGISTRY_IMAGE/backend:latest
-    - docker push $REGISTRY_IMAGE/backend:latest
+    # Copy actual backend files
+    - mkdir -p backend-temp
+    - cp -r backend/* backend-temp/ || echo "No backend files to copy"
+    - cd backend-temp
+    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -f ../Dockerfile.backend .
+    - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
+    - docker tag $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/backend:latest
+    - docker push $CI_REGISTRY_IMAGE/backend:latest
+    - cd ..
 
 build-nginx:
   stage: build
@@ -216,10 +223,10 @@ build-nginx:
       ENTRYPOINT ["/docker-entrypoint.sh"]
       CMD ["nginx", "-g", "daemon off;"]
       EOF
-    - docker build -t $REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA -f Dockerfile.nginx .
-    - docker push $REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
-    - docker tag $REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA $REGISTRY_IMAGE/nginx:latest
-    - docker push $REGISTRY_IMAGE/nginx:latest
+    - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA -f Dockerfile.nginx .
+    - docker push $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
+    - docker tag $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/nginx:latest
+    - docker push $CI_REGISTRY_IMAGE/nginx:latest
 
 # Deploy to Docker Swarm using SSH access to the manager node
 deploy:
@@ -229,7 +236,6 @@ deploy:
     # Your actual Swarm manager public IP
     SWARM_MANAGER: "13.48.178.39"
     SSH_USER: "ubuntu"
-    REGISTRY_IMAGE: registry.gitlab.com/anuar021/trashbin
   before_script:
     # Set up SSH for connecting to the Swarm manager
     - apk add --no-cache openssh-client
@@ -244,7 +250,7 @@ deploy:
 
       services:
         frontend:
-          image: ${REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
+          image: ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
           deploy:
             replicas: 1
             restart_policy:
@@ -259,7 +265,7 @@ deploy:
             - NODE_ENV=production
 
         backend:
-          image: ${REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
+          image: ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
           deploy:
             replicas: 1
             restart_policy:
@@ -286,7 +292,7 @@ deploy:
             - app-network
 
         nginx:
-          image: ${REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
+          image: ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
           deploy:
             replicas: 1
             restart_policy:

@@ -1,58 +1,82 @@
-# Build stage
-FROM node:18-alpine as build
+stages:
+  - build
+  - deploy
 
-WORKDIR /app
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
 
-# Copy package.json and package-lock.json
-COPY package*.json ./
+# Build images separately to avoid context issues
+build-frontend:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    # Create a fixed Dockerfile that properly escapes the content
+    - |
+      cat > Dockerfile.frontend << 'EOF'
+      # Build stage
+      FROM node:18-alpine as build
 
-# Install dependencies
-RUN npm ci
+      WORKDIR /app
 
-# Copy application code
-COPY . .
+      # Copy package.json and package-lock.json
+      COPY package*.json ./
 
-# Build the application
-RUN CI=false npm run build
+      # Install dependencies
+      RUN npm ci
 
-# Production stage
-FROM node:18-alpine
+      # Copy application code
+      COPY . .
 
-WORKDIR /app
+      # Build the application
+      RUN CI=false npm run build
 
-# Copy build files
-COPY --from=build /app/build ./build
+      # Production stage
+      FROM node:18-alpine
 
-# Install express (for serving)
-RUN npm init -y && \
-    npm install express@4.18.2
+      WORKDIR /app
 
-# Create server file
-RUN echo 'const express = require("express");
-const path = require("path");
-const app = express();
-const PORT = process.env.PORT || 4000;
+      # Copy build files
+      COPY --from=build /app/build ./build
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.status(200).send("OK");
-});
+      # Install express for serving
+      RUN npm init -y && \
+          npm install express@4.18.2
 
-// Serve static files from the React build
-app.use(express.static(path.join(__dirname, "build")));
+      # Create server file
+      RUN echo 'const express = require("express");\n\
+      const path = require("path");\n\
+      const app = express();\n\
+      const PORT = process.env.PORT || 4000;\n\
+      \n\
+      // Health check endpoint\n\
+      app.get("/health", (req, res) => {\n\
+        res.status(200).send("OK");\n\
+      });\n\
+      \n\
+      // Serve static files from the React build\n\
+      app.use(express.static(path.join(__dirname, "build")));\n\
+      \n\
+      // Handle React routing, return all requests to React app\n\
+      app.get("*", (req, res) => {\n\
+        res.sendFile(path.join(__dirname, "build", "index.html"));\n\
+      });\n\
+      \n\
+      // Make sure to listen on all interfaces\n\
+      app.listen(PORT, "0.0.0.0", () => {\n\
+        console.log(`Frontend server running on port ${PORT}`);\n\
+      });' > server.js
 
-// Handle React routing, return all requests to React app
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
-});
+      # Expose port
+      EXPOSE 4000
 
-// Make sure to listen on all interfaces
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Frontend server running on port ${PORT}`);
-});' > server.js
-
-# Expose port
-EXPOSE 4000
-
-# Start the server
-CMD ["node", "server.js"]
+      # Start the server
+      CMD ["node", "server.js"]
+      EOF
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -f Dockerfile.frontend .
+    - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
+    - docker tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/frontend:latest
+    - docker push $CI_REGISTRY_IMAGE/frontend:latest
