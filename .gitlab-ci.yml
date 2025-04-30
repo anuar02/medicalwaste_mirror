@@ -182,12 +182,21 @@ build-nginx:
           listen 8080;
           server_name localhost;
       
+          # Increase timeout for Docker Swarm network
+          proxy_connect_timeout 300s;
+          proxy_send_timeout 300s;
+          proxy_read_timeout 300s;
+      
+          # Enable compression
+          gzip on;
+          gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+      
           # API requests
           location /api/ {
               proxy_pass http://${BACKEND_HOST}:5000/;
               proxy_http_version 1.1;
               proxy_set_header Upgrade $http_upgrade;
-              proxy_set_header Connection "upgrade";
+              proxy_set_header Connection 'upgrade';
               proxy_set_header Host $host;
               proxy_set_header X-Real-IP $remote_addr;
               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -200,7 +209,7 @@ build-nginx:
               proxy_pass http://${FRONTEND_HOST}:4000;
               proxy_http_version 1.1;
               proxy_set_header Upgrade $http_upgrade;
-              proxy_set_header Connection "upgrade";
+              proxy_set_header Connection 'upgrade';
               proxy_set_header Host $host;
               proxy_set_header X-Real-IP $remote_addr;
               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -216,15 +225,29 @@ build-nginx:
       }
       EOF
 
-    # Create entrypoint script
+    # Create enhanced entrypoint script with debugging
     - |
       cat > temp/nginx/docker-entrypoint.sh << 'EOF'
       #!/bin/sh
       set -e
-
+      
+      # Debug - print environment variables
+      echo "Environment variables:"
+      echo "FRONTEND_HOST: ${FRONTEND_HOST}"
+      echo "BACKEND_HOST: ${BACKEND_HOST}"
+      
       # Replace environment variables in the config
-      envsubst "$FRONTEND_HOST $BACKEND_HOST" < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
-
+      # Use the dollar sign with curly braces to properly match variables
+      envsubst '${FRONTEND_HOST} ${BACKEND_HOST}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
+      
+      # Debug - print the generated config
+      echo "Generated Nginx config:"
+      cat /etc/nginx/conf.d/default.conf
+      
+      # Test nginx configuration
+      echo "Testing Nginx configuration..."
+      nginx -t
+      
       # Start nginx
       exec "$@"
       EOF
@@ -233,17 +256,20 @@ build-nginx:
     - |
       cat > temp/nginx/Dockerfile << 'EOF'
       FROM nginx:1.25-alpine
-
+      
       # Install dependencies
-      RUN apk add --no-cache gettext
-
+      RUN apk add --no-cache gettext bash
+      
       # Copy our configuration files
       COPY default.conf.template /etc/nginx/conf.d/default.conf.template
       COPY docker-entrypoint.sh /docker-entrypoint.sh
-
+      
       # Make entrypoint executable
       RUN chmod +x /docker-entrypoint.sh
-
+      
+      # Add debugging
+      RUN echo "NGINX_VERSION: $NGINX_VERSION" > /debug_info.txt
+      
       # Use our custom entrypoint
       ENTRYPOINT ["/docker-entrypoint.sh"]
       CMD ["nginx", "-g", "daemon off;"]

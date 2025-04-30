@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   frontend:
-    image: ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/frontend:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
       restart_policy:
@@ -17,7 +17,7 @@ services:
       - NODE_ENV=production
 
   backend:
-    image: ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/backend:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
       restart_policy:
@@ -31,7 +31,6 @@ services:
       - MONGODB_URI=mongodb://mongodb:27017/myapp
       - NODE_ENV=production
 
-  # Add MongoDB service for the backend
   mongodb:
     image: mongo:4.4
     deploy:
@@ -44,17 +43,13 @@ services:
       - app-network
 
   nginx:
-    image: ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/nginx:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
       restart_policy:
         condition: any
         delay: 5s
         max_attempts: 5
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
     ports:
       - "8080:8080"
     networks:
