@@ -1,17 +1,13 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
-# Replace environment variables in the nginx config
-envsubst '${FRONTEND_HOST} ${BACKEND_HOST}' < /etc/nginx/conf.d/default.conf > /etc/nginx/conf.d/default.conf.tmp
-mv /etc/nginx/conf.d/default.conf.tmp /etc/nginx/conf.d/default.conf
+# Replace environment variables in the config
+# Use the dollar sign with curly braces to properly match variables
+envsubst '${FRONTEND_HOST} ${BACKEND_HOST}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
 
-# Wait for frontend and backend services to be available
-echo "Waiting for frontend service..."
-/wait-for.sh ${FRONTEND_HOST} 4000 -t 60
-
-echo "Waiting for backend service..."
-/wait-for.sh ${BACKEND_HOST} 5000 -t 60
+# Debug - print the generated config
+echo "Generated Nginx config:"
+cat /etc/nginx/conf.d/default.conf
 
 # Start nginx
-echo "Starting Nginx..."
 exec "$@"
