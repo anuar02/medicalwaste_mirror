@@ -5,14 +5,12 @@ services:
     image: ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - node.hostname == ${WORKER1_HOSTNAME}
+      # Remove strict placement constraints for now
       restart_policy:
         condition: on-failure
         max_attempts: 3
     networks:
-      - swarm-net
+      - app-network
     environment:
       - PORT=4000
       - REACT_APP_API_URL=/api
@@ -21,14 +19,12 @@ services:
     image: ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - node.hostname == ${WORKER2_HOSTNAME}
+      # Remove strict placement constraints for now
       restart_policy:
         condition: on-failure
         max_attempts: 3
     networks:
-      - swarm-net
+      - app-network
     environment:
       - PORT=5000
       - MONGODB_URI=${MONGODB_URI}
@@ -46,11 +42,12 @@ services:
     ports:
       - "80:80"
     networks:
-      - swarm-net
+      - app-network
     depends_on:
       - frontend
       - backend
 
 networks:
-  swarm-net:
-    external: true
+  app-network:
+    driver: overlay
+    # Not external, so it will be created automatically
