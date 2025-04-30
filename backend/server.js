@@ -43,7 +43,7 @@ app.use(requestLogger);
 
 // CORS Configuration
 app.use(cors({
-    origin: ['https://narutouzumaki.kz', 'http://localhost:3001'],
+    origin: ['https://narutouzumaki.kz', 'http://localhost:4000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
