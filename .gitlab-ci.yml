@@ -1,171 +1,3 @@
-stages:
-  - build
-  - deploy
-
-variables:
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: ""
-
-# Build images separately to avoid context issues
-build-frontend:
-  stage: build
-  image: docker:20.10.16
-  services:
-    - docker:20.10.16-dind
-  script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    # Create a proper server.js file first
-    - mkdir -p temp
-    - |
-      cat > temp/server.js << 'EOF'
-      const express = require("express");
-      const path = require("path");
-      const app = express();
-      const PORT = process.env.PORT || 4000;
-
-      // Health check endpoint
-      app.get("/health", (req, res) => {
-        res.status(200).send("OK");
-      });
-
-      // Serve static files from the React build
-      app.use(express.static(path.join(__dirname, "build")));
-
-      // Handle React routing, return all requests to React app
-      app.get("*", (req, res) => {
-        res.sendFile(path.join(__dirname, "build", "index.html"));
-      });
-
-      // Make sure to listen on all interfaces
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Frontend server running on port ${PORT}`);
-      });
-      EOF
-    # Create Dockerfile without the problematic RUN echo part
-    - |
-      cat > temp/Dockerfile.frontend << 'EOF'
-      # Build stage
-      FROM node:18-alpine as build
-
-      WORKDIR /app
-
-      # Copy package.json and package-lock.json
-      COPY package*.json ./
-
-      # Install dependencies
-      RUN npm ci || npm install
-
-      # Copy application code
-      COPY . .
-
-      # Build the application
-      RUN CI=false npm run build
-
-      # Production stage
-      FROM node:18-alpine
-
-      WORKDIR /app
-
-      # Copy build files
-      COPY --from=build /app/build ./build
-      
-      # Copy our prewritten server.js
-      COPY server.js .
-
-      # Install express for serving
-      RUN npm init -y && \
-          npm install express@4.18.2
-
-      # Expose port
-      EXPOSE 4000
-
-      # Start the server
-      CMD ["node", "server.js"]
-      EOF
-    # Copy the repo contents to our temp directory
-    - mkdir -p temp/frontend
-    - cp -r frontend/* temp/frontend/ || echo "No frontend files to copy"
-    # Copy our server.js to the build context
-    - cp temp/server.js temp/frontend/
-    # Build the Docker image
-    - cd temp/frontend
-    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -f ../Dockerfile.frontend .
-    - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
-    - docker tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/frontend:latest
-    - docker push $CI_REGISTRY_IMAGE/frontend:latest
-    - cd ../..
-
-build-backend:
-  stage: build
-  image: docker:20.10.16
-  services:
-    - docker:20.10.16-dind
-  script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-
-    # Create a proper server.js file for the backend
-    - mkdir -p temp
-    - |
-      cat > temp/server.js << 'EOF'
-      const express = require("express");
-      const app = express();
-      const PORT = process.env.PORT || 5000;
-
-      // Health check endpoint
-      app.get("/health", (req, res) => {
-        res.status(200).send("OK");
-      });
-
-      // Example API endpoint
-      app.get("/api", (req, res) => {
-        res.json({ message: "API is working" });
-      });
-
-      // Start server on all interfaces
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Backend server running on port ${PORT}`);
-      });
-      EOF
-
-    # Create a simplified Dockerfile
-    - |
-      cat > temp/Dockerfile.backend << 'EOF'
-      FROM node:18-alpine
-
-      # Create app directory
-      WORKDIR /app
-
-      # Copy package files
-      COPY package*.json ./
-
-      # Install dependencies
-      RUN npm ci --only=production || npm install --production
-
-      # Copy application code
-      COPY . .
-
-      # Expose the API port
-      EXPOSE 5000
-
-      # Start the application
-      CMD ["node", "server.js"]
-      EOF
-
-    # Copy the repo contents to our temp directory
-    - mkdir -p temp/backend
-    - cp -r backend/* temp/backend/ || echo "No backend files to copy"
-
-    # Copy our server.js to the backend directory
-    - cp temp/server.js temp/backend/
-
-    # Build the Docker image
-    - cd temp/backend
-    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -f ../Dockerfile.backend .
-    - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
-    - docker tag $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/backend:latest
-    - docker push $CI_REGISTRY_IMAGE/backend:latest
-    - cd ../..
-
 build-nginx:
   stage: build
   image: docker:20.10.16
@@ -182,18 +14,12 @@ build-nginx:
           listen 8080;
           server_name localhost;
       
-          # Increase timeout for Docker Swarm network
-          proxy_connect_timeout 300s;
-          proxy_send_timeout 300s;
-          proxy_read_timeout 300s;
+          # API requests - improved handling for with/without trailing slash
+          location ~ ^/api(/.*|$) {
+              # Remove the /api prefix when proxying to the backend
+              rewrite ^/api(/.*|$) $1 break;
       
-          # Enable compression
-          gzip on;
-          gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
-      
-          # API requests
-          location /api/ {
-              proxy_pass http://${BACKEND_HOST}:5000/;
+              proxy_pass http://${BACKEND_HOST}:5000;
               proxy_http_version 1.1;
               proxy_set_header Upgrade $http_upgrade;
               proxy_set_header Connection 'upgrade';
@@ -217,7 +43,7 @@ build-nginx:
               proxy_cache_bypass $http_upgrade;
           }
       
-          # Health check
+          # Health check endpoint
           location /health {
               access_log off;
               return 200 "healthy\n";
@@ -237,7 +63,6 @@ build-nginx:
       echo "BACKEND_HOST: ${BACKEND_HOST}"
       
       # Replace environment variables in the config
-      # Use the dollar sign with curly braces to properly match variables
       envsubst '${FRONTEND_HOST} ${BACKEND_HOST}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
       
       # Debug - print the generated config
@@ -267,9 +92,6 @@ build-nginx:
       # Make entrypoint executable
       RUN chmod +x /docker-entrypoint.sh
       
-      # Add debugging
-      RUN echo "NGINX_VERSION: $NGINX_VERSION" > /debug_info.txt
-      
       # Use our custom entrypoint
       ENTRYPOINT ["/docker-entrypoint.sh"]
       CMD ["nginx", "-g", "daemon off;"]
@@ -282,124 +104,3 @@ build-nginx:
     - docker tag $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/nginx:latest
     - docker push $CI_REGISTRY_IMAGE/nginx:latest
     - cd ../..
-
-# Deploy to Docker Swarm using SSH access to the manager node
-deploy:
-  stage: deploy
-  image: alpine:latest
-  variables:
-    # Your actual Swarm manager public IP
-    SWARM_MANAGER: "13.48.178.39"
-    SSH_USER: "ubuntu"
-  before_script:
-    # Set up SSH for connecting to the Swarm manager
-    - apk add --no-cache openssh-client
-    - mkdir -p ~/.ssh
-    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-    - chmod 600 ~/.ssh/id_rsa
-    - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
-  script:
-    - |
-      cat > docker-compose.prod.yml << EOF
-      version: '3.8'
-
-      services:
-        frontend:
-          image: ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
-          deploy:
-            replicas: 1
-            restart_policy:
-              condition: any
-              delay: 5s
-              max_attempts: 5
-          networks:
-            - app-network
-          environment:
-            - PORT=4000
-            - REACT_APP_API_URL=/api
-            - NODE_ENV=production
-
-        backend:
-          image: ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
-          deploy:
-            replicas: 1
-            restart_policy:
-              condition: any
-              delay: 5s
-              max_attempts: 5
-          networks:
-            - app-network
-          environment:
-            - PORT=5000
-            - MONGODB_URI=mongodb://mongodb:27017/myapp
-            - NODE_ENV=production
-
-        # Add MongoDB service for the backend
-        mongodb:
-          image: mongo:4.4
-          deploy:
-            replicas: 1
-            restart_policy:
-              condition: on-failure
-          volumes:
-            - mongo-data:/data/db
-          networks:
-            - app-network
-
-        nginx:
-          image: ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
-          deploy:
-            replicas: 1
-            restart_policy:
-              condition: any
-              delay: 5s
-              max_attempts: 5
-          ports:
-            - "8080:8080"
-          networks:
-            - app-network
-          environment:
-            - FRONTEND_HOST=myapp_frontend
-            - BACKEND_HOST=myapp_backend
-
-      networks:
-        app-network:
-          driver: overlay
-          attachable: true
-
-      volumes:
-        mongo-data:
-      EOF
-    - |
-      cat > deploy.sh << 'EOF'
-      #!/bin/sh
-      set -e
-      
-      # Login to registry
-      echo "Logging in to registry..."
-      docker login -u $1 -p $2 $3
-      
-      # Deploy stack
-      echo "Deploying stack..."
-      docker stack deploy -c docker-compose.prod.yml myapp
-      
-      # Verify deployment
-      echo "Verifying deployment..."
-      sleep 10
-      docker service ls | grep myapp
-      
-      # Check service logs
-      echo "Checking frontend logs..."
-      docker service logs --tail 5 myapp_frontend
-      
-      echo "Deployment completed!"
-      EOF
-    - chmod +x deploy.sh
-    - scp docker-compose.prod.yml deploy.sh ${SSH_USER}@${SWARM_MANAGER}:~/
-    - ssh ${SSH_USER}@${SWARM_MANAGER} "./deploy.sh $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD $CI_REGISTRY"
-  only:
-    - main
-  environment:
-    name: production
-  # Set to manual if you want to trigger deployments manually
-  when: manual
