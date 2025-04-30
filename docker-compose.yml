@@ -2,57 +2,89 @@ version: '3.8'
 
 services:
   frontend:
-    image: ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
+    build:
+      context: ./frontend
+    image: ${CI_REGISTRY_IMAGE:-localhost}/frontend:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
       restart_policy:
         condition: on-failure
         max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
     networks:
       - app-network
     environment:
       - PORT=4000
       - REACT_APP_API_URL=/api
       - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   backend:
-    image: ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
+    build:
+      context: ./backend
+    image: ${CI_REGISTRY_IMAGE:-localhost}/backend:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
       restart_policy:
         condition: on-failure
         max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
     networks:
       - app-network
     environment:
       - PORT=5000
-      - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/app}
       - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   nginx:
-    image: ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
+    build:
+      context: .
+      dockerfile: ./nginx/Dockerfile
+    image: ${CI_REGISTRY_IMAGE:-localhost}/nginx:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
       restart_policy:
         condition: on-failure
         delay: 10s
         max_attempts: 5
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
     ports:
       - "80:80"
     networks:
       - app-network
-    # Fixing DNS resolution issues by using service discovery env vars
     environment:
       - FRONTEND_HOST=frontend
       - BACKEND_HOST=backend
-    # Add depends_on to ensure proper startup order
-    depends_on:
-      - frontend
-      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
 
 networks:
   app-network:
     driver: overlay
-    # DNS options to improve service discovery
+    attachable: true
     driver_opts:
       com.docker.network.driver.mtu: "1450"
