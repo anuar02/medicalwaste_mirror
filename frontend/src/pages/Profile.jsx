@@ -116,10 +116,7 @@ const Profile = () => {
                     receiveNotifications: notifyPrefs?.receiveAlerts || false
                 });
                 setTelegramForm({ chatId: '' });
-                setTimeout(() => {
-                    // Check connection status again after a delay to ensure server state is updated
-                    checkTelegramStatus();
-                }, 1000);
+                // Remove the setTimeout call that was causing issues
             },
             onError: (error) => {
                 setTelegramFormError(error.response?.data?.message || 'Ошибка при подключении Telegram');
@@ -138,10 +135,7 @@ const Profile = () => {
                     chatId: null,
                     receiveNotifications: false
                 });
-                setTimeout(() => {
-                    // Check connection status again after a delay to ensure server state is updated
-                    checkTelegramStatus();
-                }, 1000);
+                // No need to check status after disconnecting
             },
             onError: (error) => {
                 setTelegramFormError(error.response?.data?.message || 'Ошибка при отключении Telegram');
@@ -160,10 +154,7 @@ const Profile = () => {
                     ...prev,
                     receiveNotifications: status
                 }));
-                setTimeout(() => {
-                    // Check connection status again after a delay to ensure server state is updated
-                    checkTelegramStatus();
-                }, 1000);
+                // No need to check status after toggling
             },
             onError: (error) => {
                 setTelegramFormError(error.response?.data?.message || 'Ошибка при изменении настроек уведомлений');
@@ -184,22 +175,32 @@ const Profile = () => {
         }
     );
 
-    // Function to check Telegram connection status
+    // Function to check Telegram connection status - now using the dedicated getStatus endpoint
     const checkTelegramStatus = async () => {
         try {
-            // Try to use connect endpoint with empty data to check status
-            const response = await apiService.telegram.connect({ checkOnly: true });
-            const telegramInfo = response.data.data.user.telegram;
-            const notifyPrefs = response.data.data.user.notificationPreferences;
+            // Use the dedicated status endpoint instead of connect
+            const response = await apiService.telegram.getStatus();
 
-            setTelegramStatus({
-                connected: telegramInfo.active || false,
-                chatId: telegramInfo.chatId || null,
-                receiveNotifications: notifyPrefs?.receiveAlerts || false
-            });
+            if (response?.data?.status === 'success' && response?.data?.data?.telegram) {
+                const telegramData = response.data.data.telegram;
+
+                // Important: The backend sends 'receiveNotifications' property, not 'receiveAlerts'
+                setTelegramStatus({
+                    connected: telegramData.active || false,
+                    chatId: telegramData.chatId || null,
+                    // Match the exact property name from the backend
+                    receiveNotifications: telegramData.receiveNotifications || false
+                });
+            } else {
+                console.error("Unexpected response structure:", response?.data);
+                setTelegramStatus({
+                    connected: false,
+                    chatId: null,
+                    receiveNotifications: false
+                });
+            }
         } catch (error) {
             console.error("Error checking Telegram status:", error);
-            // If we can't check status, assume not connected
             setTelegramStatus({
                 connected: false,
                 chatId: null,
@@ -482,6 +483,28 @@ const Profile = () => {
                                     <Key className="h-4 w-4" />
                                   </span>
                                     <input
+                                        id="currentPassword"
+                                        name="currentPassword"
+                                        type={showPasswords ? 'text' : 'password'}
+                                        value={passwordData.currentPassword}
+                                        onChange={handlePasswordChange}
+                                        className="block w-full rounded-lg border border-slate-200 pl-10 pr-10 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
+                                        required
+                                        disabled={changePasswordMutation.isLoading}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* New Password */}
+                            <div>
+                                <label htmlFor="password" className="mb-1 block text-sm font-medium text-slate-700">
+                                    Новый пароль
+                                </label>
+                                <div className="relative">
+                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                    <Key className="h-4 w-4" />
+                                  </span>
+                                    <input
                                         id="password"
                                         name="password"
                                         type={showPasswords ? 'text' : 'password'}
@@ -568,7 +591,7 @@ const Profile = () => {
                                 <div className="mb-6 p-4 bg-slate-50 rounded-lg">
                                     <h3 className="font-medium text-slate-700 mb-2">Как подключить Telegram:</h3>
                                     <ol className="list-decimal list-inside text-sm text-slate-600 space-y-2">
-                                        <li>Откройте Telegram и найдите бота <strong>@your_bot_name</strong></li>
+                                        <li>Откройте Telegram и найдите бота <strong>@medWasteBot</strong></li>
                                         <li>Нажмите кнопку <strong>Старт</strong> или отправьте команду <code className="bg-slate-200 px-1 rounded">/start</code></li>
                                         <li>Бот пришлет вам ваш <strong>Chat ID</strong></li>
                                         <li>Скопируйте Chat ID и вставьте его в поле ниже</li>
