@@ -1,5 +1,6 @@
 // routes/auth.js
 const express = require('express');
+const authController = require('../controllers/authController');
 const router = express.Router();
 const { body } = require('express-validator');
 const {
@@ -10,7 +11,7 @@ const {
     forgotPassword,
     resetPassword,
     changePassword,
-    verifyToken
+    verifyToken, googleCallback, getGoogleAuthURL, googleLogin
 } = require('../controllers/authController');
 const { auth } = require('../middleware/auth');
 const { validateRequest } = require('../middleware/validators');
@@ -79,5 +80,8 @@ router.post('/forgot-password', body('email').isEmail(), validateRequest, forgot
 router.post('/reset-password/:token', resetPasswordValidation, validateRequest, resetPassword);
 router.post('/change-password', auth, resetPasswordValidation, validateRequest, changePassword);
 router.get('/verify', auth, verifyToken);
+router.get('/google/url', authController.getGoogleAuthURL);
+router.post('/google/callback', authController.googleCallback);
+router.post('/google/login', authController.googleLogin);
 
 module.exports = router;

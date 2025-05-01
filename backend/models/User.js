@@ -50,6 +50,16 @@ const userSchema = new mongoose.Schema({
         minlength: [8, 'Password must be at least 8 characters long'],
         select: false // Don't return password in queries by default
     },
+    // Add this new field for Google OAuth
+    googleId: {
+        type: String,
+        sparse: true,
+        unique: true
+    },
+    googleProfile: {
+        type: Object,
+        default: null
+    },
     role: {
         type: String,
         enum: {
@@ -118,6 +128,7 @@ const userSchema = new mongoose.Schema({
 // Index for efficient queries
 userSchema.index({ username: 1 });
 userSchema.index({ email: 1 });
+userSchema.index({ googleId: 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

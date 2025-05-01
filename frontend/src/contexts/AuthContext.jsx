@@ -87,6 +87,125 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Google Auth URL retrieval
+    const getGoogleAuthUrl = async () => {
+        try {
+            // Debug the API service structure
+            console.log('API Service:', apiService);
+            console.log('Auth methods:', apiService.auth);
+
+            // Check if the method exists
+            if (!apiService.auth || typeof apiService.auth.getGoogleAuthUrl !== 'function') {
+                console.error('API method getGoogleAuthUrl is not defined or not accessible');
+                toast.error('Ошибка при подключении к Google');
+                return null;
+            }
+
+            const response = await apiService.auth.getGoogleAuthUrl();
+            console.log('Google Auth URL response:', response);
+            return response.data.data.authUrl;
+        } catch (err) {
+            console.error('Google Auth URL error:', err);
+            const errorMessage = err.response?.data?.message || 'Ошибка при подключении к Google, попробуйте позже';
+            toast.error(errorMessage);
+            return null;
+        }
+    };
+
+
+    // Google OAuth Callback handler
+    const handleGoogleCallback = async (code) => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            console.log('Processing Google OAuth code in AuthContext:', code);
+
+            if (!apiService.auth || typeof apiService.auth.googleCallback !== 'function') {
+                console.error('API method googleCallback is not defined or not accessible');
+                console.log('Available auth methods:', Object.keys(apiService.auth));
+                setLoading(false);
+                return { success: false, error: 'Метод API не реализован' };
+            }
+
+            // Make sure your backend endpoint expects the code in this format
+            const response = await apiService.auth.googleCallback({ code });
+            console.log('Google callback response:', response);
+
+            const { token, data } = response.data;
+
+            // Store token in localStorage
+            localStorage.setItem('token', token);
+            if (response.data.refreshToken) {
+                localStorage.setItem('refreshToken', response.data.refreshToken);
+            }
+
+            // Set user in state
+            setUser(data.user);
+
+            return { success: true };
+        } catch (err) {
+            console.error('Google OAuth error:', err);
+
+            // Handle different error types
+            const errorMessage = err.response?.data?.message || 'Ошибка аутентификации через Google, попробуйте позже';
+            setError(errorMessage);
+
+            return { success: false, error: errorMessage };
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
+    // Google Direct Login (with Google ID token)
+    const googleLogin = async (idToken) => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            console.log('Processing Google ID token in AuthContext');
+
+            if (!apiService.auth || typeof apiService.auth.googleLogin !== 'function') {
+                console.error('API method googleLogin is not defined or not accessible');
+                console.log('Available auth methods:', Object.keys(apiService.auth));
+                setLoading(false);
+                return { success: false, error: 'Метод API не реализован' };
+            }
+
+            // Call your API with the ID token
+            const response = await apiService.auth.googleLogin({ idToken });
+            console.log('Google login response:', response);
+
+            const { token, data } = response.data;
+
+            // Store token in localStorage
+            localStorage.setItem('token', token);
+            if (response.data.refreshToken) {
+                localStorage.setItem('refreshToken', response.data.refreshToken);
+            }
+
+            // Set user in state
+            setUser(data.user);
+
+            // Success toast notification
+            toast.success('Успешный вход через Google!');
+
+            return { success: true };
+        } catch (err) {
+            console.error('Google login error:', err);
+
+            // Handle different error types
+            const errorMessage = err.response?.data?.message || 'Ошибка при входе через Google, попробуйте позже';
+            setError(errorMessage);
+            toast.error(errorMessage);
+
+            return { success: false, error: errorMessage };
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Register function
     const register = async (userData) => {
         setLoading(true);
@@ -128,6 +247,7 @@ export const AuthProvider = ({ children }) => {
     const logout = () => {
         // Clear token from localStorage
         localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
         removeAuthToken();
 
         // Clear user from state
@@ -268,6 +388,9 @@ export const AuthProvider = ({ children }) => {
         resetPassword,
         updateProfile,
         changePassword,
+        getGoogleAuthUrl,
+        handleGoogleCallback,
+        googleLogin,
         isAuthenticated: !!user,
         isAdmin: user?.role === 'admin',
         isSupervisor: user?.role === 'supervisor' || user?.role === 'admin'

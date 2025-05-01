@@ -115,6 +115,9 @@ const apiService = {
         forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
         resetPassword: (token, passwords) => api.post(`/auth/reset-password/${token}`, passwords),
         changePassword: (passwords) => api.post('/auth/change-password', passwords),
+        getGoogleAuthUrl: () => api.get('/auth/google/url'),
+        googleCallback: (code) => api.post('/auth/google/callback', { code }),
+        googleLogin: (data) => api.post('/auth/google/login', data)
     },
 
     // User endpoints
@@ -171,7 +174,8 @@ const apiService = {
         // Send test notification
         sendTestNotification: () => api.post('/telegram/test-notification'),
     },
-
 };
+
+
 
 export default apiService;

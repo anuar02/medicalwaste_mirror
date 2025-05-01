@@ -1,14 +1,15 @@
 // pages/auth/Login.jsx
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from '../../components/ui/Button';
-import Logo from '../../components/ui/Logo';
-
+import toast from 'react-hot-toast';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 const Login = () => {
     const navigate = useNavigate();
-    const { login } = useAuth();
+    const location = useLocation();
+    const { login, getGoogleAuthUrl, handleGoogleCallback, googleLogin } = useAuth();
 
     // Form state
     const [formData, setFormData] = useState({
@@ -26,8 +27,176 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [error, setError] = useState('');
     const [formSubmitted, setFormSubmitted] = useState(false);
+
+    // Check for Google OAuth code in URL
+    useEffect(() => {
+        const processGoogleCallback = async () => {
+            const urlParams = new URLSearchParams(location.search);
+            const code = urlParams.get('code');
+
+            if (code) {
+                console.log('Google OAuth code detected:', code);
+                setIsGoogleLoading(true);
+                setError('');
+
+                try {
+                    // Clear the URL parameters to prevent reprocessing on page reload
+                    window.history.replaceState({}, document.title, window.location.pathname);
+
+                    // Call the callback handler from your AuthContext
+                    console.log('Calling handleGoogleCallback with code');
+                    const result = await handleGoogleCallback(code);
+                    console.log('Google callback result:', result);
+
+                    if (result && result.success) {
+                        toast.success('Успешный вход через Google!');
+                        navigate('/');
+                    } else {
+                        const errorMsg = result?.error || 'Ошибка при входе через Google';
+                        setError(errorMsg);
+                        toast.error(errorMsg);
+                    }
+                } catch (err) {
+                    console.error('Error processing Google OAuth callback:', err);
+                    setError('Произошла ошибка при обработке Google авторизации');
+                    toast.error('Ошибка при входе через Google');
+                } finally {
+                    setIsGoogleLoading(false);
+                }
+            }
+        };
+
+        processGoogleCallback();
+    }, [location.search, navigate, handleGoogleCallback]);
+
+    // Initialize Google Sign-In SDK
+    useEffect(() => {
+        // Load Google Sign-In SDK if it's not already loaded
+        const loadGoogleScript = () => {
+            // Skip if already loaded
+            if (document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
+                initializeGoogleOneTap();
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.async = true;
+            script.defer = true;
+            script.onload = initializeGoogleOneTap;
+            document.body.appendChild(script);
+        };
+
+        const initializeGoogleOneTap = () => {
+            if (window.google && window.google.accounts) {
+                window.google.accounts.id.initialize({
+                    client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+                    callback: handleGoogleOneTapResponse,
+                    auto_select: false
+                });
+            }
+        };
+
+        loadGoogleScript();
+    }, []);
+
+    // Handle Google One-Tap response
+    const handleGoogleOneTapResponse = async (response) => {
+        if (response.credential) {
+            setIsGoogleLoading(true);
+            try {
+                // First check if the function exists in your auth context
+                if (typeof googleLogin !== 'function') {
+                    console.error('googleLogin is not defined in the auth context');
+                    throw new Error('Не удалось выполнить вход через Google');
+                }
+
+                const result = await googleLogin(response.credential);
+                if (result.success) {
+                    navigate('/');
+                } else {
+                    setError(result.error || 'Ошибка при входе через Google');
+                }
+            } catch (err) {
+                setError(err.message || 'Произошла ошибка при попытке входа через Google');
+                console.error(err);
+            } finally {
+                setIsGoogleLoading(false);
+            }
+        }
+    };
+
+    // Handle Google OAuth callback
+    const handleGoogleOAuthCallback = async (code) => {
+        setIsGoogleLoading(true);
+        setError('');
+
+        try {
+            // Remove code from URL to avoid reprocessing on reload
+            window.history.replaceState({}, document.title, window.location.pathname);
+
+            // First check if the function exists in your auth context
+            if (typeof handleGoogleCallback !== 'function') {
+                console.error('handleGoogleCallback is not defined in the auth context');
+                throw new Error('Не удалось обработать ответ от Google');
+            }
+
+            const result = await handleGoogleCallback(code);
+            if (result.success) {
+                navigate('/');
+            } else {
+                setError(result.error || 'Ошибка при входе через Google');
+            }
+        } catch (err) {
+            console.error('Google callback error:', err);
+            setError(err.message || 'Произошла ошибка при обработке ответа от Google');
+        } finally {
+            setIsGoogleLoading(false);
+        }
+    };
+
+    const handleGoogleSuccess = async (credentialResponse) => {
+        setIsGoogleLoading(true);
+        setError('');
+
+        try {
+            // Call your AuthContext method with the ID token
+            const result = await googleLogin(credentialResponse.credential);
+
+            if (result && result.success) {
+                toast.success('Успешный вход через Google!');
+                navigate('/');
+            } else {
+                setError(result?.error || 'Ошибка при входе через Google');
+            }
+        } catch (err) {
+            console.error('Google login error:', err);
+            setError('Произошла ошибка при входе через Google');
+        } finally {
+            setIsGoogleLoading(false);
+        }
+    };
+
+    const handleGoogleError = () => {
+        setError('Произошла ошибка при авторизации через Google');
+        toast.error('Ошибка при входе через Google');
+    };
+
+    // Handle Google Sign-In button click
+    const handleGoogleSignIn = async () => {
+        try {
+            // Redirect directly to Google OAuth
+            const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.REACT_APP_GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent('http://13.48.178.39:8080/login')}&response_type=code&scope=email%20profile%20openid&access_type=offline&prompt=consent`;
+
+            window.location.href = googleAuthUrl;
+        } catch (err) {
+            console.error('Google auth error:', err);
+            setError('Ошибка при подключении к Google');
+        }
+    };
 
     // Validate form data based on rules
     useEffect(() => {
@@ -128,8 +297,7 @@ const Login = () => {
             if (!result.success) {
                 setError(result.error || 'Ошибка авторизации');
             } else {
-                // Success redirect
-                navigate('/dashboard');
+                // Success redirect handled in login method
             }
         } catch (err) {
             setError('Произошла ошибка при попытке входа');
@@ -283,30 +451,24 @@ const Login = () => {
                             </div>
                         </div>
 
-                        {/* Social logins */}
-                        <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button
-                                type="button"
-                                className="flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
-                            >
-                                <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                                </svg>
-                                Google
-                            </button>
-                            <button
-                                type="button"
-                                className="flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
-                            >
-                                <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M13.397 20.997v-8.196h2.765l.411-3.209h-3.176V7.548c0-.926.258-1.56 1.587-1.56h1.684V3.127A22.336 22.336 0 0014.201 3c-2.444 0-4.122 1.492-4.122 4.231v2.355H7.332v3.209h2.753v8.202h3.312z"/>
-                                </svg>
-                                Facebook
-                            </button>
+                        {/* Google Sign-In button */}
+                        <div className="mt-6">
+                            <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+                                <div className="flex justify-center">
+                                    <GoogleLogin
+                                        onSuccess={handleGoogleSuccess}
+                                        onError={handleGoogleError}
+                                        text="signin_with"
+                                        shape="rectangular"
+                                        width="100%"
+                                        locale="ru"
+                                        theme="outline"
+                                        logo_alignment="center"
+                                    />
+                                </div>
+                            </GoogleOAuthProvider>
                         </div>
+
 
                         {/* Register link */}
                         <div className="mt-6 text-center">

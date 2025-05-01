@@ -1,4 +1,5 @@
 // controllers/authController.js
+const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
@@ -18,6 +19,12 @@ const generateToken = (userId) => {
         { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
 };
+
+const googleClient = new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+);
 
 /**
  * Generate refresh token
@@ -106,6 +113,211 @@ const register = asyncHandler(async (req, res, next) => {
 
     // Generate and send tokens
     createAndSendTokens(user, 201, res);
+});
+/**
+ * Generate Google OAuth authorization URL
+ */
+const getGoogleAuthURL = asyncHandler(async (req, res) => {
+    const scopes = [
+        'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/userinfo.email'
+    ];
+
+    const authUrl = googleClient.generateAuthUrl({
+        access_type: 'offline',
+        scope: scopes,
+        prompt: 'consent'
+    });
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            authUrl
+        }
+    });
+});
+
+/**
+ * Handle Google OAuth callback
+ */
+const googleCallback = asyncHandler(async (req, res, next) => {
+    const { code } = req.body;
+
+    console.log('Received Google OAuth code:', code);
+
+    if (!code) {
+        return next(new AppError('Authorization code is required', 400));
+    }
+
+    try {
+        // Initialize OAuth client with correct credentials
+        const googleClient = new OAuth2Client(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            // Make sure this matches what you set in Google Cloud Console
+            process.env.GOOGLE_REDIRECT_URI || `${process.env.FRONTEND_URL}/login`
+        );
+
+        // Exchange code for tokens
+        console.log('Exchanging code for tokens...');
+        const { tokens } = await googleClient.getToken(code);
+        googleClient.setCredentials(tokens);
+
+        // Get user info
+        console.log('Getting user info from Google...');
+        const { data } = await googleClient.request({
+            url: 'https://www.googleapis.com/oauth2/v3/userinfo'
+        });
+        console.log('Google user info received:', data.email);
+
+        // Check if user exists
+        let user = await User.findOne({ email: data.email });
+
+        if (!user) {
+            console.log('Creating new user from Google data...');
+            // Create new user
+            // Generate a random password for Google users (they'll login with Google)
+            const randomPassword = crypto.randomBytes(16).toString('hex');
+
+            user = await User.create({
+                username: data.name.replace(/\s+/g, '_').toLowerCase() + '_' + crypto.randomBytes(3).toString('hex'),
+                email: data.email,
+                password: randomPassword,
+                googleId: data.sub,
+                googleProfile: data,
+                active: true
+            });
+        } else if (!user.googleId) {
+            console.log('Linking existing user to Google account...');
+            // Link Google account to existing user
+            user.googleId = data.sub;
+            user.googleProfile = data;
+            await user.save({ validateBeforeSave: false });
+        }
+
+        // Check if account is active
+        if (!user.active) {
+            return next(new AppError('Your account has been deactivated. Please contact an administrator.', 401));
+        }
+
+        // Update last login time
+        user.lastLogin = Date.now();
+        await user.save({ validateBeforeSave: false });
+
+        // Generate tokens
+        const token = generateToken(user._id);
+        const refreshToken = generateRefreshToken(user._id);
+
+        // Send response
+        res.status(200).json({
+            status: 'success',
+            token,
+            refreshToken,
+            data: {
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    department: user.department
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Google OAuth error:', error);
+        return next(new AppError('Failed to authenticate with Google: ' + error.message, 401));
+    }
+});
+
+/**
+ * Login with Google ID token (for client-side Google Sign-In)
+ */
+const googleLogin = asyncHandler(async (req, res, next) => {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+        return next(new AppError('ID token is required', 400));
+    }
+
+    try {
+        // Initialize Google OAuth client
+        const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+        // Verify ID token
+        console.log('Verifying Google ID token...');
+        const ticket = await googleClient.verifyIdToken({
+            idToken,
+            audience: process.env.GOOGLE_CLIENT_ID
+        });
+
+        const payload = ticket.getPayload();
+        const googleId = payload.sub;
+        const email = payload.email;
+        const name = payload.name || email.split('@')[0];
+
+        console.log(`Google user verified: ${email}`);
+
+        // Check if user exists
+        let user = await User.findOne({
+            $or: [
+                { googleId },
+                { email }
+            ]
+        });
+
+        if (!user) {
+            console.log(`Creating new user for ${email}`);
+            // Create new user
+            const randomPassword = crypto.randomBytes(16).toString('hex');
+
+            user = await User.create({
+                username: name.replace(/\s+/g, '_').toLowerCase() + '_' + crypto.randomBytes(3).toString('hex'),
+                email,
+                password: randomPassword,
+                googleId,
+                googleProfile: payload,
+                active: true
+            });
+        } else if (!user.googleId) {
+            console.log(`Linking Google account to existing user: ${email}`);
+            // Link Google account to existing user
+            user.googleId = googleId;
+            user.googleProfile = payload;
+            await user.save({ validateBeforeSave: false });
+        }
+
+        // Check if account is active
+        if (!user.active) {
+            return next(new AppError('Your account has been deactivated. Please contact an administrator.', 401));
+        }
+
+        // Update last login
+        user.lastLogin = Date.now();
+        await user.save({ validateBeforeSave: false });
+
+        // Generate tokens
+        const token = generateToken(user._id);
+        const refreshToken = generateRefreshToken(user._id);
+
+        // Send response
+        res.status(200).json({
+            status: 'success',
+            token,
+            refreshToken,
+            data: {
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    department: user.department
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Google login error:', error);
+        return next(new AppError(`Failed to authenticate with Google: ${error.message}`, 401));
+    }
 });
 
 /**
@@ -398,5 +610,8 @@ module.exports = {
     forgotPassword,
     resetPassword,
     changePassword,
-    verifyToken
+    verifyToken,
+    getGoogleAuthURL,
+    googleCallback,
+    googleLogin
 };
