@@ -59,30 +59,6 @@ const Profile = () => {
         }
     );
 
-    // Fetch Telegram status separately
-    const { data: telegramData, isLoading: telegramLoading, refetch: refetchTelegram } = useQuery(
-        'telegramStatus',
-        () => apiService.telegram.getStatus(),
-        {
-            onSuccess: (data) => {
-                const telegramInfo = data.data.data.telegram;
-                setTelegramStatus({
-                    connected: telegramInfo.active || false,
-                    chatId: telegramInfo.chatId || null,
-                    receiveNotifications: telegramInfo.receiveNotifications || false
-                });
-            },
-            onError: () => {
-                // If API fails, assume not connected
-                setTelegramStatus({
-                    connected: false,
-                    chatId: null,
-                    receiveNotifications: false
-                });
-            }
-        }
-    );
-
     // Fetch departments for dropdown
     const { data: departmentsData } = useQuery(
         'departments',
@@ -140,7 +116,10 @@ const Profile = () => {
                     receiveNotifications: notifyPrefs?.receiveAlerts || false
                 });
                 setTelegramForm({ chatId: '' });
-                refetchTelegram(); // Refresh Telegram status after connection
+                setTimeout(() => {
+                    // Check connection status again after a delay to ensure server state is updated
+                    checkTelegramStatus();
+                }, 1000);
             },
             onError: (error) => {
                 setTelegramFormError(error.response?.data?.message || 'Ошибка при подключении Telegram');
@@ -159,7 +138,10 @@ const Profile = () => {
                     chatId: null,
                     receiveNotifications: false
                 });
-                refetchTelegram(); // Refresh Telegram status after disconnection
+                setTimeout(() => {
+                    // Check connection status again after a delay to ensure server state is updated
+                    checkTelegramStatus();
+                }, 1000);
             },
             onError: (error) => {
                 setTelegramFormError(error.response?.data?.message || 'Ошибка при отключении Telegram');
@@ -178,7 +160,10 @@ const Profile = () => {
                     ...prev,
                     receiveNotifications: status
                 }));
-                refetchTelegram(); // Refresh Telegram status after toggling notifications
+                setTimeout(() => {
+                    // Check connection status again after a delay to ensure server state is updated
+                    checkTelegramStatus();
+                }, 1000);
             },
             onError: (error) => {
                 setTelegramFormError(error.response?.data?.message || 'Ошибка при изменении настроек уведомлений');
@@ -198,6 +183,35 @@ const Profile = () => {
             },
         }
     );
+
+    // Function to check Telegram connection status
+    const checkTelegramStatus = async () => {
+        try {
+            // Try to use connect endpoint with empty data to check status
+            const response = await apiService.telegram.connect({ checkOnly: true });
+            const telegramInfo = response.data.data.user.telegram;
+            const notifyPrefs = response.data.data.user.notificationPreferences;
+
+            setTelegramStatus({
+                connected: telegramInfo.active || false,
+                chatId: telegramInfo.chatId || null,
+                receiveNotifications: notifyPrefs?.receiveAlerts || false
+            });
+        } catch (error) {
+            console.error("Error checking Telegram status:", error);
+            // If we can't check status, assume not connected
+            setTelegramStatus({
+                connected: false,
+                chatId: null,
+                receiveNotifications: false
+            });
+        }
+    };
+
+    // Check Telegram status on component mount
+    useEffect(() => {
+        checkTelegramStatus();
+    }, []);
 
     // Handle profile form change
     const handleProfileChange = (e) => {
@@ -284,8 +298,8 @@ const Profile = () => {
         sendTestNotificationMutation.mutate();
     };
 
-    // Loading state for all user data
-    if (userLoading || telegramLoading) {
+    // Loading state for user data
+    if (userLoading) {
         return <Loader text="Загрузка профиля..." />;
     }
 
@@ -312,9 +326,6 @@ const Profile = () => {
         'Лаборатория',
         'Реанимация',
     ];
-
-    // Debug log to check Telegram status
-    console.log("Telegram status:", telegramStatus);
 
     return (
         <div className="container mx-auto p-4">
