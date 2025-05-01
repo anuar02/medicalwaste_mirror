@@ -1,10 +1,8 @@
-// pages/auth/ForgotPassword.jsx
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, AlertCircle, ArrowLeft, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from '../../components/ui/Button';
-import Logo from '../../components/ui/Logo';
 
 const ForgotPassword = () => {
     // Form and UI state
@@ -24,12 +22,11 @@ const ForgotPassword = () => {
         setIsLoading(true);
 
         try {
-            const result = await forgotPassword(email);
-            if (result.success) {
-                setSuccess(true);
-            } else {
-                setError(result.error || 'Не удалось отправить инструкции по сбросу пароля');
-            }
+            // Call the API through the auth context
+            const response = await forgotPassword(email);
+
+            // Always show success message even if email doesn't exist (for security)
+            setSuccess(true);
         } catch (err) {
             setError('Произошла ошибка при попытке сброса пароля');
             console.error(err);
@@ -39,15 +36,11 @@ const ForgotPassword = () => {
     };
 
     return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4 py-12">
+        <div className="flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4 py-12">
             <div className="mb-8 text-center">
-                <Logo size={48} className="mx-auto" />
-                <h1 className="mt-4 text-2xl font-bold text-slate-800">
-                    Система Мониторинга Медицинских Отходов
-                </h1>
-                <p className="mt-2 text-sm text-slate-500">
+                <h4 className="mt-2">
                     Восстановление доступа к аккаунту
-                </p>
+                </h4>
             </div>
 
             <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-sm">

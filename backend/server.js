@@ -9,6 +9,9 @@ const compression = require('compression');
 const morgan = require('morgan');
 const fs = require('fs');
 const path = require('path');
+const { initializeBot } = require('./utils/telegram');
+const { logger } = require('./middleware/loggers');
+
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -18,7 +21,7 @@ const userRoutes = require('./routes/users');
 const deviceRoutes = require('./routes/devices');
 const trackingRoutes = require('./routes/tracking');
 const adminRoutes = require('./routes/admin');
-
+const telegramRoutes = require('./routes/telegram');
 
 // Import middlewares
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
@@ -27,6 +30,14 @@ const { requestLogger } = require('./middleware/loggers');
 const app = express();
 
 app.set('trust proxy', 'loopback');
+
+if (process.env.TELEGRAM_BOT_TOKEN) {
+    initializeBot()
+        .then(() => logger.info('Telegram bot initialized successfully'))
+        .catch(err => logger.error(`Failed to initialize Telegram bot: ${err.message}`));
+} else {
+    logger.warn('TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.');
+}
 
 // Create a write stream for access logs
 const accessLogStream = fs.createWriteStream(
@@ -117,6 +128,7 @@ connectDB();
 
 // Mount routes
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/telegram', telegramRoutes);
 app.use('/api/waste-bins', wasteBinRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/users', userRoutes);

@@ -13,7 +13,8 @@ const {
     checkDeviceRegistration,
     getNearbyBins,
     getOverfilledBins,
-    getStatistics
+    getStatistics,
+    sendManualAlert // New controller method for manual alerts
 } = require('../controllers/wasteBinController');
 const { auth, restrictTo, adminAuth, supervisorAuth } = require('../middleware/auth');
 const { validateRequest } = require('../middleware/validators');
@@ -164,7 +165,13 @@ router.get('/statistics', getStatistics);
 router.get('/:id', param('id').trim().notEmpty(), validateRequest, getBin);
 router.get('/:id/history', param('id').trim().notEmpty(), validateRequest, getBinHistory);
 
-
+// New route for sending manual bin alerts - accessible to all authenticated users
+router.post(
+    '/:id/send-alert',
+    param('id').trim().notEmpty().withMessage('Bin ID is required'),
+    validateRequest,
+    sendManualAlert
+);
 
 // Routes for supervisors and admins only
 router.use(restrictTo('admin', 'supervisor'));

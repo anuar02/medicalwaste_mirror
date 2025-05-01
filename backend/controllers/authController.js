@@ -210,34 +210,74 @@ const refreshToken = asyncHandler(async (req, res, next) => {
 const forgotPassword = asyncHandler(async (req, res, next) => {
     // Get user based on email
     const user = await User.findOne({ email: req.body.email });
+
+    // Don't reveal if user exists for security reasons
     if (!user) {
-        return next(new AppError('There is no user with that email address', 404));
+        return res.status(200).json({
+            status: 'success',
+            message: 'Если указанный email зарегистрирован в системе, инструкции по сбросу пароля будут отправлены'
+        });
     }
 
     // Generate reset token
     const resetToken = user.generatePasswordResetToken();
     await user.save({ validateBeforeSave: false });
 
-    // Create reset URL
-    const resetURL = `${req.protocol}://${req.get('host')}/api/auth/reset-password/${resetToken}`;
+    // Create reset URL - Use frontend URL instead of API URL
+    const resetURL = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
 
-    // Create email content
+    // Create plain text email content
     const message = `
-    Forgot your password? Submit a PATCH request with your new password and passwordConfirm to: ${resetURL}\n
-    If you didn't forget your password, please ignore this email.
-  `;
+    Сброс пароля
+    
+    Вы запросили сброс пароля для доступа к Medical Waste System. Для продолжения перейдите по ссылке ниже:
+    
+    ${resetURL}
+    
+    Ссылка действительна в течение 1 часа.
+    
+    Если вы не запрашивали сброс пароля, проигнорируйте это сообщение.
+    `;
+
+    // Create HTML email content
+    const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e1e1e1; border-radius: 5px;">
+      <h2 style="color: #2b9eb3;">Сброс пароля</h2>
+      <p>Вы запросили сброс пароля для доступа к Medical Waste System.</p>
+      <p>Для продолжения нажмите на кнопку ниже:</p>
+      
+      <div style="text-align: center; margin: 25px 0;">
+        <a href="${resetURL}" style="background-color: #2b9eb3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">Сбросить пароль</a>
+      </div>
+      
+      <p>Или скопируйте эту ссылку в браузер:</p>
+      <p style="word-break: break-all; background-color: #f5f5f5; padding: 10px; border-radius: 4px; font-size: 14px;">${resetURL}</p>
+      
+      <p><strong>Ссылка действительна в течение 1 часа.</strong></p>
+      
+      <p style="color: #777; font-size: 13px; margin-top: 30px; border-top: 1px solid #e1e1e1; padding-top: 15px;">
+        Если вы не запрашивали сброс пароля, проигнорируйте это сообщение.
+      </p>
+      
+      <p style="font-size: 12px; color: #777; margin-top: 20px;">
+        Medical Waste System
+      </p>
+    </div>
+    `;
 
     try {
-        // Send email
+        // Send email using the existing sendEmail utility
         await sendEmail({
             email: user.email,
-            subject: 'Your password reset token (valid for 1 hour)',
-            message
+            subject: 'Сброс пароля для Medical Waste System',
+            message,
+            html
         });
 
+        // Return success response
         res.status(200).json({
             status: 'success',
-            message: 'Token sent to email'
+            message: 'Инструкции по сбросу пароля отправлены на ваш email'
         });
     } catch (error) {
         // Reset token and expires if email fails
@@ -245,7 +285,7 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
         user.resetPasswordExpires = undefined;
         await user.save({ validateBeforeSave: false });
 
-        return next(new AppError('There was an error sending the email. Try again later.', 500));
+        return next(new AppError('Произошла ошибка при отправке email. Попробуйте позже.', 500));
     }
 });
 

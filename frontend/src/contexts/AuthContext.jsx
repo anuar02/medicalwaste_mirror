@@ -142,27 +142,17 @@ export const AuthProvider = ({ children }) => {
 
     // Forgot password function
     const forgotPassword = async (email) => {
-        setLoading(true);
-        setError(null);
-
         try {
-            await apiService.auth.forgotPassword(email);
+            const response = await apiService.auth.forgotPassword(email)
 
-            // Success toast notification
-            toast.success('Инструкции по сбросу пароля отправлены на ваш email');
+            // Any response from the server is treated as success
+            // This is a security measure to not reveal if the email exists
+            return response.data;
+        } catch (error) {
+            console.error('Password reset error:', error);
 
-            return { success: true };
-        } catch (err) {
-            console.error('Forgot password error:', err);
-
-            // Handle different error types
-            const errorMessage = err.response?.data?.message || 'Ошибка при отправке инструкций, попробуйте позже';
-            setError(errorMessage);
-            toast.error(errorMessage);
-
-            return { success: false, error: errorMessage };
-        } finally {
-            setLoading(false);
+            // Re-throw the error to be handled by the component
+            throw error;
         }
     };
 

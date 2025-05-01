@@ -1,8 +1,11 @@
 // controllers/wasteBinController.js
 const WasteBin = require('../models/WasteBin');
 const History = require('../models/History');
+const User = require('../models/User');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { sendAlertNotification } = require('../utils/telegram');
+const { logger } = require('../middleware/loggers');
 
 /**
  * Get all waste bins with optional filtering
@@ -227,17 +230,15 @@ const updateBinLevel = asyncHandler(async (req, res) => {
         bin = await WasteBin.findOne({ 'deviceInfo.macAddress': macAddress });
     }
 
-    if (latitude || longitude) {
-        if (latitude) bin.location.coordinates[1] = latitude;
-        if (longitude) bin.location.coordinates[0] = longitude;
-    }
-
     if (!bin) {
         return res.status(404).json({
             status: 'fail',
             message: 'Bin not found'
         });
     }
+
+    // Store previous fullness for threshold comparison
+    const previousFullness = bin.fullness;
 
     // Update bin with sensor data
     bin.fullness = fullness !== undefined ? fullness : (distance ? 100 - distance : bin.fullness);
@@ -250,6 +251,12 @@ const updateBinLevel = asyncHandler(async (req, res) => {
     if (bin.deviceInfo) {
         if (batteryVoltage !== undefined) bin.deviceInfo.batteryVoltage = batteryVoltage;
         bin.deviceInfo.lastSeen = new Date();
+    }
+
+    // Update location if provided
+    if (latitude || longitude) {
+        if (latitude) bin.location.coordinates[1] = latitude;
+        if (longitude) bin.location.coordinates[0] = longitude;
     }
 
     bin.lastUpdate = new Date();
@@ -266,9 +273,48 @@ const updateBinLevel = asyncHandler(async (req, res) => {
         timestamp: new Date()
     });
 
+    // Check if bin has exceeded alert threshold and send Telegram notification
+    let alertSent = false;
+    if (bin.fullness >= bin.alertThreshold && previousFullness < bin.alertThreshold) {
+        try {
+            // Get users from the bin's department for targeted notifications
+            const departmentUsers = bin.department
+                ? await User.find({ department: bin.department }).select('_id')
+                : null;
+
+            const userIds = departmentUsers ? departmentUsers.map(user => user._id) : null;
+
+            // Format bin data for the notification
+            const binData = {
+                binId: bin.binId,
+                department: bin.department,
+                wasteType: bin.wasteType,
+                fullness: bin.fullness,
+                alertThreshold: bin.alertThreshold,
+                location: {
+                    floor: bin.location?.floor || '1',
+                    room: bin.location?.room || 'Unknown'
+                },
+                lastUpdate: bin.lastUpdate
+            };
+
+            // Send alert notification
+            const notificationResults = await sendAlertNotification(binData, userIds);
+
+            logger.info(`Alert notifications sent for bin ${binId}. Results: ${JSON.stringify(notificationResults)}`);
+            alertSent = notificationResults && notificationResults.some(result => result.success);
+        } catch (error) {
+            logger.error(`Failed to send alert notifications for bin ${binId}: ${error.message}`);
+            // Continue even if notifications fail
+        }
+    }
+
     res.status(200).json({
         status: 'success',
-        data: { bin }
+        data: {
+            bin,
+            alertSent
+        }
     });
 });
 
@@ -321,9 +367,62 @@ const getOverfilledBins = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Send manual alert for an overfilled bin
+ */
+const sendManualAlert = asyncHandler(async (req, res, next) => {
+    const { binId } = req.params;
+
+    // Find the bin
+    const bin = await WasteBin.findOne({ binId });
+
+    if (!bin) {
+        return next(new AppError('No waste bin found with that ID', 404));
+    }
+
+    try {
+        // Get users from the bin's department for targeted notifications
+        const departmentUsers = bin.department
+            ? await User.find({ department: bin.department }).select('_id')
+            : null;
+
+        const userIds = departmentUsers ? departmentUsers.map(user => user._id) : null;
+
+        // Format bin data for the notification
+        const binData = {
+            binId: bin.binId,
+            department: bin.department,
+            wasteType: bin.wasteType,
+            fullness: bin.fullness,
+            alertThreshold: bin.alertThreshold,
+            location: {
+                floor: bin.location?.floor || '1',
+                room: bin.location?.room || 'Unknown'
+            },
+            lastUpdate: bin.lastUpdate
+        };
+
+        // Send alert notification
+        const notificationResults = await sendAlertNotification(binData, userIds);
+
+        logger.info(`Manual alert notifications sent for bin ${binId}. Results: ${JSON.stringify(notificationResults)}`);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Alert notification sent successfully',
+            data: {
+                notificationsSent: notificationResults?.length || 0,
+                successCount: notificationResults?.filter(r => r.success)?.length || 0
+            }
+        });
+    } catch (error) {
+        logger.error(`Failed to send manual alert for bin ${binId}: ${error.message}`);
+        return next(new AppError('Failed to send alert notification', 500));
+    }
+});
+
+/**
  * Get waste collection statistics
  */
-// In wasteBinController.js - getStatistics function
 const getStatistics = asyncHandler(async (req, res) => {
     // Get aggregate stats with defaults if empty
     const stats = await WasteBin.aggregate([
@@ -421,7 +520,6 @@ const checkDeviceRegistration = asyncHandler(async (req, res) => {
     });
 });
 
-
 const registerDevice = asyncHandler(async (req, res) => {
     const { macAddress, tempBinId, deviceType } = req.body;
 
@@ -499,5 +597,6 @@ module.exports = {
     getNearbyBins,
     getOverfilledBins,
     getStatistics,
-    checkDeviceRegistration
+    checkDeviceRegistration,
+    sendManualAlert
 };

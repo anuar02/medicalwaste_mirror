@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from 'react-query';
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from 'react-query';
-import { User, Mail, Key, Save, AlertCircle, CheckCircle, Eye, EyeOff, Building } from 'lucide-react';
+import { User, Mail, Key, Save, AlertCircle, CheckCircle, Eye, EyeOff, Building, MessageCircle, Bell, BellOff, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import apiService from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,13 +25,26 @@ const Profile = () => {
         passwordConfirm: '',
     });
 
+    // Telegram form state
+    const [telegramForm, setTelegramForm] = useState({
+        chatId: '',
+    });
+
+    // Telegram connection status state
+    const [telegramStatus, setTelegramStatus] = useState({
+        connected: false,
+        chatId: null,
+        receiveNotifications: true
+    });
+
     // UI state
     const [showPasswords, setShowPasswords] = useState(false);
     const [profileFormError, setProfileFormError] = useState('');
     const [passwordFormError, setPasswordFormError] = useState('');
+    const [telegramFormError, setTelegramFormError] = useState('');
 
     // Fetch user details
-    const { data: userData, isLoading: userLoading, error: userError } = useQuery(
+    const { data: userData, isLoading: userLoading, error: userError, refetch: refetchUser } = useQuery(
         'userProfile',
         () => apiService.users.getProfile(),
         {
@@ -43,6 +56,30 @@ const Profile = () => {
                     department: user.department || '',
                 });
             },
+        }
+    );
+
+    // Fetch Telegram status separately
+    const { data: telegramData, isLoading: telegramLoading, refetch: refetchTelegram } = useQuery(
+        'telegramStatus',
+        () => apiService.telegram.getStatus(),
+        {
+            onSuccess: (data) => {
+                const telegramInfo = data.data.data.telegram;
+                setTelegramStatus({
+                    connected: telegramInfo.active || false,
+                    chatId: telegramInfo.chatId || null,
+                    receiveNotifications: telegramInfo.receiveNotifications || false
+                });
+            },
+            onError: () => {
+                // If API fails, assume not connected
+                setTelegramStatus({
+                    connected: false,
+                    chatId: null,
+                    receiveNotifications: false
+                });
+            }
         }
     );
 
@@ -62,7 +99,7 @@ const Profile = () => {
         {
             onSuccess: () => {
                 toast.success('Профиль успешно обновлен');
-                QueryClient.invalidateQueries('userProfile');
+                refetchUser();
             },
             onError: (error) => {
                 setProfileFormError(error.response?.data?.message || 'Ошибка при обновлении профиля');
@@ -88,6 +125,77 @@ const Profile = () => {
         }
     );
 
+    // Connect Telegram mutation
+    const connectTelegramMutation = useMutation(
+        (data) => apiService.telegram.connect(data),
+        {
+            onSuccess: (response) => {
+                toast.success('Telegram успешно подключен');
+                // Update Telegram status directly from response
+                const telegramInfo = response.data.data.user.telegram;
+                const notifyPrefs = response.data.data.user.notificationPreferences;
+                setTelegramStatus({
+                    connected: telegramInfo.active || false,
+                    chatId: telegramInfo.chatId || null,
+                    receiveNotifications: notifyPrefs?.receiveAlerts || false
+                });
+                setTelegramFormData({ chatId: '' });
+            },
+            onError: (error) => {
+                setTelegramFormError(error.response?.data?.message || 'Ошибка при подключении Telegram');
+            },
+        }
+    );
+
+    // Disconnect Telegram mutation
+    const disconnectTelegramMutation = useMutation(
+        () => apiService.telegram.disconnect(),
+        {
+            onSuccess: (response) => {
+                toast.success('Telegram отключен');
+                setTelegramStatus({
+                    connected: false,
+                    chatId: null,
+                    receiveNotifications: false
+                });
+            },
+            onError: (error) => {
+                setTelegramFormError(error.response?.data?.message || 'Ошибка при отключении Telegram');
+            },
+        }
+    );
+
+    // Toggle Telegram notifications mutation
+    const toggleNotificationsMutation = useMutation(
+        (data) => apiService.telegram.toggleNotifications(data),
+        {
+            onSuccess: (response) => {
+                const status = response.data.data.user.notificationPreferences.receiveAlerts;
+                toast.success(`Уведомления ${status ? 'включены' : 'отключены'}`);
+                setTelegramStatus(prev => ({
+                    ...prev,
+                    receiveNotifications: status
+                }));
+            },
+            onError: (error) => {
+                setTelegramFormError(error.response?.data?.message || 'Ошибка при изменении настроек уведомлений');
+            },
+        }
+    );
+
+    // Send test notification mutation
+    const sendTestNotificationMutation = useMutation(
+        () => apiService.telegram.sendTestNotification(),
+        {
+            onSuccess: () => {
+                toast.success('Тестовое уведомление отправлено');
+            },
+            onError: (error) => {
+                setTelegramFormError(error.response?.data?.message || 'Ошибка при отправке тестового уведомления');
+            },
+        }
+    );
+
     // Handle profile form change
     const handleProfileChange = (e) => {
         const { name, value } = e.target;
@@ -102,6 +210,15 @@ const Profile = () => {
         const { name, value } = e.target;
         setPasswordData({
             ...passwordData,
+            [name]: value,
+        });
+    };
+
+    // Handle Telegram form change
+    const handleTelegramChange = (e) => {
+        const { name, value } = e.target;
+        setTelegramForm({
+            ...telegramForm,
             [name]: value,
         });
     };
@@ -133,8 +250,39 @@ const Profile = () => {
         changePasswordMutation.mutate(passwordData);
     };
 
-    // Loading state
-    if (userLoading) {
+    // Handle connect Telegram form submission
+    const handleConnectTelegram = async (e) => {
+        e.preventDefault();
+        setTelegramFormError('');
+
+        if (!telegramForm.chatId) {
+            setTelegramFormError('Введите Chat ID');
+            return;
+        }
+
+        connectTelegramMutation.mutate(telegramForm);
+    };
+
+    // Handle disconnect Telegram
+    const handleDisconnectTelegram = () => {
+        setTelegramFormError('');
+        disconnectTelegramMutation.mutate();
+    };
+
+    // Handle toggle notifications
+    const handleToggleNotifications = (enabled) => {
+        setTelegramFormError('');
+        toggleNotificationsMutation.mutate({ receiveAlerts: enabled });
+    };
+
+    // Handle send test notification
+    const handleSendTestNotification = () => {
+        setTelegramFormError('');
+        sendTestNotificationMutation.mutate();
+    };
+
+    // Loading state for all user data
+    if (userLoading || telegramLoading) {
         return <Loader text="Загрузка профиля..." />;
     }
 
@@ -371,6 +519,148 @@ const Profile = () => {
                                 Изменить пароль
                             </Button>
                         </form>
+                    </div>
+                </div>
+
+                {/* Telegram Settings */}
+                <div className="lg:col-span-2 overflow-hidden rounded-xl bg-white shadow-sm">
+                    <div className="border-b border-slate-100 px-6 py-4 flex justify-between items-center">
+                        <div>
+                            <h2 className="text-lg font-semibold text-slate-800">Настройки уведомлений Telegram</h2>
+                            <p className="text-sm text-slate-500">
+                                Подключите Telegram для получения уведомлений о заполненных контейнерах
+                            </p>
+                        </div>
+                        {telegramStatus.connected && (
+                            <div className="px-3 py-1 bg-teal-100 text-teal-800 rounded-full text-xs font-medium">
+                                Подключено
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-6">
+                        {telegramFormError && (
+                            <div className="mb-4 flex items-center rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+                                <AlertCircle className="mr-2 h-4 w-4" />
+                                <p>{telegramFormError}</p>
+                            </div>
+                        )}
+
+                        {!telegramStatus.connected ? (
+                            <div>
+                                <div className="mb-6 p-4 bg-slate-50 rounded-lg">
+                                    <h3 className="font-medium text-slate-700 mb-2">Как подключить Telegram:</h3>
+                                    <ol className="list-decimal list-inside text-sm text-slate-600 space-y-2">
+                                        <li>Откройте Telegram и найдите бота <strong>@your_bot_name</strong></li>
+                                        <li>Нажмите кнопку <strong>Старт</strong> или отправьте команду <code className="bg-slate-200 px-1 rounded">/start</code></li>
+                                        <li>Бот пришлет вам ваш <strong>Chat ID</strong></li>
+                                        <li>Скопируйте Chat ID и вставьте его в поле ниже</li>
+                                    </ol>
+                                </div>
+
+                                <form onSubmit={handleConnectTelegram} className="space-y-4">
+                                    <div>
+                                        <label htmlFor="chatId" className="mb-1 block text-sm font-medium text-slate-700">
+                                            Telegram Chat ID
+                                        </label>
+                                        <div className="relative">
+                                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                            <MessageCircle className="h-4 w-4" />
+                                          </span>
+                                            <input
+                                                id="chatId"
+                                                name="chatId"
+                                                type="text"
+                                                value={telegramFormData.chatId}
+                                                onChange={handleTelegramChange}
+                                                className="block w-full rounded-lg border border-slate-200 pl-10 pr-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
+                                                placeholder="Введите ваш Chat ID из Telegram"
+                                                required
+                                                disabled={connectTelegramMutation.isLoading}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <Button
+                                        type="submit"
+                                        isLoading={connectTelegramMutation.isLoading}
+                                        color="teal"
+                                    >
+                                        <MessageCircle className="mr-2 h-4 w-4" />
+                                        Подключить Telegram
+                                    </Button>
+                                </form>
+                            </div>
+                        ) : (
+                            <div>
+                                <div className="mb-6 space-y-4">
+                                    <div className="flex justify-between items-center p-4 bg-slate-50 rounded-lg">
+                                        <div>
+                                            <h3 className="font-medium text-slate-700">Статус подключения</h3>
+                                            <p className="text-sm text-slate-500">Telegram успешно подключен</p>
+                                        </div>
+                                        <div className="text-sm text-slate-600 bg-white px-3 py-1 rounded-md border border-slate-200">
+                                            Chat ID: {telegramStatus.chatId}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-between items-center p-4 bg-slate-50 rounded-lg">
+                                        <div>
+                                            <h3 className="font-medium text-slate-700">Уведомления</h3>
+                                            <p className="text-sm text-slate-500">
+                                                {telegramStatus.receiveNotifications
+                                                    ? 'Вы получаете уведомления о заполненных контейнерах'
+                                                    : 'Уведомления отключены'}
+                                            </p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            color={telegramStatus.receiveNotifications ? 'red' : 'green'}
+                                            onClick={() => handleToggleNotifications(!telegramStatus.receiveNotifications)}
+                                            isLoading={toggleNotificationsMutation.isLoading}
+                                            variant="outline"
+                                            size="sm"
+                                        >
+                                            {telegramStatus.receiveNotifications ? (
+                                                <>
+                                                    <BellOff className="mr-2 h-4 w-4" />
+                                                    Отключить
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Bell className="mr-2 h-4 w-4" />
+                                                    Включить
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-3">
+                                    <Button
+                                        type="button"
+                                        color="teal"
+                                        onClick={handleSendTestNotification}
+                                        isLoading={sendTestNotificationMutation.isLoading}
+                                        disabled={!telegramStatus.receiveNotifications}
+                                    >
+                                        <Send className="mr-2 h-4 w-4" />
+                                        Отправить тестовое уведомление
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        color="red"
+                                        variant="outline"
+                                        onClick={handleDisconnectTelegram}
+                                        isLoading={disconnectTelegramMutation.isLoading}
+                                    >
+                                        <MessageCircle className="mr-2 h-4 w-4" />
+                                        Отключить Telegram
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

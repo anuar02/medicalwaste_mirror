@@ -76,6 +76,26 @@ const userSchema = new mongoose.Schema({
         },
         default: ''
     },
+    telegram: {
+        chatId: {
+            type: String,
+            default: null
+        },
+        username: {
+            type: String,
+            default: null
+        },
+        active: {
+            type: Boolean,
+            default: false
+        }
+    },
+    notificationPreferences: {
+        receiveAlerts: {
+            type: Boolean,
+            default: true
+        }
+    },
     active: {
         type: Boolean,
         default: true
@@ -93,18 +113,7 @@ const userSchema = new mongoose.Schema({
     resetPasswordToken: String,
     resetPasswordExpires: Date,
     passwordChangedAt: Date
-}, {
-    timestamps: true,
-    toJSON: {
-        transform: (doc, ret) => {
-            delete ret.password;
-            delete ret.resetPasswordToken;
-            delete ret.resetPasswordExpires;
-            delete ret.__v;
-            return ret;
-        }
-    }
-});
+}, schemaOptions);
 
 // Index for efficient queries
 userSchema.index({ username: 1 });

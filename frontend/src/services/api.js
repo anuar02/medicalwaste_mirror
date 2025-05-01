@@ -156,9 +156,21 @@ const apiService = {
         getCollectionPoints: (params) => api.get('/tracking/collection-points', { params }),
         getDriverStats: (driverId, params) => api.get(`/tracking/driver-stats/${driverId}`, { params }),
         sendCommand: (data) => api.post('/tracking/send-command', data)
-    }
+    },
 
-// This should be placed within your existing apiService object
+    telegram: {
+        // Connect Telegram account with chatId
+        connect: (data) => api.post('/telegram/connect', data),
+
+        // Disconnect Telegram account
+        disconnect: () => api.post('/telegram/disconnect'),
+
+        // Toggle notification preferences
+        toggleNotifications: (data) => api.post('/telegram/toggle-notifications', data),
+
+        // Send test notification
+        sendTestNotification: () => api.post('/telegram/test-notification'),
+    },
 
 };
 

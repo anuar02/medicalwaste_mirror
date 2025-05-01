@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - PORT=4000
+      - REACT_APP_API_URL=/api
+      - NODE_ENV=development
+    networks:
+      - app-network
+
+  backend:
+    env_file:
+      - ./backend/.env
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongodb:27017/myapp
+      - NODE_ENV=development
+      - JWT_SECRET=c617477e722206edfb3aa0d4cee67033a2e45d85f92c218315d0800b45cbf09b830a91ddc353ae8cbbb7fd9eb7d0f33c85714c6ee7794eec444371a7fb5da8f1
+      - JWT_EXPIRES_IN=24h
+      - JWT_COOKIE_EXPIRES_IN=24
+      - JWT_REFRESH_SECRET=c617477e722206edfb3aa0d4cee67033a2e45d85f92c218315d0800b45cbf09b830a91ddc353ae8cbbb7fd9eb7d0f33c85714c6ee7794eec444371a7fb5da8f1
+      - JWT_REFRESH_EXPIRES_IN=7d
+      - JWT_REFRESH_COOKIE_EXPIRES_IN=7
+    networks:
+      - app-network
+    depends_on:
+      - mongodb
+
+  mongodb:
+    image: mongo:4.4
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+
+  nginx:
+    build:
+      context: ./nginx
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    depends_on:
+      - frontend
+      - backend
+    environment:
+      - FRONTEND_HOST=frontend
+      - BACKEND_HOST=backend
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongo-data:

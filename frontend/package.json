@@ -21,6 +21,7 @@
     "react-scripts": "5.0.1",
     "recharts": "^2.14.1",
     "tailwindcss": "^3.4.16",
+    "telegraf": "^4.16.3",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
