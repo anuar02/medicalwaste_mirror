@@ -139,7 +139,8 @@ const Profile = () => {
                     chatId: telegramInfo.chatId || null,
                     receiveNotifications: notifyPrefs?.receiveAlerts || false
                 });
-                setTelegramFormData({ chatId: '' });
+                setTelegramForm({ chatId: '' });
+                refetchTelegram(); // Refresh Telegram status after connection
             },
             onError: (error) => {
                 setTelegramFormError(error.response?.data?.message || 'Ошибка при подключении Telegram');
@@ -158,6 +159,7 @@ const Profile = () => {
                     chatId: null,
                     receiveNotifications: false
                 });
+                refetchTelegram(); // Refresh Telegram status after disconnection
             },
             onError: (error) => {
                 setTelegramFormError(error.response?.data?.message || 'Ошибка при отключении Telegram');
@@ -176,6 +178,7 @@ const Profile = () => {
                     ...prev,
                     receiveNotifications: status
                 }));
+                refetchTelegram(); // Refresh Telegram status after toggling notifications
             },
             onError: (error) => {
                 setTelegramFormError(error.response?.data?.message || 'Ошибка при изменении настроек уведомлений');
@@ -309,6 +312,9 @@ const Profile = () => {
         'Лаборатория',
         'Реанимация',
     ];
+
+    // Debug log to check Telegram status
+    console.log("Telegram status:", telegramStatus);
 
     return (
         <div className="container mx-auto p-4">
@@ -571,7 +577,7 @@ const Profile = () => {
                                                 id="chatId"
                                                 name="chatId"
                                                 type="text"
-                                                value={telegramFormData.chatId}
+                                                value={telegramForm.chatId}
                                                 onChange={handleTelegramChange}
                                                 className="block w-full rounded-lg border border-slate-200 pl-10 pr-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                                 placeholder="Введите ваш Chat ID из Telegram"
