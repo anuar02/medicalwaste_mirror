@@ -60,8 +60,8 @@ services:
     networks:
       - app-network
     environment:
-      - FRONTEND_HOST=myapp_frontend
-      - BACKEND_HOST=myapp_backend
+      - FRONTEND_HOST=trashBin_frontend
+      - BACKEND_HOST=trashBin_backend
 
 networks:
   app-network:
