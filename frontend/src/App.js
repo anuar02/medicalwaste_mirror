@@ -14,6 +14,9 @@ import AuthLayout from './layouts/AuthLayout';
 import UserManagement from "./pages/admin/UserManagement";
 import BinManagement from "./pages/admin/BinManagement";
 import DeviceManagement from "./pages/admin/DeviceManagement";
+import DriverRegistration from "./components/DriverRegistration";
+import AdminDriverVerification from "./components/AdminDriverVerification";
+import MedicalCompanyManagement from "./components/MedicalCompanyManagement";
 
 // Pages - Using lazy loading for improved performance
 const Login = React.lazy(() => import('./pages/auth/Login'));
@@ -69,7 +72,7 @@ const App = () => {
         <QueryClientProvider client={queryClient}>
             <ThemeProvider>
                 <BrowserRouter>
-                    <AuthProvider> {/* Now inside BrowserRouter */}
+                    <AuthProvider>
                         <Suspense fallback={<LoadingScreen />}>
                             <Routes>
                                 {/* Auth Routes */}
@@ -90,6 +93,32 @@ const App = () => {
                                             </ProtectedRoute>
                                         }
                                     />
+                                    <Route
+                                        path="/driver/register"
+                                        element={
+                                            <ProtectedRoute>
+                                                <DriverRegistration />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    {/* Fixed: Changed from component to element */}
+                                    <Route
+                                        path="/admin/drivers"
+                                        element={
+                                            <ProtectedRoute>
+                                                <AdminDriverVerification />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+                                    <Route
+                                        path="/admin/companies"
+                                        element={
+                                            <ProtectedRoute>
+                                                <MedicalCompanyManagement />
+                                            </ProtectedRoute>
+                                        }
+                                    />
+
                                     <Route
                                         path="/bins"
                                         element={
@@ -146,14 +175,15 @@ const App = () => {
                                             </ProtectedRoute>
                                         }
                                     />
-                                    {/*<Route*/}
-                                    {/*    path="/admin/bins"*/}
-                                    {/*    element={*/}
-                                    {/*        <ProtectedRoute>*/}
-                                    {/*            <BinManagement />*/}
-                                    {/*        </ProtectedRoute>*/}
-                                    {/*    }*/}
-                                    {/*/>*/}
+                                    {/* Uncommented and fixed BinManagement route */}
+                                    <Route
+                                        path="/admin/bins"
+                                        element={
+                                            <ProtectedRoute>
+                                                <BinManagement />
+                                            </ProtectedRoute>
+                                        }
+                                    />
                                     <Route
                                         path="/admin/users"
                                         element={

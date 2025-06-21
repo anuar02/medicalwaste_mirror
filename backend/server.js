@@ -22,6 +22,8 @@ const deviceRoutes = require('./routes/devices');
 const trackingRoutes = require('./routes/tracking');
 const adminRoutes = require('./routes/admin');
 const telegramRoutes = require('./routes/telegram');
+const driverRoutes = require('./routes/drivers');
+const medicalCompanyRoutes = require('./routes/medicalCompanies');
 
 // Import middlewares
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
@@ -132,8 +134,10 @@ app.use('/api/telegram', telegramRoutes);
 app.use('/api/waste-bins', wasteBinRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/drivers', driverRoutes);
+app.use('/api/medical-companies', medicalCompanyRoutes);
 app.use('/api/devices', deviceRoutes);
-app.use('/api/tracking', trackingRoutes); // Add this new route
+app.use('/api/tracking', trackingRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Health check endpoint

@@ -14,8 +14,11 @@ services:
       - PORT=4000
       - REACT_APP_API_URL=/api
       - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
     networks:
       - app-network
+    restart: unless-stopped
 
   backend:
     env_file:
@@ -28,6 +31,7 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
+      - ./backend/logs:/app/logs
     environment:
       - PORT=5000
       - MONGODB_URI=mongodb://mongodb:27017/myapp
@@ -41,7 +45,9 @@ services:
     networks:
       - app-network
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
 
   mongodb:
     image: mongo:4.4
@@ -49,8 +55,18 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
     networks:
       - app-network
+    environment:
+      - MONGO_INITDB_DATABASE=myapp
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
   nginx:
     build:
@@ -65,6 +81,31 @@ services:
     environment:
       - FRONTEND_HOST=frontend
       - BACKEND_HOST=backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: MongoDB Admin Interface
+  mongo-express:
+    image: mongo-express:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+    networks:
+      - app-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - admin
 
 networks:
   app-network:
@@ -72,3 +113,4 @@ networks:
 
 volumes:
   mongo-data:
+    driver: local

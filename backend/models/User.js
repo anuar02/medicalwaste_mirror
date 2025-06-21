@@ -62,10 +62,7 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: {
-            values: ['user', 'admin', 'supervisor'],
-            message: 'Role must be either: user, admin, or supervisor'
-        },
+        enum: ['user', 'admin', 'supervisor', 'driver'],
         default: 'user'
     },
     department: {
@@ -86,6 +83,7 @@ const userSchema = new mongoose.Schema({
         },
         default: ''
     },
+
     telegram: {
         chatId: {
             type: String,
