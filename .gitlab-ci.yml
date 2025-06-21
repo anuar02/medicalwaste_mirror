@@ -256,7 +256,7 @@ deploy:
   image: alpine:latest
   variables:
     # Your actual Swarm manager public IP
-    SWARM_MANAGER: "13.48.178.39"
+    SWARM_MANAGER: "51.20.79.185"
     SSH_USER: "ubuntu"
   before_script:
     # Set up SSH for connecting to the Swarm manager
