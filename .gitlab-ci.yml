@@ -272,13 +272,22 @@ deploy:
     - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
     - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+
+    # Debug: Show what variables we have
+    - echo "=== GitLab CI Variables Check ==="
+    - echo "JWT_SECRET is set:" $([ -n "$JWT_SECRET" ] && echo "YES" || echo "NO")
+    - echo "GOOGLE_CLIENT_ID is set:" $([ -n "$GOOGLE_CLIENT_ID" ] && echo "YES" || echo "NO")
+    - echo "CI_REGISTRY_IMAGE: $CI_REGISTRY_IMAGE"
+    - echo "CI_COMMIT_SHA: $CI_COMMIT_SHA"
+
   script:
+    # Create docker-compose file with ACTUAL VALUES substituted (not variable references)
     - |
       cat > docker-compose.prod.yml << EOF
       version: '3.8'
       services:
         frontend:
-          image: ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
+          image: $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
           deploy:
             replicas: 1
             placement:
@@ -294,10 +303,10 @@ deploy:
             - PORT=4000
             - REACT_APP_API_URL=/api
             - NODE_ENV=production
-            - JWT_SECRET=${JWT_SECRET}
+            - REACT_APP_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
       
         backend:
-          image: ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
+          image: $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
           deploy:
             replicas: 1
             placement:
@@ -311,12 +320,19 @@ deploy:
             - myapp_app-network
           environment:
             - PORT=5000
-            - MONGODB_URI=mongodb://myapp_mongodb:27017/trashbin_db
+            - MONGODB_URI=mongodb://10.0.1.184:27017/trashbin_db
             - NODE_ENV=production
-            - JWT_SECRET=${JWT_SECRET}
+            - JWT_SECRET=$JWT_SECRET
+            - JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
+            - GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+            - GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
+            - GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI
+            - FRONTEND_URL=$FRONTEND_URL
+            - TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+            - BCRYPT_ROUNDS=12
       
         nginx:
-          image: ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
+          image: $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
           deploy:
             replicas: 1
             placement:
@@ -338,6 +354,11 @@ deploy:
         myapp_app-network:
           external: true
       EOF
+
+    # Debug: Show what was actually written to the file
+    - echo "=== Generated docker-compose.prod.yml content ==="
+    - cat docker-compose.prod.yml | head -50
+
     - |
       cat > deploy.sh << 'EOF'
       #!/bin/sh
@@ -377,8 +398,13 @@ deploy:
       
       echo "Deployment completed!"
       EOF
+
     - chmod +x deploy.sh
+
+    # Copy files to server
     - scp docker-compose.prod.yml deploy.sh ${SSH_USER}@${SWARM_MANAGER}:~/
+
+    # Execute deployment
     - ssh ${SSH_USER}@${SWARM_MANAGER} "./deploy.sh $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD $CI_REGISTRY"
   only:
     - main
