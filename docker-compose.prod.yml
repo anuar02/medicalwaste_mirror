@@ -6,7 +6,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.hostname==ip-10-0-1-166  # Add this
+          - node.hostname==ip-10-0-1-166
       restart_policy:
         condition: any
         delay: 5s
@@ -14,17 +14,19 @@ services:
     networks:
       - myapp_app-network
     environment:
+      # Frontend environment variables
       - PORT=4000
-      - REACT_APP_API_URL=/api
       - NODE_ENV=production
-      
+      - REACT_APP_API_URL=/api
+      - REACT_APP_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+
   backend:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/backend:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
       placement:
         constraints:
-          - node.hostname==ip-10-0-1-166  # Add this
+          - node.hostname==ip-10-0-1-166
       restart_policy:
         condition: any
         delay: 5s
@@ -32,23 +34,35 @@ services:
     networks:
       - myapp_app-network
     environment:
+      # Backend environment variables
       - PORT=5000
-      - MONGODB_URI=mongodb://10.0.1.184:27017/trashbin_db
       - NODE_ENV=production
-      
+      - MONGODB_URI=mongodb://10.0.1.184:27017/trashbin_db
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=24h
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - JWT_REFRESH_EXPIRES_IN=7d
+      - JWT_COOKIE_EXPIRES_IN=24
+      - JWT_REFRESH_COOKIE_EXPIRES_IN=7
+      - BCRYPT_ROUNDS=12
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+
   nginx:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/nginx:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
       placement:
         constraints:
-          - node.hostname==ip-10-0-1-166  # Add this
+          - node.hostname==ip-10-0-1-166
       restart_policy:
         condition: any
         delay: 5s
         max_attempts: 5
     ports:
-      - "80:8080"  # Keep consistent port
+      - "80:8080"
     networks:
       - myapp_app-network
     environment:
