@@ -671,3 +671,7 @@
 {"duration":"7ms","ip":"::ffff:172.18.0.3","level":"info","message":"GET /api/auth/verify","service":"medical-waste-api","status":200,"timestamp":"2025-06-21 22:48:32","userId":"6812828eb47c14fa2607c70e"}
 {"duration":"6ms","ip":"::ffff:172.18.0.3","level":"info","message":"GET /api/medical-companies","service":"medical-waste-api","status":200,"timestamp":"2025-06-21 22:48:32","userId":"unauthenticated"}
 {"duration":"12ms","ip":"::ffff:172.18.0.3","level":"info","message":"GET /api/waste-bins/overfilled","service":"medical-waste-api","status":200,"timestamp":"2025-06-21 22:48:32","userId":"6812828eb47c14fa2607c70e"}
+{"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-07-14 13:03:33"}
+{"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-07-14 13:03:34"}
+{"duration":"143ms","ip":"::ffff:192.168.65.1","level":"warn","message":"GET /","service":"medical-waste-api","status":404,"timestamp":"2025-07-14 13:04:17","userId":"unauthenticated"}
+{"duration":"15ms","ip":"::ffff:192.168.65.1","level":"warn","message":"GET /favicon.ico","service":"medical-waste-api","status":404,"timestamp":"2025-07-14 13:04:21","userId":"unauthenticated"}

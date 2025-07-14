@@ -658,3 +658,5 @@
 ::ffff:172.18.0.3 - - [21/Jun/2025:22:48:32 +0000] "GET /api/auth/verify HTTP/1.1" 200 141 "http://localhost:8080/admin/companies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
 ::ffff:172.18.0.3 - - [21/Jun/2025:22:48:32 +0000] "GET /api/medical-companies HTTP/1.1" 200 406 "http://localhost:8080/admin/companies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
 ::ffff:172.18.0.3 - - [21/Jun/2025:22:48:32 +0000] "GET /api/waste-bins/overfilled HTTP/1.1" 200 51 "http://localhost:8080/admin/companies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+::ffff:192.168.65.1 - - [14/Jul/2025:13:04:17 +0000] "GET / HTTP/1.1" 404 875 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+::ffff:192.168.65.1 - - [14/Jul/2025:13:04:21 +0000] "GET /favicon.ico HTTP/1.1" 404 897 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"

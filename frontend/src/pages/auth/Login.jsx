@@ -202,27 +202,27 @@ const Login = () => {
     };
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 px-4 py-8">
+        <div className="flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4 py-8">
             <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
-                {/* Header - Reduced padding */}
-                <div className="border-b border-slate-100 px-6 py-4">
+                {/* Header - Compact padding */}
+                <div className="border-b border-slate-100 px-6 py-3">
                     <h2 className="text-xl font-semibold text-slate-800">Вход в систему</h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="text-sm text-slate-500">
                         Введите свои учетные данные для доступа
                     </p>
                 </div>
 
-                {/* Form container - Reduced padding */}
+                {/* Form container - Compact padding */}
                 <div className="px-6 py-4">
                     {/* Error message */}
                     {error && (
-                        <div className="mb-3 flex items-center rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 animate-fade-in">
+                        <div className="mb-2 flex items-center rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 animate-fade-in">
                             <AlertCircle className="mr-2 h-4 w-4 flex-shrink-0" />
                             <p>{error}</p>
                         </div>
                     )}
 
-                    {/* Login form - Reduced spacing */}
+                    {/* Login form - Compact spacing */}
                     <form onSubmit={handleSubmit} className="space-y-3">
                         {/* Email */}
                         <div>
@@ -299,8 +299,8 @@ const Login = () => {
                             )}
                         </div>
 
-                        {/* Remember me & Forgot password */}
-                        <div className="flex items-center justify-between py-2">
+                        {/* Remember me & Forgot password - Compact */}
+                        <div className="flex items-center justify-between py-1">
                             <div className="flex items-center">
                                 <input
                                     id="remember-me"
@@ -322,14 +322,14 @@ const Login = () => {
                             </Link>
                         </div>
 
-                        {/* Submit button - Reduced top margin */}
+                        {/* Submit button - Compact margin */}
                         <Button
                             type="submit"
                             color="teal"
                             fullWidth
                             isLoading={isLoading}
                             disabled={formSubmitted && !isFormValid()}
-                            className="mt-4"
+                            className="!mt-3"
                         >
                             <LogIn className="mr-2 h-4 w-4" />
                             Войти
@@ -338,8 +338,8 @@ const Login = () => {
                         {/* Google Sign-In */}
                         {googleClientId && (
                             <>
-                                {/* Divider - Reduced margin */}
-                                <div className="relative mt-4">
+                                {/* Divider - Compact margin */}
+                                <div className="relative mt-3">
                                     <div className="absolute inset-0 flex items-center">
                                         <div className="w-full border-t border-slate-200"></div>
                                     </div>
@@ -348,8 +348,8 @@ const Login = () => {
                                     </div>
                                 </div>
 
-                                {/* Google Login Button - Reduced margin */}
-                                <div className="mt-4">
+                                {/* Google Login Button - Compact margin */}
+                                <div className="mt-3">
                                     <GoogleOAuthProvider clientId={googleClientId}>
                                         <div className="flex justify-center">
                                             <GoogleLogin
@@ -369,8 +369,8 @@ const Login = () => {
                             </>
                         )}
 
-                        {/* Register link - Reduced margin */}
-                        <div className="mt-4 text-center">
+                        {/* Register link - Compact margin */}
+                        <div className="mt-3 text-center">
                             <p className="text-sm text-slate-600">
                                 Еще нет аккаунта?{' '}
                                 <Link
