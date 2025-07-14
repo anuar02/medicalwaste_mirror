@@ -310,7 +310,7 @@ deploy:
             - myapp_app-network
           environment:
             - PORT=5000
-            - MONGODB_URI=mongodb://myapp_mongodb:27017/trashbin_db
+            - MONGODB_URI=mongodb://10.0.1.184:27017/trashbin_db
             - NODE_ENV=production
       
         nginx:
