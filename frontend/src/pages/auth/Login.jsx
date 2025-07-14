@@ -1,15 +1,15 @@
 // pages/auth/Login.jsx
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from '../../components/ui/Button';
 import toast from 'react-hot-toast';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+
 const Login = () => {
     const navigate = useNavigate();
-    const location = useLocation();
-    const { login, getGoogleAuthUrl, handleGoogleCallback, googleLogin } = useAuth();
+    const { login, googleLogin } = useAuth();
 
     // Form state
     const [formData, setFormData] = useState({
@@ -31,249 +31,118 @@ const Login = () => {
     const [error, setError] = useState('');
     const [formSubmitted, setFormSubmitted] = useState(false);
 
-    // Check for Google OAuth code in URL
+    // Environment validation
+    const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+
     useEffect(() => {
-        const processGoogleCallback = async () => {
-            const urlParams = new URLSearchParams(location.search);
-            const code = urlParams.get('code');
+        if (!googleClientId) {
+            console.error('Google Client ID is not configured');
+            setError('Google authentication is not properly configured');
+        }
+    }, [googleClientId]);
 
-            if (code) {
-                console.log('Google OAuth code detected:', code);
-                setIsGoogleLoading(true);
-                setError('');
-
-                try {
-                    // Clear the URL parameters to prevent reprocessing on page reload
-                    window.history.replaceState({}, document.title, window.location.pathname);
-
-                    // Call the callback handler from your AuthContext
-                    console.log('Calling handleGoogleCallback with code');
-                    const result = await handleGoogleCallback(code);
-                    console.log('Google callback result:', result);
-
-                    if (result && result.success) {
-                        toast.success('Успешный вход через Google!');
-                        navigate('/');
-                    } else {
-                        const errorMsg = result?.error || 'Ошибка при входе через Google';
-                        setError(errorMsg);
-                        toast.error(errorMsg);
-                    }
-                } catch (err) {
-                    console.error('Error processing Google OAuth callback:', err);
-                    setError('Произошла ошибка при обработке Google авторизации');
-                    toast.error('Ошибка при входе через Google');
-                } finally {
-                    setIsGoogleLoading(false);
-                }
-            }
-        };
-
-        processGoogleCallback();
-    }, [location.search, navigate, handleGoogleCallback]);
-
-    // Initialize Google Sign-In SDK
+    // Validate form data
     useEffect(() => {
-        // Load Google Sign-In SDK if it's not already loaded
-        const loadGoogleScript = () => {
-            // Skip if already loaded
-            if (document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
-                initializeGoogleOneTap();
-                return;
-            }
+        const newValidation = { ...validation };
 
-            const script = document.createElement('script');
-            script.src = 'https://accounts.google.com/gsi/client';
-            script.async = true;
-            script.defer = true;
-            script.onload = initializeGoogleOneTap;
-            document.body.appendChild(script);
-        };
-
-        const initializeGoogleOneTap = () => {
-            if (window.google && window.google.accounts) {
-                window.google.accounts.id.initialize({
-                    client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID,
-                    callback: handleGoogleOneTapResponse,
-                    auto_select: false
-                });
-            }
-        };
-
-        loadGoogleScript();
-    }, []);
-
-    // Handle Google One-Tap response
-    const handleGoogleOneTapResponse = async (response) => {
-        if (response.credential) {
-            setIsGoogleLoading(true);
-            try {
-                // First check if the function exists in your auth context
-                if (typeof googleLogin !== 'function') {
-                    console.error('googleLogin is not defined in the auth context');
-                    throw new Error('Не удалось выполнить вход через Google');
-                }
-
-                const result = await googleLogin(response.credential);
-                if (result.success) {
-                    navigate('/');
-                } else {
-                    setError(result.error || 'Ошибка при входе через Google');
-                }
-            } catch (err) {
-                setError(err.message || 'Произошла ошибка при попытке входа через Google');
-                console.error(err);
-            } finally {
-                setIsGoogleLoading(false);
-            }
-        }
-    };
-
-    // Handle Google OAuth callback
-    const handleGoogleOAuthCallback = async (code) => {
-        setIsGoogleLoading(true);
-        setError('');
-
-        try {
-            // Remove code from URL to avoid reprocessing on reload
-            window.history.replaceState({}, document.title, window.location.pathname);
-
-            // First check if the function exists in your auth context
-            if (typeof handleGoogleCallback !== 'function') {
-                console.error('handleGoogleCallback is not defined in the auth context');
-                throw new Error('Не удалось обработать ответ от Google');
-            }
-
-            const result = await handleGoogleCallback(code);
-            if (result.success) {
-                navigate('/');
-            } else {
-                setError(result.error || 'Ошибка при входе через Google');
-            }
-        } catch (err) {
-            console.error('Google callback error:', err);
-            setError(err.message || 'Произошла ошибка при обработке ответа от Google');
-        } finally {
-            setIsGoogleLoading(false);
-        }
-    };
-
-    const handleGoogleSuccess = async (credentialResponse) => {
-        setIsGoogleLoading(true);
-        setError('');
-
-        try {
-            // Call your AuthContext method with the ID token
-            const result = await googleLogin(credentialResponse.credential);
-
-            if (result && result.success) {
-                toast.success('Успешный вход через Google!');
-                navigate('/');
-            } else {
-                setError(result?.error || 'Ошибка при входе через Google');
-            }
-        } catch (err) {
-            console.error('Google login error:', err);
-            setError('Произошла ошибка при входе через Google');
-        } finally {
-            setIsGoogleLoading(false);
-        }
-    };
-
-    const handleGoogleError = () => {
-        setError('Произошла ошибка при авторизации через Google');
-        toast.error('Ошибка при входе через Google');
-    };
-
-    // Handle Google Sign-In button click
-    const handleGoogleSignIn = async () => {
-        try {
-            // Redirect directly to Google OAuth
-            const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.REACT_APP_GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent('http://13.48.178.39:8080/login')}&response_type=code&scope=email%20profile%20openid&access_type=offline&prompt=consent`;
-
-            window.location.href = googleAuthUrl;
-        } catch (err) {
-            console.error('Google auth error:', err);
-            setError('Ошибка при подключении к Google');
-        }
-    };
-
-    // Validate form data based on rules
-    useEffect(() => {
         // Email validation
-        const emailValidation = {
-            isValid: false,
-            message: '',
-            touched: validation.email.touched,
-        };
-
         if (formData.email) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(formData.email)) {
-                emailValidation.message = 'Пожалуйста, введите корректный email';
+                newValidation.email = {
+                    ...newValidation.email,
+                    isValid: false,
+                    message: 'Пожалуйста, введите корректный email'
+                };
             } else {
-                emailValidation.isValid = true;
+                newValidation.email = {
+                    ...newValidation.email,
+                    isValid: true,
+                    message: ''
+                };
             }
-        } else if (validation.email.touched) {
-            emailValidation.message = 'Email обязателен';
+        } else if (newValidation.email.touched) {
+            newValidation.email = {
+                ...newValidation.email,
+                isValid: false,
+                message: 'Email обязателен'
+            };
         }
 
         // Password validation
-        const passwordValidation = {
-            isValid: false,
-            message: '',
-            touched: validation.password.touched,
-        };
-
         if (formData.password) {
-            if (formData.password.length < 1) {
-                passwordValidation.message = 'Пароль обязателен';
+            if (formData.password.length < 6) {
+                newValidation.password = {
+                    ...newValidation.password,
+                    isValid: false,
+                    message: 'Пароль должен содержать минимум 6 символов'
+                };
             } else {
-                passwordValidation.isValid = true;
+                newValidation.password = {
+                    ...newValidation.password,
+                    isValid: true,
+                    message: ''
+                };
             }
-        } else if (validation.password.touched) {
-            passwordValidation.message = 'Пароль обязателен';
+        } else if (newValidation.password.touched) {
+            newValidation.password = {
+                ...newValidation.password,
+                isValid: false,
+                message: 'Пароль обязателен'
+            };
         }
 
-        setValidation({
-            email: emailValidation,
-            password: passwordValidation,
-        });
-    }, [formData, validation.email.touched, validation.password.touched]);
+        setValidation(newValidation);
+    }, [formData.email, formData.password, validation.email.touched, validation.password.touched]);
 
-    // Check if form is valid
-    const isFormValid = () => {
-        return Object.values(validation).every(field => field.isValid);
+    // Utility functions
+    const handleError = (message) => {
+        setError(message);
+        toast.error(message);
     };
 
-    // Handle form input change
+    const handleSuccess = (message) => {
+        toast.success(message);
+        navigate('/');
+    };
+
+    const isFormValid = () => {
+        return validation.email.isValid && validation.password.isValid;
+    };
+
+    const getInputStatusClass = (fieldName) => {
+        if (!validation[fieldName].touched) return 'border-slate-200';
+        return validation[fieldName].isValid
+            ? 'border-green-500 focus:border-green-500 focus:ring-green-500'
+            : 'border-red-500 focus:border-red-500 focus:ring-red-500';
+    };
+
+    // Event handlers
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData({
-            ...formData,
+        setFormData(prev => ({
+            ...prev,
             [name]: value,
-        });
+        }));
     };
 
-    // Handle input blur to mark field as touched
     const handleBlur = (e) => {
         const { name } = e.target;
-        setValidation({
-            ...validation,
+        setValidation(prev => ({
+            ...prev,
             [name]: {
-                ...validation[name],
+                ...prev[name],
                 touched: true,
             },
-        });
+        }));
     };
 
-    // Handle form submission
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setFormSubmitted(true);
 
-        // Update all fields as touched
+        // Mark all fields as touched
         const touchedValidation = Object.keys(validation).reduce((acc, key) => {
             acc[key] = {
                 ...validation[key],
@@ -292,31 +161,48 @@ const Login = () => {
         setIsLoading(true);
 
         try {
-            // Pass email and password directly
             const result = await login(formData.email, formData.password);
-            if (!result.success) {
-                setError(result.error || 'Ошибка авторизации');
+
+            if (result.success) {
+                handleSuccess('Успешный вход в систему!');
             } else {
-                // Success redirect handled in login method
+                handleError(result.error || 'Ошибка авторизации');
             }
         } catch (err) {
-            setError('Произошла ошибка при попытке входа');
-            console.error(err);
+            console.error('Login error:', err);
+            handleError('Произошла ошибка при попытке входа');
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Get input status class
-    const getInputStatusClass = (fieldName) => {
-        if (!validation[fieldName].touched) return 'border-slate-200';
-        return validation[fieldName].isValid
-            ? 'border-green-500 focus:border-green-500 focus:ring-green-500'
-            : 'border-red-500 focus:border-red-500 focus:ring-red-500';
+    const handleGoogleSuccess = async (credentialResponse) => {
+        setIsGoogleLoading(true);
+        setError('');
+
+        try {
+            const result = await googleLogin(credentialResponse.credential);
+
+            if (result && result.success) {
+                handleSuccess('Успешный вход через Google!');
+            } else {
+                handleError(result?.error || 'Ошибка при входе через Google');
+            }
+        } catch (err) {
+            console.error('Google login error:', err);
+            handleError('Произошла ошибка при входе через Google');
+        } finally {
+            setIsGoogleLoading(false);
+        }
+    };
+
+    const handleGoogleError = (error) => {
+        console.error('Google login error:', error);
+        handleError('Произошла ошибка при авторизации через Google');
     };
 
     return (
-        <div className="flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4">
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 px-4">
             <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
                 <div className="border-b border-slate-100 p-6">
                     <h2 className="text-xl font-semibold text-slate-800">Вход в систему</h2>
@@ -385,14 +271,17 @@ const Login = () => {
                                     onChange={handleChange}
                                     onBlur={handleBlur}
                                     className={`block w-full rounded-lg border px-3 py-2 text-slate-700 focus:ring-teal-500 pr-10 transition-all duration-200 ${getInputStatusClass('password')}`}
+                                    placeholder="Введите пароль"
                                 />
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex">
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
                                     {validation.password.touched && (
-                                        validation.password.isValid ? (
-                                            <CheckCircle className="h-5 w-5 text-green-500 mr-1" />
-                                        ) : (
-                                            <XCircle className="h-5 w-5 text-red-500 mr-1" />
-                                        )
+                                        <div className="mr-2">
+                                            {validation.password.isValid ? (
+                                                <CheckCircle className="h-5 w-5 text-green-500" />
+                                            ) : (
+                                                <XCircle className="h-5 w-5 text-red-500" />
+                                            )}
+                                        </div>
                                     )}
                                     <button
                                         type="button"
@@ -416,14 +305,17 @@ const Login = () => {
                                     name="remember-me"
                                     type="checkbox"
                                     checked={rememberMe}
-                                    onChange={() => setRememberMe(!rememberMe)}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
                                     className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                                 />
                                 <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-600">
                                     Запомнить меня
                                 </label>
                             </div>
-                            <Link to="/forgot-password" className="text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors">
+                            <Link
+                                to="/forgot-password"
+                                className="text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors"
+                            >
                                 Забыли пароль?
                             </Link>
                         </div>
@@ -441,40 +333,48 @@ const Login = () => {
                             Войти
                         </Button>
 
-                        {/* Divider with text */}
-                        <div className="relative mt-6">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-slate-200"></div>
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                                <span className="bg-white px-2 text-slate-500">или продолжить с</span>
-                            </div>
-                        </div>
-
-                        {/* Google Sign-In button */}
-                        <div className="mt-6">
-                            <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
-                                <div className="flex justify-center">
-                                    <GoogleLogin
-                                        onSuccess={handleGoogleSuccess}
-                                        onError={handleGoogleError}
-                                        text="signin_with"
-                                        shape="rectangular"
-                                        width="100%"
-                                        locale="ru"
-                                        theme="outline"
-                                        logo_alignment="center"
-                                    />
+                        {/* Google Sign-In */}
+                        {googleClientId && (
+                            <>
+                                {/* Divider */}
+                                <div className="relative mt-6">
+                                    <div className="absolute inset-0 flex items-center">
+                                        <div className="w-full border-t border-slate-200"></div>
+                                    </div>
+                                    <div className="relative flex justify-center text-sm">
+                                        <span className="bg-white px-2 text-slate-500">или продолжить с</span>
+                                    </div>
                                 </div>
-                            </GoogleOAuthProvider>
-                        </div>
 
+                                {/* Google Login Button */}
+                                <div className="mt-6">
+                                    <GoogleOAuthProvider clientId={googleClientId}>
+                                        <div className="flex justify-center">
+                                            <GoogleLogin
+                                                onSuccess={handleGoogleSuccess}
+                                                onError={handleGoogleError}
+                                                text="signin_with"
+                                                shape="rectangular"
+                                                width="100%"
+                                                locale="ru"
+                                                theme="outline"
+                                                logo_alignment="center"
+                                                disabled={isGoogleLoading}
+                                            />
+                                        </div>
+                                    </GoogleOAuthProvider>
+                                </div>
+                            </>
+                        )}
 
                         {/* Register link */}
                         <div className="mt-6 text-center">
                             <p className="text-sm text-slate-600">
                                 Еще нет аккаунта?{' '}
-                                <Link to="/register" className="font-medium text-teal-600 hover:text-teal-700 transition-colors">
+                                <Link
+                                    to="/register"
+                                    className="font-medium text-teal-600 hover:text-teal-700 transition-colors"
+                                >
                                     Зарегистрироваться
                                 </Link>
                             </p>
