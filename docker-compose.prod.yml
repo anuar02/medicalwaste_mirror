@@ -4,12 +4,15 @@ services:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/frontend:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.hostname==ip-10-0-1-166  # Add this
       restart_policy:
         condition: any
         delay: 5s
         max_attempts: 5
     networks:
-      - myapp_app-network  # Use existing network
+      - myapp_app-network
     environment:
       - PORT=4000
       - REACT_APP_API_URL=/api
@@ -19,37 +22,39 @@ services:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/backend:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.hostname==ip-10-0-1-166  # Add this
       restart_policy:
         condition: any
         delay: 5s
         max_attempts: 5
     networks:
-      - myapp_app-network  # Use existing network
+      - myapp_app-network
     environment:
       - PORT=5000
-      - MONGODB_URI=mongodb://myapp_mongodb:27017/trashbin_db  # Use existing MongoDB service
+      - MONGODB_URI=mongodb://myapp_mongodb:27017/trashbin_db
       - NODE_ENV=production
       
-  # Remove mongodb service since you already have myapp_mongodb
-  
   nginx:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/nginx:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.hostname==ip-10-0-1-166  # Add this
       restart_policy:
         condition: any
         delay: 5s
         max_attempts: 5
     ports:
-      - "80:8080"
+      - "80:8080"  # Keep consistent port
     networks:
-      - myapp_app-network  # Use existing network
+      - myapp_app-network
     environment:
       - FRONTEND_HOST=myapp_frontend
       - BACKEND_HOST=myapp_backend
 
 networks:
   myapp_app-network:
-    external: true  # Use existing external network
-
-# Remove volumes section since using existing MongoDB
+    external: true
