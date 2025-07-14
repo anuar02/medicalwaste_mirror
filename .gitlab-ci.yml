@@ -294,6 +294,7 @@ deploy:
             - PORT=4000
             - REACT_APP_API_URL=/api
             - NODE_ENV=production
+            - JWT_SECRET=${JWT_SECRET}
       
         backend:
           image: ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
@@ -310,8 +311,9 @@ deploy:
             - myapp_app-network
           environment:
             - PORT=5000
-            - MONGODB_URI=mongodb://10.0.1.184:27017/trashbin_db
+            - MONGODB_URI=mongodb://myapp_mongodb:27017/trashbin_db
             - NODE_ENV=production
+            - JWT_SECRET=${JWT_SECRET}
       
         nginx:
           image: ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
