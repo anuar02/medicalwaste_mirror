@@ -274,7 +274,6 @@ deploy:
   stage: deploy
   image: alpine:latest
   variables:
-    # Your actual Swarm manager public IP
     SWARM_MANAGER: "51.20.79.185"
     SSH_USER: "ubuntu"
   dependencies:
@@ -286,22 +285,17 @@ deploy:
     - build-backend
     - build-nginx
   before_script:
-    # Set up SSH for connecting to the Swarm manager
     - apk add --no-cache openssh-client
     - mkdir -p ~/.ssh
     - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
     - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
-
-    # Debug: Show what variables we have
     - echo "=== GitLab CI Variables Check ==="
     - echo "JWT_SECRET is set:" $([ -n "$JWT_SECRET" ] && echo "YES" || echo "NO")
     - echo "GOOGLE_CLIENT_ID is set:" $([ -n "$GOOGLE_CLIENT_ID" ] && echo "YES" || echo "NO")
-    - echo "CI_REGISTRY_IMAGE: $CI_REGISTRY_IMAGE"
-    - echo "CI_COMMIT_SHA: $CI_COMMIT_SHA"
-
+    - echo "CI_REGISTRY_IMAGE:" $CI_REGISTRY_IMAGE
+    - echo "CI_COMMIT_SHA:" $CI_COMMIT_SHA
   script:
-    # Create docker-compose file with ACTUAL VALUES substituted (not variable references)
     - |
       cat > docker-compose.prod.yml << EOF
       version: '3.8'
@@ -374,57 +368,42 @@ deploy:
         myapp_app-network:
           external: true
       EOF
-
-    # Debug: Show what was actually written to the file
     - echo "=== Generated docker-compose.prod.yml content ==="
-    - cat docker-compose.prod.yml | head -50
-
+    - head -50 docker-compose.prod.yml
     - |
       cat > deploy.sh << 'EOF'
       #!/bin/sh
       set -e
       
-      # Login to registry
       echo "Logging in to registry..."
       echo $2 | docker login --username $1 --password-stdin $3
       
-      # Pull images explicitly before deployment
       echo "Pulling latest images..."
       docker pull ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA} || echo "Backend pull failed, continuing..."
       docker pull ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA} || echo "Frontend pull failed, continuing..."
       docker pull ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA} || echo "Nginx pull failed, continuing..."
       
-      # Deploy stack with registry auth
       echo "Deploying stack..."
       docker stack deploy --with-registry-auth -c docker-compose.prod.yml myapp
       
-      # Wait for services to start
       echo "Waiting for services to start..."
       sleep 15
       
-      # Verify deployment
       echo "Verifying deployment..."
       docker service ls
       
-      # Check service status
       echo "Checking service status..."
       docker service ps myapp_backend --no-trunc | head -5
       docker service ps myapp_frontend --no-trunc | head -5
       docker service ps myapp_nginx --no-trunc | head -5
       
-      # Check logs if services are running
       echo "Checking backend logs..."
       docker service logs --tail 10 myapp_backend || true
       
       echo "Deployment completed!"
       EOF
-
     - chmod +x deploy.sh
-
-    # Copy files to server
     - scp docker-compose.prod.yml deploy.sh ${SSH_USER}@${SWARM_MANAGER}:~/
-
-    # Execute deployment
     - ssh ${SSH_USER}@${SWARM_MANAGER} "./deploy.sh $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD $CI_REGISTRY"
   only:
     - main
