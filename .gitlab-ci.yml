@@ -14,6 +14,10 @@ build-frontend:
     - docker:20.10.16-dind
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+    # Debug environment variables
+    - echo "GOOGLE_CLIENT_ID available:" $([ -n "$GOOGLE_CLIENT_ID" ] && echo "YES" || echo "NO")
+
     # Create a proper server.js file first
     - mkdir -p temp
     - |
@@ -41,7 +45,8 @@ build-frontend:
         console.log(`Frontend server running on port ${PORT}`);
       });
       EOF
-    # Create Dockerfile without the problematic RUN echo part
+
+    # Create Dockerfile with build-time environment variables
     - |
       cat > temp/Dockerfile.frontend << 'EOF'
       # Build stage
@@ -57,6 +62,14 @@ build-frontend:
 
       # Copy application code
       COPY . .
+
+      # Build arguments for React environment variables
+      ARG REACT_APP_GOOGLE_CLIENT_ID
+      ARG REACT_APP_API_URL
+
+      # Set as environment variables for build
+      ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID
+      ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
       # Build the application
       RUN CI=false npm run build
@@ -82,14 +95,21 @@ build-frontend:
       # Start the server
       CMD ["node", "server.js"]
       EOF
+
     # Copy the repo contents to our temp directory
     - mkdir -p temp/frontend
     - cp -r frontend/* temp/frontend/ || echo "No frontend files to copy"
+
     # Copy our server.js to the build context
     - cp temp/server.js temp/frontend/
-    # Build the Docker image
+
+    # Build the Docker image with build arguments
     - cd temp/frontend
-    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -f ../Dockerfile.frontend .
+    - docker build
+      --build-arg REACT_APP_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID"
+      --build-arg REACT_APP_API_URL="/api"
+      -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
+      -f ../Dockerfile.frontend .
     - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
     - docker tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/frontend:latest
     - docker push $CI_REGISTRY_IMAGE/frontend:latest
