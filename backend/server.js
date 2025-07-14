@@ -1,4 +1,3 @@
-// server.js - Main application file
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -56,7 +55,7 @@ app.use(requestLogger);
 
 // CORS Configuration
 app.use(cors({
-    origin: ['https://narutouzumaki.kz', 'http://localhost:4000'],
+    origin: ['https://medicalwaste.kz', 'http://localhost:4000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
