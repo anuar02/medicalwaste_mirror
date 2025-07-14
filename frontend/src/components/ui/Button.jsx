@@ -17,7 +17,7 @@ const Button = ({
                     ...props
                 }) => {
     // Base classes
-    const baseClasses = 'inline-flex bg-white items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none';
+    const baseClasses = 'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none';
 
     // Size classes
     const sizeClasses = {
