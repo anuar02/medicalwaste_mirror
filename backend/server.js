@@ -1,4 +1,3 @@
-// server.js - Main application file
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -22,6 +21,8 @@ const deviceRoutes = require('./routes/devices');
 const trackingRoutes = require('./routes/tracking');
 const adminRoutes = require('./routes/admin');
 const telegramRoutes = require('./routes/telegram');
+const driverRoutes = require('./routes/drivers');
+const medicalCompanyRoutes = require('./routes/medicalCompanies');
 
 // Import middlewares
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
@@ -30,29 +31,6 @@ const { requestLogger } = require('./middleware/loggers');
 const app = express();
 
 app.set('trust proxy', 'loopback');
-
-let telegramInitialized = false;
-
-const initializeTelegramBot = async () => {
-    if (telegramInitialized) {
-        logger.info('Telegram bot already initialized, skipping...');
-        return;
-    }
-
-    if (process.env.TELEGRAM_BOT_TOKEN) {
-        try {
-            const { initializeBot } = require('./utils/telegram');
-            await initializeBot();
-            telegramInitialized = true;
-            logger.info('Telegram bot initialized successfully');
-        } catch (err) {
-            logger.error(`Failed to initialize Telegram bot: ${err.message}`);
-            // Don't exit process, just continue without Telegram
-        }
-    } else {
-        logger.warn('TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.');
-    }
-};
 
 if (process.env.TELEGRAM_BOT_TOKEN) {
     initializeBot()
@@ -77,9 +55,9 @@ app.use(requestLogger);
 
 // CORS Configuration
 app.use(cors({
-    origin: ['https://narutouzumaki.kz', 'http://localhost:4000'],
+    origin: ['https://medicalwaste.kz', 'http://localhost:4000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
     maxAge: 86400 // 24 hours
 }));
@@ -129,7 +107,6 @@ const connectDB = async () => {
             connectTimeoutMS: 15000,
             writeConcern: { w: 1, j: true },
         });
-        await initializeTelegramBot();
         console.log('Connected to MongoDB successfully');
     } catch (error) {
         console.error('MongoDB connection error:', error);
@@ -156,8 +133,10 @@ app.use('/api/telegram', telegramRoutes);
 app.use('/api/waste-bins', wasteBinRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/drivers', driverRoutes);
+app.use('/api/medical-companies', medicalCompanyRoutes);
 app.use('/api/devices', deviceRoutes);
-app.use('/api/tracking', trackingRoutes); // Add this new route
+app.use('/api/tracking', trackingRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Health check endpoint

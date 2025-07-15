@@ -29,6 +29,9 @@ const updateProfileValidation = [
         .isEmail()
         .withMessage('Please provide a valid email')
         .normalizeEmail(),
+    body('role')
+        .isIn(['user', 'admin', 'supervisor', 'driver'])
+        .withMessage('Invalid role'),
     body('department')
         .optional()
         .trim()

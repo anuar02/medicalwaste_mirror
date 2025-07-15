@@ -87,6 +87,7 @@ const updateBinValidation = [
         .withMessage('Invalid status')
 ];
 
+// Input validation for waste level update
 const wasteLevelValidation = [
     body('binId')
         .trim()
@@ -113,26 +114,50 @@ const wasteLevelValidation = [
         .withMessage('Weight must be a positive number')
 ];
 
-router.post('/waste-level', deviceAuth, wasteLevelValidation, validateRequest, updateBinLevel);
-router.get('/check-device', deviceAuth, checkDeviceRegistration);
-router.post('/register-device', deviceAuth, registerDevice);
+router.post('/set-collecting-mode', auth, async (req, res) => {
+    const { deviceId, isCollecting } = req.body;
 
-// Add device command routes if you have them
-router.get('/get-device-commands', deviceAuth, getDeviceCommands);
-router.post('/acknowledge-command', deviceAuth, acknowledgeCommand);
+    // Проверяем наличие необходимых данных
+    if (!deviceId) {
+        return res.status(400).json({
+            status: 'fail',
+            message: 'Device ID is required'
+        });
+    }
 
-// ===== WEB APP ROUTES (using JWT auth) =====
-// These routes are for the web application and require JWT authentication
+    // Сохраняем команду в базе данных для последующего получения устройством
+    try {
+        await DeviceCommand.create({
+            deviceId,
+            command: 'setCollectingMode',
+            params: { isCollecting },
+            executed: false,
+            createdAt: new Date()
+        });
 
-// Public health check (no auth needed)
-router.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+        res.status(200).json({
+            status: 'success',
+            message: 'Command sent to device'
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to send command'
+        });
+    }
 });
 
-// Protected routes for web app users
-router.use(auth); // Apply JWT auth to all routes below this point
+// Public routes (requires just API key validation)
+router.post('/waste-level', wasteLevelValidation, validateRequest, updateBinLevel);
 
-// Routes for all authenticated web users
+// Register
+router.get('/check-device', checkDeviceRegistration);
+router.post('/register-device', registerDevice);
+
+// Protected routes (requires authentication)
+router.use(auth);
+
+// Routes for all authenticated users
 router.get('/', getAllBins);
 router.get('/nearby', getNearbyBins);
 router.get('/overfilled', getOverfilledBins);
@@ -140,7 +165,7 @@ router.get('/statistics', getStatistics);
 router.get('/:id', param('id').trim().notEmpty(), validateRequest, getBin);
 router.get('/:id/history', param('id').trim().notEmpty(), validateRequest, getBinHistory);
 
-// Manual alert route for authenticated users
+// New route for sending manual bin alerts - accessible to all authenticated users
 router.post(
     '/:id/send-alert',
     param('id').trim().notEmpty().withMessage('Bin ID is required'),
@@ -156,5 +181,6 @@ router.patch('/:id', param('id').trim().notEmpty(), updateBinValidation, validat
 // Routes for admins only
 router.use(restrictTo('admin'));
 router.delete('/:id', param('id').trim().notEmpty(), validateRequest, deleteBin);
+
 
 module.exports = router;

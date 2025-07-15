@@ -28,7 +28,7 @@ services:
       - app-network
     environment:
       - PORT=5000
-      - MONGODB_URI=mongodb://mongodb:27017/myapp
+      - MONGODB_URI=mongodb://myapp_mongodb:27017/trashbin_db
       - NODE_ENV=production
 
   # Add MongoDB service for the backend
@@ -60,8 +60,8 @@ services:
     networks:
       - app-network
     environment:
-      - FRONTEND_HOST=myapp_frontend
-      - BACKEND_HOST=myapp_backend
+      - FRONTEND_HOST=trashBin_frontend
+      - BACKEND_HOST=trashBin_backend
 
 networks:
   app-network:
