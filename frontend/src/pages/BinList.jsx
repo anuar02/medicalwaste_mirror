@@ -216,7 +216,6 @@ const BinList = () => {
                 <div className="mt-4 flex space-x-3 md:mt-0">
                     <Button
                         variant="outline"
-                        className="bg-white"
                         onClick={() => setShowFilters(!showFilters)}
                     >
                         <Filter className="mr-2 h-4 w-4" />
@@ -224,7 +223,6 @@ const BinList = () => {
                     </Button>
                     <Button
                         variant="outline"
-                        className="bg-white"
                         onClick={handleRefresh}
                         isLoading={isFetching}
                     >
@@ -233,7 +231,6 @@ const BinList = () => {
                     </Button>
                     {isSupervisor && (
                         <Button
-                            className="bg-white"
                             onClick={() => setShowAddModal(true)}
                         >
                             <Plus className="mr-2 h-4 w-4" />

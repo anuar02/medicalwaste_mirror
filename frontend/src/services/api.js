@@ -2,7 +2,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 
 // Create Axios instance with common configuration
-export const api = axios.create({
+const api = axios.create({
     baseURL: process.env.REACT_APP_API_URL || '/api',
     headers: {
         'Content-Type': 'application/json',
@@ -151,18 +151,6 @@ const apiService = {
         getStatistics: () => api.get('/waste-bins/statistics'),
     },
 
-    registerDriver: (data) => api.post('/drivers/register', data),
-    getDriverProfile: () => api.get('/drivers/profile'),
-    getPendingDrivers: () => api.get('/drivers/pending'),
-    verifyDriver: (id, data) => api.patch(`/drivers/verify/${id}`, data),
-    getAllDrivers: () => api.get('/drivers'),
-
-// Medical company endpoints
-    getMedicalCompanies: () => api.get('/medical-companies'),
-    createMedicalCompany: (data) => api.post('/medical-companies', data),
-    updateMedicalCompany: (id, data) => api.patch(`/medical-companies/${id}`, data),
-    deleteMedicalCompany: (id) => api.delete(`/medical-companies/${id}`),
-
     // Device tracking endpoints
     tracking: {
         getAllDevices: () => api.get('/tracking/devices'),
@@ -171,23 +159,6 @@ const apiService = {
         getCollectionPoints: (params) => api.get('/tracking/collection-points', { params }),
         getDriverStats: (driverId, params) => api.get(`/tracking/driver-stats/${driverId}`, { params }),
         sendCommand: (data) => api.post('/tracking/send-command', data)
-    },
-
-    drivers: {
-        registerDriver: (data) => api.post('/drivers/register', data),
-        getDriverProfile: () => api.get('/drivers/profile'),
-        updateDriverProfile: (data) => api.patch('/drivers/profile', data),
-        getPendingDrivers: () => api.get('/drivers/pending'),
-        verifyDriver: (id, data) => api.patch(`/drivers/verify/${id}`, data),
-        getAllDrivers: (params) => api.get('/drivers', { params })
-    },
-
-    // Medical company endpoints
-    medicalCompanies: {
-        getMedicalCompanies: () => api.get('/medical-companies'),
-        createMedicalCompany: (data) => api.post('/medical-companies', data),
-        updateMedicalCompany: (id, data) => api.patch(`/medical-companies/${id}`, data),
-        deleteMedicalCompany: (id) => api.delete(`/medical-companies/${id}`)
     },
 
     telegram: {

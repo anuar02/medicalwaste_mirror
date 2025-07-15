@@ -12,8 +12,6 @@ import {
     X,
     Truck,
     Bell,
-    UserCheck,
-    Building2,
     Navigation,
     LogOut,
     ChevronDown,
@@ -63,24 +61,6 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
             adminOnly: true,
         },
         {
-            icon: <User className="h-5 w-5" />,
-            label: 'Стать Водителем',
-            path: '/driver/register',
-            userOnly: true, // Only show to regular users
-        },
-        {
-            icon: <UserCheck className="h-5 w-5" />,
-            label: 'Проверка Водителей',
-            path: '/admin/drivers',
-            adminOnly: true,
-        },
-        {
-            icon: <Building2 className="h-5 w-5" />,
-            label: 'Мед. Компании',
-            path: '/admin/companies',
-            adminOnly: true,
-        },
-        {
             icon: <Navigation className="h-5 w-5" />,
             label: 'Отслеживание',
             path: '/tracking',
@@ -101,7 +81,6 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
     // Filter admin-only items if user is not admin
     const filteredNavItems = navItems.filter(item => {
         if (item.adminOnly && !isAdmin) return false;
-        if (item.userOnly && (isAdmin || user?.role === 'driver')) return false;
         return true;
     });
 

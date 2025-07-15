@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const axiosInstance = axios.create({
-    baseURL: 'https://medicalwaste.kz/api',
+    baseURL: 'https://narutouzumaki.kz/api',
     headers: {
         'Content-Type': 'application/json'
     }

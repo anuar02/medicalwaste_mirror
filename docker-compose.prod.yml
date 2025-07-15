@@ -1,74 +1,67 @@
 version: '3.8'
+
 services:
   frontend:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/frontend:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - node.hostname==ip-10-0-1-166
       restart_policy:
         condition: any
         delay: 5s
         max_attempts: 5
     networks:
-      - myapp_app-network
+      - app-network
     environment:
-      # Frontend environment variables
       - PORT=4000
-      - NODE_ENV=production
       - REACT_APP_API_URL=/api
-      - REACT_APP_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - NODE_ENV=production
 
   backend:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/backend:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - node.hostname==ip-10-0-1-166
       restart_policy:
         condition: any
         delay: 5s
         max_attempts: 5
     networks:
-      - myapp_app-network
+      - app-network
     environment:
-      # Backend environment variables
       - PORT=5000
+      - MONGODB_URI=mongodb://mongodb:27017/myapp
       - NODE_ENV=production
-      - MONGODB_URI=mongodb://myapp_mongodb:27017/trashbin_db
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=24h
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - JWT_REFRESH_EXPIRES_IN=7d
-      - JWT_COOKIE_EXPIRES_IN=24
-      - JWT_REFRESH_COOKIE_EXPIRES_IN=7
-      - BCRYPT_ROUNDS=12
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+
+  mongodb:
+    image: mongo:4.4
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
 
   nginx:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/nginx:${CI_COMMIT_SHA:-latest}
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - node.hostname==ip-10-0-1-166
       restart_policy:
         condition: any
         delay: 5s
         max_attempts: 5
     ports:
-      - "80:8080"
+      - "8080:8080"
     networks:
-      - myapp_app-network
+      - app-network
     environment:
       - FRONTEND_HOST=myapp_frontend
       - BACKEND_HOST=myapp_backend
 
 networks:
-  myapp_app-network:
-    external: true
+  app-network:
+    driver: overlay
+    attachable: true
+
+volumes:
+  mongo-data:

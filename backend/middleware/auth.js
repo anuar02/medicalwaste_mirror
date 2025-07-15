@@ -68,7 +68,51 @@ const auth = async (req, res, next) => {
         next(error);
     }
 };
+/**
+ * Device authentication middleware for IoT devices
+ * Checks for X-API-Key header instead of JWT token
+ */
+const deviceAuth = async (req, res, next) => {
+    try {
+        // Get API key from headers
+        const apiKey = req.headers['x-api-key'];
 
+        // Log for debugging
+        console.log('Device auth - received API key:', apiKey);
+
+        if (!apiKey) {
+            return res.status(401).json({
+                status: 'fail',
+                message: 'API key required in X-API-Key header'
+            });
+        }
+
+        // Check against your expected API key
+        const expectedApiKey = process.env.DEVICE_API_KEY || '61e22b5ce396dc63971206c55f406c4643fba0f2bb5abaaf96aa788df7574931';
+
+        if (apiKey !== expectedApiKey) {
+            console.log('Device auth - invalid API key:', apiKey);
+            return res.status(401).json({
+                status: 'fail',
+                message: 'Invalid API key'
+            });
+        }
+
+        // Set device authentication flag
+        req.authenticated = true;
+        req.authType = 'device';
+        req.userId = 'device'; // For logging purposes
+
+        console.log('Device auth - success');
+        next();
+    } catch (error) {
+        console.error('Device auth error:', error);
+        return res.status(500).json({
+            status: 'error',
+            message: 'Authentication error'
+        });
+    }
+};
 /**
  * Middleware to restrict access to certain roles
  * @param  {...String} roles - Roles allowed to access the route
@@ -106,5 +150,6 @@ module.exports = {
     auth,
     restrictTo,
     adminAuth,
+    deviceAuth,
     supervisorAuth
 };
