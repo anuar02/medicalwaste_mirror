@@ -17,6 +17,49 @@ export const useAuth = () => {
     return context;
 };
 
+// Helper function to safely extract user data from API response
+const extractUserData = (response) => {
+    try {
+        // Try different response patterns
+        if (response?.data?.data?.user) {
+            return response.data.data.user;
+        }
+        if (response?.data?.user) {
+            return response.data.user;
+        }
+        if (response?.data?.data) {
+            return response.data.data;
+        }
+        if (response?.user) {
+            return response.user;
+        }
+        return response?.data || null;
+    } catch (error) {
+        console.error('Error extracting user data:', error);
+        return null;
+    }
+};
+
+// Helper function to safely extract token from API response
+const extractToken = (response) => {
+    try {
+        // Try different response patterns
+        if (response?.data?.token) {
+            return response.data.token;
+        }
+        if (response?.data?.data?.token) {
+            return response.data.data.token;
+        }
+        if (response?.token) {
+            return response.token;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error extracting token:', error);
+        return null;
+    }
+};
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -29,20 +72,43 @@ export const AuthProvider = ({ children }) => {
             const token = localStorage.getItem('token');
             if (token) {
                 try {
-                    // No need to call setAuthToken since the API interceptor handles this
+                    console.log('Checking auth status with token:', token);
+
                     const response = await apiService.auth.verifyToken();
-                    if (response.data.valid) {
-                        const userData = response.data.data.user;
-                        setUser(userData);
+                    console.log('Auth verification response:', response);
+
+                    // Handle different response structures
+                    const isValid = response?.data?.valid ||
+                        response?.data?.data?.valid ||
+                        response?.valid ||
+                        (response?.status === 200);
+
+                    if (isValid) {
+                        const userData = extractUserData(response);
+                        if (userData) {
+                            console.log('User authenticated:', userData);
+                            setUser(userData);
+                        } else {
+                            console.warn('Valid token but no user data found');
+                            logout();
+                        }
                     } else {
-                        // Token is invalid, clear it
+                        console.log('Token is invalid');
                         logout();
                     }
                 } catch (err) {
-                    // Error verifying token
                     console.error('Auth verification error:', err);
-                    logout();
+
+                    // Only logout if it's a real auth error (not network issues)
+                    if (err.response?.status === 401 || err.response?.status === 403) {
+                        logout();
+                    } else {
+                        // For network errors, just log but don't logout
+                        console.warn('Network error during auth check, keeping user logged in');
+                    }
                 }
+            } else {
+                console.log('No token found in localStorage');
             }
             setLoading(false);
         };
@@ -52,19 +118,32 @@ export const AuthProvider = ({ children }) => {
 
     // Login function
     const login = async (email, password) => {
+        console.log('Attempting login for:', email);
         setLoading(true);
         setError(null);
 
         try {
             const response = await apiService.auth.login({ email, password });
-            const { token, data } = response.data;
+            console.log('Login response:', response);
+
+            const token = extractToken(response);
+            const userData = extractUserData(response);
+
+            if (!token) {
+                throw new Error('No token received from server');
+            }
+
+            if (!userData) {
+                throw new Error('No user data received from server');
+            }
 
             // Store token in localStorage
             localStorage.setItem('token', token);
-            // No need to call setAuthToken - API interceptor will handle it
+            console.log('Token stored:', token);
 
             // Set user in state
-            setUser(data.user);
+            setUser(userData);
+            console.log('User set in state:', userData);
 
             // Success toast notification
             toast.success('Успешный вход в систему!');
@@ -77,7 +156,14 @@ export const AuthProvider = ({ children }) => {
             console.error('Login error:', err);
 
             // Handle different error types
-            const errorMessage = err.response?.data?.message || 'Ошибка авторизации, попробуйте позже';
+            let errorMessage = 'Ошибка авторизации, попробуйте позже';
+
+            if (err.response?.data?.message) {
+                errorMessage = err.response.data.message;
+            } else if (err.message) {
+                errorMessage = err.message;
+            }
+
             setError(errorMessage);
             toast.error(errorMessage);
 
@@ -90,116 +176,141 @@ export const AuthProvider = ({ children }) => {
     // Google Auth URL retrieval
     const getGoogleAuthUrl = async () => {
         try {
-            // Debug the API service structure
-            console.log('API Service:', apiService);
-            console.log('Auth methods:', apiService.auth);
+            console.log('Getting Google Auth URL...');
+            console.log('API Service structure:', {
+                hasAuth: !!apiService.auth,
+                authMethods: apiService.auth ? Object.keys(apiService.auth) : 'N/A'
+            });
 
-            // Check if the method exists
-            if (!apiService.auth || typeof apiService.auth.getGoogleAuthUrl !== 'function') {
-                console.error('API method getGoogleAuthUrl is not defined or not accessible');
+            if (!apiService.auth?.getGoogleAuthUrl) {
+                console.error('getGoogleAuthUrl method not found');
                 toast.error('Ошибка при подключении к Google');
                 return null;
             }
 
             const response = await apiService.auth.getGoogleAuthUrl();
             console.log('Google Auth URL response:', response);
-            return response.data.data.authUrl;
+
+            // Try different response patterns
+            const authUrl = response?.data?.data?.authUrl ||
+                response?.data?.authUrl ||
+                response?.authUrl ||
+                response?.data;
+
+            if (!authUrl) {
+                throw new Error('No auth URL received from server');
+            }
+
+            return authUrl;
         } catch (err) {
             console.error('Google Auth URL error:', err);
-            const errorMessage = err.response?.data?.message || 'Ошибка при подключении к Google, попробуйте позже';
+            const errorMessage = err.response?.data?.message || err.message || 'Ошибка при подключении к Google';
             toast.error(errorMessage);
             return null;
         }
     };
 
-
     // Google OAuth Callback handler
     const handleGoogleCallback = async (code) => {
+        console.log('Processing Google OAuth callback with code:', code);
         setLoading(true);
         setError(null);
 
         try {
-            console.log('Processing Google OAuth code in AuthContext:', code);
-
-            if (!apiService.auth || typeof apiService.auth.googleCallback !== 'function') {
-                console.error('API method googleCallback is not defined or not accessible');
-                console.log('Available auth methods:', Object.keys(apiService.auth));
-                setLoading(false);
+            if (!apiService.auth?.googleCallback) {
+                console.error('googleCallback method not found');
+                const availableMethods = apiService.auth ? Object.keys(apiService.auth) : [];
+                console.log('Available auth methods:', availableMethods);
                 return { success: false, error: 'Метод API не реализован' };
             }
 
-            // Make sure your backend endpoint expects the code in this format
-            const response = await apiService.auth.googleCallback({ code });
+            const response = await apiService.auth.googleCallback(code);
             console.log('Google callback response:', response);
 
-            const { token, data } = response.data;
+            const token = extractToken(response);
+            const userData = extractUserData(response);
 
-            // Store token in localStorage
+            if (!token) {
+                throw new Error('No token received from Google OAuth');
+            }
+
+            if (!userData) {
+                throw new Error('No user data received from Google OAuth');
+            }
+
+            // Store tokens
             localStorage.setItem('token', token);
-            if (response.data.refreshToken) {
-                localStorage.setItem('refreshToken', response.data.refreshToken);
+
+            const refreshToken = response?.data?.refreshToken ||
+                response?.data?.data?.refreshToken ||
+                response?.refreshToken;
+            if (refreshToken) {
+                localStorage.setItem('refreshToken', refreshToken);
             }
 
             // Set user in state
-            setUser(data.user);
+            setUser(userData);
 
+            toast.success('Успешный вход через Google!');
             return { success: true };
         } catch (err) {
             console.error('Google OAuth error:', err);
-
-            // Handle different error types
-            const errorMessage = err.response?.data?.message || 'Ошибка аутентификации через Google, попробуйте позже';
+            const errorMessage = err.response?.data?.message || err.message || 'Ошибка аутентификации через Google';
             setError(errorMessage);
-
             return { success: false, error: errorMessage };
         } finally {
             setLoading(false);
         }
     };
 
-
     // Google Direct Login (with Google ID token)
     const googleLogin = async (idToken) => {
+        console.log('Processing Google ID token login');
         setLoading(true);
         setError(null);
 
         try {
-            console.log('Processing Google ID token in AuthContext');
-
-            if (!apiService.auth || typeof apiService.auth.googleLogin !== 'function') {
-                console.error('API method googleLogin is not defined or not accessible');
-                console.log('Available auth methods:', Object.keys(apiService.auth));
-                setLoading(false);
+            if (!apiService.auth?.googleLogin) {
+                console.error('googleLogin method not found');
+                const availableMethods = apiService.auth ? Object.keys(apiService.auth) : [];
+                console.log('Available auth methods:', availableMethods);
                 return { success: false, error: 'Метод API не реализован' };
             }
 
-            // Call your API with the ID token
             const response = await apiService.auth.googleLogin({ idToken });
             console.log('Google login response:', response);
 
-            const { token, data } = response.data;
+            const token = extractToken(response);
+            const userData = extractUserData(response);
 
-            // Store token in localStorage
+            if (!token) {
+                throw new Error('No token received from Google login');
+            }
+
+            if (!userData) {
+                throw new Error('No user data received from Google login');
+            }
+
+            // Store tokens
             localStorage.setItem('token', token);
-            if (response.data.refreshToken) {
-                localStorage.setItem('refreshToken', response.data.refreshToken);
+
+            const refreshToken = response?.data?.refreshToken ||
+                response?.data?.data?.refreshToken ||
+                response?.refreshToken;
+            if (refreshToken) {
+                localStorage.setItem('refreshToken', refreshToken);
             }
 
             // Set user in state
-            setUser(data.user);
+            setUser(userData);
 
-            // Success toast notification
             toast.success('Успешный вход через Google!');
-
             return { success: true };
         } catch (err) {
             console.error('Google login error:', err);
-
-            // Handle different error types
-            const errorMessage = err.response?.data?.message || 'Ошибка при входе через Google, попробуйте позже';
+            const errorMessage = err.response?.data?.message || err.message || 'Ошибка при входе через Google';
             setError(errorMessage);
             toast.error(errorMessage);
-
             return { success: false, error: errorMessage };
         } finally {
             setLoading(false);
@@ -208,35 +319,40 @@ export const AuthProvider = ({ children }) => {
 
     // Register function
     const register = async (userData) => {
+        console.log('Attempting registration for:', userData.email);
         setLoading(true);
         setError(null);
 
         try {
             const response = await apiService.auth.register(userData);
-            const { token, data } = response.data;
+            console.log('Registration response:', response);
+
+            const token = extractToken(response);
+            const userDataResponse = extractUserData(response);
+
+            if (!token) {
+                throw new Error('No token received from registration');
+            }
+
+            if (!userDataResponse) {
+                throw new Error('No user data received from registration');
+            }
 
             // Store token in localStorage
             localStorage.setItem('token', token);
-            // No need to call setAuthToken - API interceptor will handle it
 
             // Set user in state
-            setUser(data.user);
+            setUser(userDataResponse);
 
-            // Success toast notification
             toast.success('Регистрация успешна!');
-
-            // Navigate to dashboard
             navigate('/');
 
             return { success: true };
         } catch (err) {
             console.error('Registration error:', err);
-
-            // Handle different error types
-            const errorMessage = err.response?.data?.message || 'Ошибка регистрации, попробуйте позже';
+            const errorMessage = err.response?.data?.message || err.message || 'Ошибка регистрации';
             setError(errorMessage);
             toast.error(errorMessage);
-
             return { success: false, error: errorMessage };
         } finally {
             setLoading(false);
@@ -245,13 +361,16 @@ export const AuthProvider = ({ children }) => {
 
     // Logout function
     const logout = () => {
-        // Clear token from localStorage
+        console.log('Logging out user');
+
+        // Clear tokens from localStorage
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         removeAuthToken();
 
         // Clear user from state
         setUser(null);
+        setError(null);
 
         // Success toast notification
         toast.success('Выход выполнен успешно');
@@ -262,22 +381,22 @@ export const AuthProvider = ({ children }) => {
 
     // Forgot password function
     const forgotPassword = async (email) => {
+        console.log('Requesting password reset for:', email);
         try {
-            const response = await apiService.auth.forgotPassword(email)
+            const response = await apiService.auth.forgotPassword(email);
+            console.log('Forgot password response:', response);
 
-            // Any response from the server is treated as success
-            // This is a security measure to not reveal if the email exists
-            return response.data;
+            // Return the response data, handling different structures
+            return response?.data?.data || response?.data || response;
         } catch (error) {
             console.error('Password reset error:', error);
-
-            // Re-throw the error to be handled by the component
             throw error;
         }
     };
 
     // Reset password function
     const resetPassword = async (token, password, passwordConfirm) => {
+        console.log('Resetting password with token');
         setLoading(true);
         setError(null);
 
@@ -286,31 +405,32 @@ export const AuthProvider = ({ children }) => {
                 password,
                 passwordConfirm
             });
+            console.log('Reset password response:', response);
 
-            const { token: newToken, data } = response.data;
+            const newToken = extractToken(response);
+            const userData = extractUserData(response);
 
-            // Store token in localStorage
-            localStorage.setItem('token', newToken);
-            // No need to call setAuthToken - API interceptor will handle it
+            if (newToken && userData) {
+                // Store token in localStorage
+                localStorage.setItem('token', newToken);
 
-            // Set user in state
-            setUser(data.user);
+                // Set user in state
+                setUser(userData);
 
-            // Success toast notification
-            toast.success('Пароль успешно изменен!');
-
-            // Navigate to dashboard
-            navigate('/');
+                toast.success('Пароль успешно изменен!');
+                navigate('/');
+            } else {
+                // Password reset successful but no auto-login
+                toast.success('Пароль успешно изменен! Пожалуйста, войдите в систему.');
+                navigate('/login');
+            }
 
             return { success: true };
         } catch (err) {
             console.error('Reset password error:', err);
-
-            // Handle different error types
-            const errorMessage = err.response?.data?.message || 'Ошибка при сбросе пароля, попробуйте позже';
+            const errorMessage = err.response?.data?.message || err.message || 'Ошибка при сбросе пароля';
             setError(errorMessage);
             toast.error(errorMessage);
-
             return { success: false, error: errorMessage };
         } finally {
             setLoading(false);
@@ -319,27 +439,29 @@ export const AuthProvider = ({ children }) => {
 
     // Update user profile
     const updateProfile = async (profileData) => {
+        console.log('Updating profile:', profileData);
         setLoading(true);
         setError(null);
 
         try {
             const response = await apiService.users.updateProfile(profileData);
+            console.log('Update profile response:', response);
 
-            // Update user in state
-            setUser(response.data.data.user);
+            const userData = extractUserData(response);
+            if (userData) {
+                setUser(userData);
+            } else {
+                // If we can't extract user data, merge with existing user
+                setUser(prevUser => ({ ...prevUser, ...profileData }));
+            }
 
-            // Success toast notification
             toast.success('Профиль успешно обновлен!');
-
             return { success: true };
         } catch (err) {
             console.error('Update profile error:', err);
-
-            // Handle different error types
-            const errorMessage = err.response?.data?.message || 'Ошибка при обновлении профиля, попробуйте позже';
+            const errorMessage = err.response?.data?.message || err.message || 'Ошибка при обновлении профиля';
             setError(errorMessage);
             toast.error(errorMessage);
-
             return { success: false, error: errorMessage };
         } finally {
             setLoading(false);
@@ -348,28 +470,25 @@ export const AuthProvider = ({ children }) => {
 
     // Change password
     const changePassword = async (currentPassword, password, passwordConfirm) => {
+        console.log('Changing password');
         setLoading(true);
         setError(null);
 
         try {
-            await apiService.auth.changePassword({
+            const response = await apiService.auth.changePassword({
                 currentPassword,
                 password,
                 passwordConfirm
             });
+            console.log('Change password response:', response);
 
-            // Success toast notification
             toast.success('Пароль успешно изменен!');
-
             return { success: true };
         } catch (err) {
             console.error('Change password error:', err);
-
-            // Handle different error types
-            const errorMessage = err.response?.data?.message || 'Ошибка при изменении пароля, попробуйте позже';
+            const errorMessage = err.response?.data?.message || err.message || 'Ошибка при изменении пароля';
             setError(errorMessage);
             toast.error(errorMessage);
-
             return { success: false, error: errorMessage };
         } finally {
             setLoading(false);
@@ -396,11 +515,16 @@ export const AuthProvider = ({ children }) => {
         isSupervisor: user?.role === 'supervisor' || user?.role === 'admin'
     };
 
-    // Loading spinner for initial authentication check
+    // Enhanced loading spinner with more info in development
     if (loading && !user) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-slate-50">
-                <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-teal-500"></div>
+                <div className="text-center">
+                    <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-teal-500 mx-auto"></div>
+                    {process.env.NODE_ENV === 'development' && (
+                        <p className="mt-4 text-sm text-slate-500">Проверка аутентификации...</p>
+                    )}
+                </div>
             </div>
         );
     }

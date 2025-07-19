@@ -10,7 +10,7 @@ export const api = axios.create({
     timeout: 10000, // 10 second timeout
 });
 
-// Request interceptor
+// Request interceptor (unchanged from your original)
 api.interceptors.request.use(
     (config) => {
         // You can modify the request config here
@@ -33,7 +33,7 @@ api.interceptors.request.use(
     }
 );
 
-// Response interceptor
+// Response interceptor (unchanged from your original)
 api.interceptors.response.use(
     (response) => {
         // You can modify the response data here
@@ -104,107 +104,401 @@ api.interceptors.response.use(
     }
 );
 
-// API Service methods
+// Wrapper function to maintain compatibility while adding enhanced error handling
+const createCompatibleMethod = (apiCall) => {
+    return async (...args) => {
+        try {
+            const response = await apiCall(...args);
+            // Log successful API calls in development
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`✅ API Success:`, {
+                    method: apiCall.name,
+                    args,
+                    response: response.data
+                });
+            }
+            return response;
+        } catch (error) {
+            // Enhanced error logging
+            if (process.env.NODE_ENV === 'development') {
+                console.error(`❌ API Error:`, {
+                    method: apiCall.name,
+                    args,
+                    error: error.response?.data || error.message,
+                    status: error.response?.status
+                });
+            }
+            throw error;
+        }
+    };
+};
+
+// API Service methods - EXACTLY the same interface as your original
 const apiService = {
-    // Auth endpoints
+    // Auth endpoints (unchanged interface)
     auth: {
-        login: (credentials) => api.post('/auth/login', credentials),
-        register: (userData) => api.post('/auth/register', userData),
-        logout: () => api.post('/auth/logout'),
-        verifyToken: () => api.get('/auth/verify'),
-        forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
-        resetPassword: (token, passwords) => api.post(`/auth/reset-password/${token}`, passwords),
-        changePassword: (passwords) => api.post('/auth/change-password', passwords),
-        getGoogleAuthUrl: () => api.get('/auth/google/url'),
-        googleCallback: (code) => api.post('/auth/google/callback', { code }),
-        googleLogin: (data) => api.post('/auth/google/login', data)
+        login: createCompatibleMethod((credentials) => api.post('/auth/login', credentials)),
+        register: createCompatibleMethod((userData) => api.post('/auth/register', userData)),
+        logout: createCompatibleMethod(() => api.post('/auth/logout')),
+        verifyToken: createCompatibleMethod(() => api.get('/auth/verify')),
+        forgotPassword: createCompatibleMethod((email) => api.post('/auth/forgot-password', { email })),
+        resetPassword: createCompatibleMethod((token, passwords) => api.post(`/auth/reset-password/${token}`, passwords)),
+        changePassword: createCompatibleMethod((passwords) => api.post('/auth/change-password', passwords)),
+        getGoogleAuthUrl: createCompatibleMethod(() => api.get('/auth/google/url')),
+        googleCallback: createCompatibleMethod((code) => api.post('/auth/google/callback', { code })),
+        googleLogin: createCompatibleMethod((data) => api.post('/auth/google/login', data))
     },
 
-    // User endpoints
+    // User endpoints (unchanged interface)
     users: {
-        getProfile: () => api.get('/users/profile'),
-        updateProfile: (data) => api.patch('/users/profile', data),
-        getDepartments: () => api.get('/users/departments'),
-        getAllUsers: () => api.get('/users'),
-        deleteUser: (userId) => api.delete(`/users/${userId}`),
-        updateUserRole: (userId, data) => api.patch(`/users/${userId}/role`, data),
+        getProfile: createCompatibleMethod(() => api.get('/users/profile')),
+        updateProfile: createCompatibleMethod((data) => api.patch('/users/profile', data)),
+        getDepartments: createCompatibleMethod(() => api.get('/users/departments')),
+        getAllUsers: createCompatibleMethod(() => api.get('/users')),
+        deleteUser: createCompatibleMethod((userId) => api.delete(`/users/${userId}`)),
+        updateUserRole: createCompatibleMethod((userId, data) => api.patch(`/users/${userId}/role`, data)),
     },
-    // Devices endpoints
+
+    // Devices endpoints (unchanged interface)
     devices: {
-        getPendingDevices: () => api.get('/devices/pending'),
-        configureDevice: (deviceId, data) => api.post(`/devices/${deviceId}/configure`, data),
-        getAll: () => api.get('/devices'),
-        getById: (deviceId) => api.get(`/devices/${deviceId}`),
-        delete: (deviceId) => api.delete(`/devices/${deviceId}`),
+        getPendingDevices: createCompatibleMethod(() => api.get('/devices/pending')),
+        configureDevice: createCompatibleMethod((deviceId, data) => api.post(`/devices/${deviceId}/configure`, data)),
+        getAll: createCompatibleMethod(() => api.get('/devices')),
+        getById: createCompatibleMethod((deviceId) => api.get(`/devices/${deviceId}`)),
+        delete: createCompatibleMethod((deviceId) => api.delete(`/devices/${deviceId}`)),
     },
 
-    // Waste Bin endpoints
+    // Waste Bin endpoints (enhanced but same interface)
     wasteBins: {
-        getAll: (params) => api.get('/waste-bins', { params }),
-        getById: (binId) => api.get(`/waste-bins/${binId}`),
-        create: (binData) => api.post('/waste-bins', binData),
-        update: (binId, binData) => api.patch(`/waste-bins/${binId}`, binData),
-        delete: (binId) => api.delete(`/waste-bins/${binId}`),
-        getHistory: (binId, params) => api.get(`/waste-bins/${binId}/history`, { params }),
-        getNearby: (params) => api.get('/waste-bins/nearby', { params }),
-        getOverfilled: () => api.get('/waste-bins/overfilled'),
-        getStatistics: () => api.get('/waste-bins/statistics'),
+        // ===== BASIC CRUD OPERATIONS =====
+        getAll: createCompatibleMethod((params = {}) => {
+            const queryParams = {
+                page: params.page || 1,
+                limit: params.limit || 20,
+                sortBy: params.sortBy || 'updatedAt',
+                sortOrder: params.sortOrder || 'desc',
+                ...params
+            };
+            return api.get('/waste-bins', { params: queryParams });
+        }),
+
+        getById: createCompatibleMethod((binId) => api.get(`/waste-bins/${binId}`)),
+
+        create: createCompatibleMethod((binData) => api.post('/waste-bins', binData)),
+
+        update: createCompatibleMethod((binId, binData) => api.patch(`/waste-bins/${binId}`, binData)),
+
+        delete: createCompatibleMethod((binId) => api.delete(`/waste-bins/${binId}`)),
+
+        // ===== HISTORY & TIME PERIODS =====
+
+        // Quick access methods for frontend time period selector
+        getHistory1h: createCompatibleMethod((binId) => api.get(`/waste-bins/${binId}/history/1h`)),
+        getHistory6h: createCompatibleMethod((binId) => api.get(`/waste-bins/${binId}/history/6h`)),
+        getHistory24h: createCompatibleMethod((binId) => api.get(`/waste-bins/${binId}/history/24h`)),
+        getHistory7d: createCompatibleMethod((binId) => api.get(`/waste-bins/${binId}/history/7d`)),
+        getHistory30d: createCompatibleMethod((binId) => api.get(`/waste-bins/${binId}/history/30d`)),
+
+        // Flexible history method with custom parameters
+        getHistory: createCompatibleMethod((binId, params = {}) => {
+            const queryParams = {
+                period: params.period,
+                interval: params.interval,
+                aggregation: params.aggregation || 'avg',
+                startDate: params.startDate,
+                endDate: params.endDate,
+                limit: params.limit || 1000,
+                ...params
+            };
+            return api.get(`/waste-bins/${binId}/history`, { params: queryParams });
+        }),
+
+        // Convenience method for time period selector compatibility
+        getHistoryByPeriod: createCompatibleMethod((binId, period) => {
+            const periodRoutes = {
+                '1h': () => api.get(`/waste-bins/${binId}/history/1h`),
+                '6h': () => api.get(`/waste-bins/${binId}/history/6h`),
+                '24h': () => api.get(`/waste-bins/${binId}/history/24h`),
+                '7d': () => api.get(`/waste-bins/${binId}/history/7d`),
+                '30d': () => api.get(`/waste-bins/${binId}/history/30d`)
+            };
+
+            return periodRoutes[period] ?
+                periodRoutes[period]() :
+                api.get(`/waste-bins/${binId}/history`, { params: { period } });
+        }),
+
+        // ===== LOCATION & PROXIMITY =====
+        getNearby: createCompatibleMethod((params = {}) => {
+            const queryParams = {
+                latitude: params.latitude,
+                longitude: params.longitude,
+                radius: params.radius || 1, // km
+                ...params
+            };
+            return api.get('/waste-bins/nearby', { params: queryParams });
+        }),
+
+        // ===== ALERTS & MONITORING =====
+        getOverfilled: createCompatibleMethod((threshold = 80) =>
+            api.get('/waste-bins/overfilled', { params: { threshold } })
+        ),
+
+        getAlerts: createCompatibleMethod((binId, params = {}) => {
+            const queryParams = {
+                status: params.status || 'active',
+                ...params
+            };
+            return api.get(`/waste-bins/${binId}/alerts`, { params: queryParams });
+        }),
+
+        sendManualAlert: createCompatibleMethod((binId, alertData = {}) => {
+            const payload = {
+                alertType: alertData.alertType || 'manual',
+                message: alertData.message,
+                priority: alertData.priority || 'medium',
+                ...alertData
+            };
+            return api.post(`/waste-bins/${binId}/send-alert`, payload);
+        }),
+
+        dismissAlert: createCompatibleMethod((alertId) => api.patch(`/alerts/${alertId}/dismiss`)),
+
+        // ===== STATISTICS & ANALYTICS =====
+        getStatistics: createCompatibleMethod((params = {}) => {
+            const queryParams = {
+                period: params.period || 'day',
+                department: params.department,
+                ...params
+            };
+            return api.get('/waste-bins/statistics', { params: queryParams });
+        }),
+
+        getAnalytics: createCompatibleMethod((params = {}) => {
+            const queryParams = {
+                startDate: params.startDate,
+                endDate: params.endDate,
+                groupBy: params.groupBy || 'day',
+                ...params
+            };
+            return api.get('/waste-bins/analytics', { params: queryParams });
+        }),
+
+        getMetrics: createCompatibleMethod(() => api.get('/waste-bins/metrics')),
+
+        // ===== PREDICTIONS & MAINTENANCE =====
+        predictMaintenance: createCompatibleMethod((binId) =>
+            api.get(`/waste-bins/${binId}/predict-maintenance`)
+        ),
+
+        // ===== COLLECTION MANAGEMENT =====
+        scheduleCollection: createCompatibleMethod((binId, scheduleData) => {
+            const payload = {
+                scheduledFor: scheduleData.scheduledFor,
+                priority: scheduleData.priority || 'medium',
+                notes: scheduleData.notes,
+                ...scheduleData
+            };
+            return api.post(`/waste-bins/${binId}/schedule-collection`, payload);
+        }),
+
+        getCollectionRoutes: createCompatibleMethod((params = {}) => {
+            const queryParams = {
+                date: params.date || new Date().toISOString().split('T')[0],
+                optimize: params.optimize || false,
+                ...params
+            };
+            return api.get('/waste-bins/collection-routes', { params: queryParams });
+        }),
+
+        optimizeRoutes: createCompatibleMethod((optimizationData) => {
+            const payload = {
+                date: optimizationData.date,
+                vehicleCapacity: optimizationData.vehicleCapacity || 100,
+                maxDistance: optimizationData.maxDistance || 50,
+                ...optimizationData
+            };
+            return api.post('/waste-bins/optimize-routes', payload);
+        }),
+
+        // ===== DEVICE & IoT MANAGEMENT =====
+        setCollectingMode: createCompatibleMethod((binId, isCollecting) =>
+            api.post(`/waste-bins/${binId}/set-collecting-mode`, { isCollecting })
+        ),
+
+        sendDeviceCommand: createCompatibleMethod((commandData) => {
+            const payload = {
+                deviceId: commandData.deviceId,
+                command: commandData.command,
+                params: commandData.params || {},
+                priority: commandData.priority || 'medium',
+                ...commandData
+            };
+            return api.post('/waste-bins/device-command', payload);
+        }),
+
+        // ===== BULK OPERATIONS =====
+        bulkUpdate: createCompatibleMethod((binIds, updates) => {
+            const payload = {
+                binIds: Array.isArray(binIds) ? binIds : [binIds],
+                updates: updates
+            };
+            return api.patch('/waste-bins/bulk-update', payload);
+        }),
+
+        // ===== DATA EXPORT =====
+        exportData: createCompatibleMethod((format = 'csv', params = {}) => {
+            const queryParams = {
+                startDate: params.startDate,
+                endDate: params.endDate,
+                departments: params.departments,
+                ...params
+            };
+            return api.get(`/waste-bins/export/${format}`, {
+                params: queryParams,
+                responseType: 'blob' // For file downloads
+            });
+        }),
+
+        // ===== UTILITY METHODS =====
+
+        // Get current status of multiple bins
+        getBulkStatus: createCompatibleMethod((binIds) => {
+            const params = { binIds: binIds.join(',') };
+            return api.get('/waste-bins', { params });
+        }),
+
+        // Search bins with advanced filters
+        search: createCompatibleMethod((searchParams) => {
+            const queryParams = {
+                q: searchParams.query,
+                department: searchParams.department,
+                wasteType: searchParams.wasteType,
+                status: searchParams.status,
+                minFullness: searchParams.minFullness,
+                maxFullness: searchParams.maxFullness,
+                ...searchParams
+            };
+            return api.get('/waste-bins', { params: queryParams });
+        }),
+
+        // Get bins by department
+        getByDepartment: createCompatibleMethod((department, params = {}) => {
+            const queryParams = { department, ...params };
+            return api.get('/waste-bins', { params: queryParams });
+        }),
+
+        // Get bins by waste type
+        getByWasteType: createCompatibleMethod((wasteType, params = {}) => {
+            const queryParams = { wasteType, ...params };
+            return api.get('/waste-bins', { params: queryParams });
+        }),
+
+        // Get bins requiring attention (overfilled, maintenance due, etc.)
+        getRequiringAttention: createCompatibleMethod((params = {}) => {
+            const queryParams = {
+                minFullness: params.threshold || 75,
+                status: 'active',
+                ...params
+            };
+            return api.get('/waste-bins', { params: queryParams });
+        }),
+
+        // ===== REALTIME DATA =====
+
+        // Get latest sensor reading for a bin
+        getLatestReading: createCompatibleMethod((binId) =>
+            api.get(`/waste-bins/${binId}/latest-reading`)
+        ),
+
+        // Get current trend for a bin
+        getTrend: createCompatibleMethod((binId, hours = 24) =>
+            api.get(`/waste-bins/${binId}/trend`, { params: { hours } })
+        ),
+
+        // ===== ERROR HANDLING HELPERS =====
+
+        // Wrapper for API calls with enhanced error handling
+        async safeApiCall(apiMethod, ...args) {
+            try {
+                const response = await apiMethod(...args);
+                return { success: true, data: response.data };
+            } catch (error) {
+                console.error('API call failed:', error);
+                return {
+                    success: false,
+                    error: error.response?.data?.message || 'API call failed',
+                    status: error.response?.status
+                };
+            }
+        },
+
+        // Batch multiple API calls
+        async batchCalls(calls) {
+            const promises = calls.map(call => this.safeApiCall(call.method, ...call.args));
+            const results = await Promise.allSettled(promises);
+            return results.map((result, index) => ({
+                id: calls[index].id,
+                ...result.value
+            }));
+        }
     },
 
-    registerDriver: (data) => api.post('/drivers/register', data),
-    getDriverProfile: () => api.get('/drivers/profile'),
-    getPendingDrivers: () => api.get('/drivers/pending'),
-    verifyDriver: (id, data) => api.patch(`/drivers/verify/${id}`, data),
-    getAllDrivers: () => api.get('/drivers'),
+    // Legacy driver endpoints (maintaining exact interface)
+    registerDriver: createCompatibleMethod((data) => api.post('/drivers/register', data)),
+    getDriverProfile: createCompatibleMethod(() => api.get('/drivers/profile')),
+    getPendingDrivers: createCompatibleMethod(() => api.get('/drivers/pending')),
+    verifyDriver: createCompatibleMethod((id, data) => api.patch(`/drivers/verify/${id}`, data)),
+    getAllDrivers: createCompatibleMethod(() => api.get('/drivers')),
 
-// Medical company endpoints
-    getMedicalCompanies: () => api.get('/medical-companies'),
-    createMedicalCompany: (data) => api.post('/medical-companies', data),
-    updateMedicalCompany: (id, data) => api.patch(`/medical-companies/${id}`, data),
-    deleteMedicalCompany: (id) => api.delete(`/medical-companies/${id}`),
+    // Legacy medical company endpoints (maintaining exact interface)
+    getMedicalCompanies: createCompatibleMethod(() => api.get('/medical-companies')),
+    createMedicalCompany: createCompatibleMethod((data) => api.post('/medical-companies', data)),
+    updateMedicalCompany: createCompatibleMethod((id, data) => api.patch(`/medical-companies/${id}`, data)),
+    deleteMedicalCompany: createCompatibleMethod((id) => api.delete(`/medical-companies/${id}`)),
 
     // Device tracking endpoints
     tracking: {
-        getAllDevices: () => api.get('/tracking/devices'),
-        getDeviceLocation: (deviceId) => api.get(`/tracking/devices/${deviceId}`),
-        getDeviceHistory: (deviceId, params) => api.get(`/tracking/history/${deviceId}`, { params }),
-        getCollectionPoints: (params) => api.get('/tracking/collection-points', { params }),
-        getDriverStats: (driverId, params) => api.get(`/tracking/driver-stats/${driverId}`, { params }),
-        sendCommand: (data) => api.post('/tracking/send-command', data)
+        getAllDevices: createCompatibleMethod(() => api.get('/tracking/devices')),
+        getDeviceLocation: createCompatibleMethod((deviceId) => api.get(`/tracking/devices/${deviceId}`)),
+        getDeviceHistory: createCompatibleMethod((deviceId, params) => api.get(`/tracking/history/${deviceId}`, { params })),
+        getCollectionPoints: createCompatibleMethod((params) => api.get('/tracking/collection-points', { params })),
+        getDriverStats: createCompatibleMethod((driverId, params) => api.get(`/tracking/driver-stats/${driverId}`, { params })),
+        sendCommand: createCompatibleMethod((data) => api.post('/tracking/send-command', data))
     },
 
+    // Structured driver endpoints (as per your original)
     drivers: {
-        registerDriver: (data) => api.post('/drivers/register', data),
-        getDriverProfile: () => api.get('/drivers/profile'),
-        updateDriverProfile: (data) => api.patch('/drivers/profile', data),
-        getPendingDrivers: () => api.get('/drivers/pending'),
-        verifyDriver: (id, data) => api.patch(`/drivers/verify/${id}`, data),
-        getAllDrivers: (params) => api.get('/drivers', { params })
+        registerDriver: createCompatibleMethod((data) => api.post('/drivers/register', data)),
+        getDriverProfile: createCompatibleMethod(() => api.get('/drivers/profile')),
+        updateDriverProfile: createCompatibleMethod((data) => api.patch('/drivers/profile', data)),
+        getPendingDrivers: createCompatibleMethod(() => api.get('/drivers/pending')),
+        verifyDriver: createCompatibleMethod((id, data) => api.patch(`/drivers/verify/${id}`, data)),
+        getAllDrivers: createCompatibleMethod((params) => api.get('/drivers', { params }))
     },
 
-    // Medical company endpoints
+    // Structured medical company endpoints (as per your original)
     medicalCompanies: {
-        getMedicalCompanies: () => api.get('/medical-companies'),
-        createMedicalCompany: (data) => api.post('/medical-companies', data),
-        updateMedicalCompany: (id, data) => api.patch(`/medical-companies/${id}`, data),
-        deleteMedicalCompany: (id) => api.delete(`/medical-companies/${id}`)
+        getMedicalCompanies: createCompatibleMethod(() => api.get('/medical-companies')),
+        createMedicalCompany: createCompatibleMethod((data) => api.post('/medical-companies', data)),
+        updateMedicalCompany: createCompatibleMethod((id, data) => api.patch(`/medical-companies/${id}`, data)),
+        deleteMedicalCompany: createCompatibleMethod((id) => api.delete(`/medical-companies/${id}`))
     },
 
+    // Telegram endpoints
     telegram: {
         // Connect Telegram account with chatId
-        connect: (data) => api.post('/telegram/connect', data),
+        connect: createCompatibleMethod((data) => api.post('/telegram/connect', data)),
 
         // Disconnect Telegram account
-        disconnect: () => api.post('/telegram/disconnect'),
+        disconnect: createCompatibleMethod(() => api.post('/telegram/disconnect')),
 
         // Toggle notification preferences
-        toggleNotifications: (data) => api.post('/telegram/toggle-notifications', data),
+        toggleNotifications: createCompatibleMethod((data) => api.post('/telegram/toggle-notifications', data)),
 
         // Send test notification
-        sendTestNotification: () => api.post('/telegram/test-notification'),
+        sendTestNotification: createCompatibleMethod(() => api.post('/telegram/test-notification')),
     },
 };
-
-
 
 export default apiService;

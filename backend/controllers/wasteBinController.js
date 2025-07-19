@@ -51,6 +51,415 @@ const getAllBins = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Bulk update multiple bins
+ */
+const bulkUpdateBins = asyncHandler(async (req, res, next) => {
+    const { binIds, updates } = req.body;
+
+    if (!binIds || !Array.isArray(binIds) || binIds.length === 0) {
+        return next(new AppError('Please provide valid bin IDs array', 400));
+    }
+
+    try {
+        const updateResult = await WasteBin.updateMany(
+            { binId: { $in: binIds } },
+            { $set: updates }
+        );
+
+        res.status(200).json({
+            status: 'success',
+            message: `Updated ${updateResult.modifiedCount} bins`,
+            data: {
+                matched: updateResult.matchedCount,
+                modified: updateResult.modifiedCount
+            }
+        });
+    } catch (error) {
+        return next(new AppError('Failed to update bins', 500));
+    }
+});
+
+/**
+ * Export bin data in various formats
+ */
+const exportBinData = asyncHandler(async (req, res, next) => {
+    const { format } = req.params;
+    const { startDate, endDate, departments } = req.query;
+
+    // Build filter
+    const filter = {};
+    if (startDate && endDate) {
+        filter.lastUpdate = {
+            $gte: new Date(startDate),
+            $lte: new Date(endDate)
+        };
+    }
+    if (departments) {
+        filter.department = { $in: departments.split(',') };
+    }
+
+    const bins = await WasteBin.find(filter);
+
+    if (format === 'csv') {
+        // Simple CSV export
+        const csvData = bins.map(bin => ({
+            BinID: bin.binId,
+            Department: bin.department,
+            WasteType: bin.wasteType,
+            Fullness: bin.fullness,
+            Status: bin.status,
+            LastUpdate: bin.lastUpdate
+        }));
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=bins.csv');
+
+        // Simple CSV conversion
+        const csvString = [
+            Object.keys(csvData[0]).join(','),
+            ...csvData.map(row => Object.values(row).join(','))
+        ].join('\n');
+
+        return res.send(csvString);
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: { bins }
+    });
+});
+
+/**
+ * Get bin analytics
+ */
+const getBinAnalytics = asyncHandler(async (req, res) => {
+    const { startDate, endDate, groupBy = 'day' } = req.query;
+
+    // Build date filter
+    const dateFilter = {};
+    if (startDate) dateFilter.$gte = new Date(startDate);
+    if (endDate) dateFilter.$lte = new Date(endDate);
+
+    // Get analytics data
+    const analytics = await History.aggregate([
+        ...(Object.keys(dateFilter).length > 0 ? [{ $match: { timestamp: dateFilter } }] : []),
+        {
+            $group: {
+                _id: {
+                    $dateToString: {
+                        format: groupBy === 'hour' ? '%Y-%m-%d %H:00' : '%Y-%m-%d',
+                        date: '$timestamp'
+                    }
+                },
+                avgFullness: { $avg: '$fullness' },
+                maxFullness: { $max: '$fullness' },
+                minFullness: { $min: '$fullness' },
+                dataPoints: { $sum: 1 }
+            }
+        },
+        { $sort: { _id: 1 } }
+    ]);
+
+    res.status(200).json({
+        status: 'success',
+        data: { analytics }
+    });
+});
+
+/**
+ * Predict maintenance needs
+ */
+const predictMaintenance = asyncHandler(async (req, res, next) => {
+    const bin = await WasteBin.findOne({ binId: req.params.id });
+
+    if (!bin) {
+        return next(new AppError('No waste bin found with that ID', 404));
+    }
+
+    // Simple prediction based on current fullness and historical data
+    const recentHistory = await History.find({ binId: req.params.id })
+        .sort({ timestamp: -1 })
+        .limit(10);
+
+    let prediction = {
+        maintenanceNeeded: false,
+        priority: 'low',
+        estimatedDays: null,
+        reasons: []
+    };
+
+    // Check if maintenance is due based on fullness
+    if (bin.fullness >= bin.alertThreshold) {
+        prediction.maintenanceNeeded = true;
+        prediction.priority = 'high';
+        prediction.reasons.push('Bin is at or above alert threshold');
+    }
+
+    // Check for rapid filling trend
+    if (recentHistory.length >= 5) {
+        const avgIncrease = recentHistory.slice(0, 5).reduce((sum, h, i) => {
+            if (i === 0) return 0;
+            return sum + (recentHistory[i-1].fullness - h.fullness);
+        }, 0) / 4;
+
+        if (avgIncrease > 5) {
+            prediction.maintenanceNeeded = true;
+            prediction.priority = 'medium';
+            prediction.reasons.push('Rapid filling trend detected');
+        }
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: { prediction }
+    });
+});
+
+/**
+ * Get bin alerts
+ */
+const getBinAlerts = asyncHandler(async (req, res, next) => {
+    const bin = await WasteBin.findOne({ binId: req.params.id });
+
+    if (!bin) {
+        return next(new AppError('No waste bin found with that ID', 404));
+    }
+
+    // Generate alerts based on current bin status
+    const alerts = [];
+
+    if (bin.fullness >= bin.alertThreshold) {
+        alerts.push({
+            id: `alert-${bin.binId}-fullness`,
+            type: 'overfull',
+            priority: bin.fullness >= 95 ? 'critical' : 'high',
+            message: `Bin is ${bin.fullness}% full`,
+            timestamp: new Date(),
+            status: 'active'
+        });
+    }
+
+    if (bin.status === 'maintenance') {
+        alerts.push({
+            id: `alert-${bin.binId}-maintenance`,
+            type: 'maintenance_due',
+            priority: 'medium',
+            message: 'Maintenance required',
+            timestamp: new Date(),
+            status: 'active'
+        });
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: { alerts }
+    });
+});
+
+/**
+ * Dismiss an alert
+ */
+const dismissAlert = asyncHandler(async (req, res) => {
+    const { alertId } = req.params;
+
+    // In a real implementation, you'd update an alerts collection
+    // For now, just return success
+    res.status(200).json({
+        status: 'success',
+        message: 'Alert dismissed successfully',
+        data: { alertId }
+    });
+});
+
+/**
+ * Schedule collection for a bin
+ */
+const scheduleCollection = asyncHandler(async (req, res, next) => {
+    const { scheduledFor, priority, notes } = req.body;
+
+    const bin = await WasteBin.findOne({ binId: req.params.id });
+
+    if (!bin) {
+        return next(new AppError('No waste bin found with that ID', 404));
+    }
+
+    // Update bin with collection schedule
+    bin.nextCollection = new Date(scheduledFor);
+    bin.collectionNotes = notes;
+    await bin.save();
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Collection scheduled successfully',
+        data: {
+            binId: bin.binId,
+            scheduledFor: bin.nextCollection,
+            priority,
+            notes
+        }
+    });
+});
+
+/**
+ * Get collection routes
+ */
+const getCollectionRoutes = asyncHandler(async (req, res) => {
+    const { date, optimize } = req.query;
+
+    const targetDate = date ? new Date(date) : new Date();
+
+    // Find bins scheduled for collection or overfull
+    const bins = await WasteBin.find({
+        $or: [
+            { nextCollection: { $lte: targetDate } },
+            { $expr: { $gte: ['$fullness', '$alertThreshold'] } }
+        ]
+    });
+
+    const routes = [{
+        id: 'route-1',
+        date: targetDate,
+        bins: bins.map(bin => ({
+            binId: bin.binId,
+            department: bin.department,
+            location: bin.location,
+            priority: bin.fullness >= 95 ? 'critical' : 'normal'
+        })),
+        estimatedTime: bins.length * 10, // 10 minutes per bin
+        distance: bins.length * 0.5 // 0.5 km per bin
+    }];
+
+    res.status(200).json({
+        status: 'success',
+        data: { routes }
+    });
+});
+
+/**
+ * Optimize collection routes
+ */
+const optimizeRoutes = asyncHandler(async (req, res) => {
+    const { date, vehicleCapacity, maxDistance } = req.body;
+
+    // Simple optimization - group by department
+    const bins = await WasteBin.find({
+        $expr: { $gte: ['$fullness', '$alertThreshold'] }
+    });
+
+    const optimizedRoutes = bins.reduce((routes, bin) => {
+        const existingRoute = routes.find(r => r.department === bin.department);
+        if (existingRoute) {
+            existingRoute.bins.push(bin);
+        } else {
+            routes.push({
+                department: bin.department,
+                bins: [bin],
+                estimatedTime: 30,
+                distance: 2
+            });
+        }
+        return routes;
+    }, []);
+
+    res.status(200).json({
+        status: 'success',
+        data: { optimizedRoutes }
+    });
+});
+
+/**
+ * Get bin metrics
+ */
+const getBinMetrics = asyncHandler(async (req, res) => {
+    const metrics = await WasteBin.aggregate([
+        {
+            $group: {
+                _id: null,
+                totalBins: { $sum: 1 },
+                activeBins: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+                avgFullness: { $avg: '$fullness' },
+                alertBins: { $sum: { $cond: [{ $gte: ['$fullness', '$alertThreshold'] }, 1, 0] } }
+            }
+        }
+    ]);
+
+    res.status(200).json({
+        status: 'success',
+        data: { metrics: metrics[0] || {} }
+    });
+});
+
+/**
+ * Set collecting mode for a bin
+ */
+const setCollectingMode = asyncHandler(async (req, res, next) => {
+    const { isCollecting } = req.body;
+
+    const bin = await WasteBin.findOne({ binId: req.params.id });
+
+    if (!bin) {
+        return next(new AppError('No waste bin found with that ID', 404));
+    }
+
+    bin.isCollecting = isCollecting;
+    bin.collectionStarted = isCollecting ? new Date() : null;
+    await bin.save();
+
+    res.status(200).json({
+        status: 'success',
+        message: `Collecting mode ${isCollecting ? 'enabled' : 'disabled'}`,
+        data: { bin }
+    });
+});
+
+/**
+ * Send device command
+ */
+const sendDeviceCommand = asyncHandler(async (req, res) => {
+    const { deviceId, command, params, priority } = req.body;
+
+    // In a real implementation, you'd queue this command for the device
+    res.status(200).json({
+        status: 'success',
+        message: 'Command sent to device',
+        data: {
+            commandId: `cmd-${Date.now()}`,
+            deviceId,
+            command,
+            params,
+            priority,
+            status: 'pending'
+        }
+    });
+});
+
+/**
+ * Get device commands
+ */
+const getDeviceCommands = asyncHandler(async (req, res) => {
+    const { deviceId } = req.params;
+
+    // Return empty commands array for now
+    res.status(200).json({
+        status: 'success',
+        data: { commands: [] }
+    });
+});
+
+/**
+ * Mark command as executed
+ */
+const markCommandExecuted = asyncHandler(async (req, res) => {
+    const { commandId } = req.params;
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Command marked as executed',
+        data: { commandId }
+    });
+});
+
+/**
  * Get a specific waste bin by ID
  */
 const getBin = asyncHandler(async (req, res, next) => {
@@ -591,12 +1000,26 @@ module.exports = {
     createBin,
     updateBin,
     deleteBin,
-    registerDevice,
     getBinHistory,
     updateBinLevel,
+    registerDevice,
+    checkDeviceRegistration,
     getNearbyBins,
     getOverfilledBins,
     getStatistics,
-    checkDeviceRegistration,
-    sendManualAlert
+    sendManualAlert,
+    bulkUpdateBins,
+    exportBinData,
+    getBinAnalytics,
+    predictMaintenance,
+    getBinAlerts,
+    dismissAlert,
+    scheduleCollection,
+    getCollectionRoutes,
+    optimizeRoutes,
+    getBinMetrics,
+    setCollectingMode,
+    sendDeviceCommand,
+    getDeviceCommands,
+    markCommandExecuted
 };

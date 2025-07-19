@@ -69,6 +69,180 @@ const auth = async (req, res, next) => {
     }
 };
 
+// Add these functions to your middleware/auth.js file
+
+const ApiKey = require('../models/apiKey'); // Adjust path based on your model location
+
+/**
+ * API key authentication middleware for IoT devices
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+const apiKeyAuth = async (req, res, next) => {
+    try {
+        // Get API key from header
+        const apiKey = req.header('X-API-Key');
+
+        if (!apiKey) {
+            return next(new AppError('API key is required', 401));
+        }
+
+        // Find API key in database
+        const validKey = await ApiKey.findOne({
+            key: apiKey,
+            active: true
+        });
+
+        if (!validKey) {
+            return next(new AppError('Invalid or inactive API key', 403));
+        }
+
+        // Check if API key has expired
+        if (validKey.expiresAt && validKey.expiresAt < new Date()) {
+            return next(new AppError('API key has expired', 403));
+        }
+
+        // Add device info to request
+        req.deviceId = validKey.deviceId;
+        req.apiKey = validKey;
+
+        // Update last used timestamp
+        await ApiKey.updateOne(
+            { _id: validKey._id },
+            {
+                $set: { lastUsed: new Date() },
+                $inc: { usageCount: 1 }
+            }
+        );
+
+        next();
+    } catch (error) {
+        console.error('API key validation error:', error);
+        next(new AppError('Server error during API key validation', 500));
+    }
+};
+
+/**
+ * Device authentication middleware - specifically for IoT device endpoints
+ * This is more restrictive than apiKeyAuth and includes additional device-specific checks
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+const deviceAuth = async (req, res, next) => {
+    try {
+        // Get device credentials from headers
+        const deviceId = req.header('X-Device-ID');
+        const deviceSecret = req.header('X-Device-Secret');
+        const apiKey = req.header('X-API-Key');
+
+        // If API key is provided, use API key auth
+        if (apiKey) {
+            return apiKeyAuth(req, res, next);
+        }
+
+        // Otherwise, require device ID and secret
+        if (!deviceId || !deviceSecret) {
+            return next(new AppError('Device authentication required', 401));
+        }
+
+        // Verify device credentials
+        // You might want to create a Device model for this
+        const validKey = await ApiKey.findOne({
+            deviceId: deviceId,
+            deviceSecret: deviceSecret, // If you store device secrets
+            active: true
+        });
+
+        if (!validKey) {
+            return next(new AppError('Invalid device credentials', 403));
+        }
+
+        // Check if device is registered and active
+        if (validKey.status !== 'active') {
+            return next(new AppError('Device is not active', 403));
+        }
+
+        // Rate limiting check for specific device
+        const now = new Date();
+        const oneMinuteAgo = new Date(now.getTime() - 60000);
+
+        // Simple rate limiting - you might want to use Redis for this
+        if (validKey.lastRequest && validKey.lastRequest > oneMinuteAgo) {
+            const requestsInLastMinute = validKey.recentRequests || 0;
+            if (requestsInLastMinute > 100) { // 100 requests per minute limit
+                return next(new AppError('Device rate limit exceeded', 429));
+            }
+        }
+
+        // Update device info
+        req.deviceId = validKey.deviceId;
+        req.device = validKey;
+
+        // Update last request timestamp
+        await ApiKey.updateOne(
+            { _id: validKey._id },
+            {
+                $set: {
+                    lastRequest: now,
+                    lastUsed: now
+                },
+                $inc: {
+                    usageCount: 1,
+                    recentRequests: 1
+                }
+            }
+        );
+
+        next();
+    } catch (error) {
+        console.error('Device authentication error:', error);
+        next(new AppError('Server error during device authentication', 500));
+    }
+};
+
+/**
+ * Alternative simple device auth if you don't need complex device management
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+const simpleDeviceAuth = async (req, res, next) => {
+    try {
+        const apiKey = req.header('X-API-Key') || req.header('Authorization')?.replace('Bearer ', '');
+
+        if (!apiKey) {
+            return next(new AppError('Device authentication required', 401));
+        }
+
+        // Simple API key validation
+        const validKey = await ApiKey.findOne({
+            key: apiKey,
+            active: true
+        });
+
+        if (!validKey) {
+            return next(new AppError('Invalid device credentials', 403));
+        }
+
+        req.deviceId = validKey.deviceId;
+        req.device = validKey;
+
+        // Update usage
+        await ApiKey.updateOne(
+            { _id: validKey._id },
+            { $set: { lastUsed: new Date() } }
+        );
+
+        next();
+    } catch (error) {
+        console.error('Simple device auth error:', error);
+        next(new AppError('Server error during device authentication', 500));
+    }
+};
+
+
 /**
  * Middleware to restrict access to certain roles
  * @param  {...String} roles - Roles allowed to access the route
@@ -106,5 +280,8 @@ module.exports = {
     auth,
     restrictTo,
     adminAuth,
-    supervisorAuth
+    supervisorAuth,
+    apiKeyAuth,      // Add this
+    deviceAuth,      // Add this
+    simpleDeviceAuth // Alternative option
 };

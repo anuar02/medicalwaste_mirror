@@ -233,7 +233,6 @@ const BinList = () => {
                     </Button>
                     {isSupervisor && (
                         <Button
-                            className="bg-white"
                             onClick={() => setShowAddModal(true)}
                         >
                             <Plus className="mr-2 h-4 w-4" />
