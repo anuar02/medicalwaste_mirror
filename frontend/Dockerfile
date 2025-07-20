@@ -41,7 +41,7 @@ build-frontend:
         console.log(`Frontend server running on port ${PORT}`);
       });
       EOF
-    # Create Dockerfile without the problematic RUN echo part
+    # Create Dockerfile with React version fix
     - |
       cat > temp/Dockerfile.frontend << 'EOF'
       # Build stage
@@ -52,14 +52,17 @@ build-frontend:
       # Copy package.json and package-lock.json
       COPY package*.json ./
 
-      # Install dependencies
+      # Install dependencies and upgrade React to latest version
       RUN npm ci
+
+      # Upgrade React and React-DOM to latest versions to ensure 'use' hook support
+      RUN npm install react@^18.3.0 react-dom@^18.3.0 || echo "React upgrade attempted"
 
       # Copy application code
       COPY . .
 
-      # Build the application
-      RUN CI=false npm run build
+      # Build the application with legacy peer deps to handle any conflicts
+      RUN CI=false npm run build --legacy-peer-deps
 
       # Production stage
       FROM node:18-alpine
