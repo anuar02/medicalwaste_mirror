@@ -1,7 +1,7 @@
 // components/modals/EditBinModal.jsx
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { useMutation } from 'react-query';
+import { useMutation } from '@tanstack/react-query';
 import { X, Save, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../ui/Button';

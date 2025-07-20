@@ -1,6 +1,6 @@
 // pages/Settings.jsx
 import React, { useState } from 'react';
-import { useMutation, useQuery } from 'react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
     Settings as SettingsIcon,
     Bell,

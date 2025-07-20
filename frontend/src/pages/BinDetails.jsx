@@ -1,7 +1,7 @@
 // pages/BinDetails.jsx
 import React, { useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
     Trash2, Edit, Clock, Thermometer, MapPin, Weight, ArrowLeft, Share2,

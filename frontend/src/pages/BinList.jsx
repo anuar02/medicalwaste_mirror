@@ -1,6 +1,6 @@
 // pages/BinList.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Plus,

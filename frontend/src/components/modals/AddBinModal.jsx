@@ -1,7 +1,7 @@
 // components/modals/AddBinModal.jsx
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
-import { useMutation } from 'react-query';
+import { useMutation } from '@tanstack/react-query';
 import { X, Plus, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../ui/Button';

@@ -1,6 +1,6 @@
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation } from 'react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { User, Mail, Key, Save, AlertCircle, CheckCircle, Eye, EyeOff, Building, MessageCircle, Bell, BellOff, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import apiService from '../services/api';

@@ -20,7 +20,7 @@ import {
     Wifi, Cpu
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import apiService from '../services/api';
 import Logo from '../components/ui/Logo';
 
