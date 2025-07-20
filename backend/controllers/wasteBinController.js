@@ -606,15 +606,178 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
         return next(new AppError('No waste bin found with that ID', 404));
     }
 
-    // Get history
-    const history = await History.find({ binId: req.params.id })
-        .sort({ timestamp: -1 })
-        .limit(parseInt(req.query.limit) || 24);
+    // Get parameters from query or use defaults
+    const { period = '24h', interval = '1h', limit = 100 } = req.query;
+
+    // Calculate date range based on period
+    const endDate = new Date();
+    const startDate = new Date();
+
+    switch (period) {
+        case '1h':
+            startDate.setHours(startDate.getHours() - 1);
+            break;
+        case '6h':
+            startDate.setHours(startDate.getHours() - 6);
+            break;
+        case '24h':
+            startDate.setDate(startDate.getDate() - 1);
+            break;
+        case '7d':
+            startDate.setDate(startDate.getDate() - 7);
+            break;
+        case '30d':
+            startDate.setDate(startDate.getDate() - 30);
+            break;
+        default:
+            startDate.setDate(startDate.getDate() - 1);
+    }
+
+    console.log(`Getting history for period: ${period}, interval: ${interval}`);
+    console.log(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
+    // If no aggregation needed (period matches interval), return raw data
+    if (
+        (period === '1h' && interval === '5min') ||
+        (period === '6h' && interval === '15min') ||
+        (period === '24h' && interval === '1h')
+    ) {
+        const history = await History.find({
+            binId: req.params.id,
+            timestamp: {
+                $gte: startDate,
+                $lte: endDate
+            }
+        })
+            .sort({ timestamp: -1 })
+            .limit(parseInt(limit));
+
+        return res.status(200).json({
+            status: 'success',
+            results: history.length,
+            data: {
+                history,
+                period,
+                interval,
+                aggregated: false
+            }
+        });
+    }
+
+    // For longer periods (7d, 30d), use aggregation
+    const getIntervalMinutes = (interval) => {
+        switch (interval) {
+            case '5min': return 5;
+            case '15min': return 15;
+            case '30min': return 30;
+            case '1h': return 60;
+            case '6h': return 360;
+            case '1d': return 1440;
+            default: return 60;
+        }
+    };
+
+    const intervalMinutes = getIntervalMinutes(interval);
+
+    // MongoDB aggregation pipeline for time-based grouping
+    const pipeline = [
+        // Match records in date range
+        {
+            $match: {
+                binId: req.params.id,
+                timestamp: {
+                    $gte: startDate,
+                    $lte: endDate
+                }
+            }
+        },
+        // Add computed fields for grouping
+        {
+            $addFields: {
+                // Calculate time bucket based on interval
+                timeBucket: {
+                    $toDate: {
+                        $multiply: [
+                            {
+                                $floor: {
+                                    $divide: [
+                                        { $toLong: "$timestamp" },
+                                        intervalMinutes * 60 * 1000
+                                    ]
+                                }
+                            },
+                            intervalMinutes * 60 * 1000
+                        ]
+                    }
+                }
+            }
+        },
+        // Group by time bucket
+        {
+            $group: {
+                _id: "$timeBucket",
+                // Average the values in each time bucket
+                fullness: { $avg: "$fullness" },
+                weight: { $avg: "$weight" },
+                temperature: { $avg: "$temperature" },
+                distance: { $avg: "$distance" },
+                timestamp: { $first: "$timeBucket" },
+                createdAt: { $first: "$timeBucket" },
+                recordCount: { $sum: 1 }, // Number of records averaged
+                binId: { $first: "$binId" }
+            }
+        },
+        // Sort by timestamp (newest first)
+        {
+            $sort: { timestamp: -1 }
+        },
+        // Limit results
+        {
+            $limit: parseInt(limit)
+        },
+        // Format the output
+        {
+            $project: {
+                _id: 1,
+                binId: 1,
+                fullness: { $round: ["$fullness", 1] },
+                weight: { $round: ["$weight", 1] },
+                temperature: { $round: ["$temperature", 1] },
+                distance: { $round: ["$distance", 1] },
+                timestamp: 1,
+                createdAt: 1,
+                recordCount: 1,
+                // Add formatted time for display
+                time: {
+                    $dateToString: {
+                        format: "%H:%M:%S %p",
+                        date: "$timestamp",
+                        timezone: "UTC"
+                    }
+                }
+            }
+        }
+    ];
+
+    // Execute aggregation
+    const history = await History.aggregate(pipeline);
+
+    console.log(`Found ${history.length} aggregated records`);
 
     res.status(200).json({
         status: 'success',
         results: history.length,
-        data: { history }
+        data: {
+            history,
+            period,
+            interval,
+            aggregated: true,
+            intervalMinutes,
+            dateRange: {
+                start: startDate.toISOString(),
+                end: endDate.toISOString()
+            }
+        }
     });
 });
 
