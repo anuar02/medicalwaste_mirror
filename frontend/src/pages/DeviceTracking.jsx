@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, {useState, useEffect} from 'react';
+import {useQuery} from '@tanstack/react-query';
 import {
     MapPin,
     Navigation,
@@ -15,7 +15,7 @@ import Loader from '../components/ui/Loader';
 import DashboardCard from '../components/dashboard/DashboardCard';
 import Button from '../components/ui/Button';
 import Map from '../components/map/Map';
-import { formatDate } from '../utils/formatters';
+import {formatDate} from '../utils/formatters';
 
 const DeviceTracking = () => {
     const [selectedDevice, setSelectedDevice] = useState(null);
@@ -31,60 +31,52 @@ const DeviceTracking = () => {
         data: devicesData,
         isLoading: devicesLoading,
         refetch: refetchDevices
-    } = useQuery(
-        'trackingDevices',
-        () => apiService.tracking.getAllDevices(),
-        {
-            refetchInterval: 30000, // 30 seconds
-            staleTime: 10000, // 10 seconds
-        }
-    );
+    } = useQuery({
+        queryKey: ['trackingDevices'],
+        queryFn: () => apiService.tracking.getAllDevices(),
+        refetchInterval: 30000, // 30 seconds
+        staleTime: 10000, // 10 seconds
+    });
 
     // Fetch detailed device info when a device is selected
     const {
         data: deviceDetailData,
         isLoading: deviceDetailLoading,
         refetch: refetchDeviceDetail
-    } = useQuery(
-        ['deviceDetail', selectedDevice],
-        () => apiService.tracking.getDeviceLocation(selectedDevice),
-        {
-            enabled: !!selectedDevice,
-            refetchInterval: 15000, // 15 seconds
-        }
-    );
+    } = useQuery({
+        queryKey: ['deviceDetail', selectedDevice],
+        queryFn: () => apiService.tracking.getDeviceLocation(selectedDevice),
+        enabled: !!selectedDevice,
+        refetchInterval: 15000, // 15 seconds
+    });
 
     // Fetch history data when a device is selected and history is enabled
     const {
         data: historyData,
         isLoading: historyLoading
-    } = useQuery(
-        ['deviceHistory', selectedDevice, historyHours],
-        () => apiService.tracking.getDeviceHistory(selectedDevice, {
+    } = useQuery({
+        queryKey: ['deviceHistory', selectedDevice, historyHours],
+        queryFn: () => apiService.tracking.getDeviceHistory(selectedDevice, {
             limit: 100,
             from: new Date(Date.now() - historyHours * 60 * 60 * 1000).toISOString()
         }),
-        {
-            enabled: !!selectedDevice && showHistory,
-            refetchInterval: 60000, // 1 minute
-        }
-    );
+        enabled: !!selectedDevice && showHistory,
+        refetchInterval: 60000, // 1 minute
+    });
 
-    // Fetch checkpoints when a device is selected and checkpoints are enabled
+// Fetch checkpoints when a device is selected and checkpoints are enabled
     const {
         data: checkpointsData,
         isLoading: checkpointsLoading
-    } = useQuery(
-        ['deviceCheckpoints', selectedDevice],
-        () => apiService.tracking.getDeviceCheckpoints(selectedDevice, {
+    } = useQuery({
+        queryKey: ['deviceCheckpoints', selectedDevice],
+        queryFn: () => apiService.tracking.getDeviceCheckpoints(selectedDevice, {
             limit: 50,
             from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() // Last 7 days
         }),
-        {
-            enabled: !!selectedDevice && showCheckpoints,
-            refetchInterval: 120000, // 2 minutes
-        }
-    );
+        enabled: !!selectedDevice && showCheckpoints,
+        refetchInterval: 120000, // 2 minutes
+    });
 
     // When devices data changes, update map if a device is selected
     useEffect(() => {
@@ -187,7 +179,7 @@ const DeviceTracking = () => {
 
     // Loading state
     if (devicesLoading && !devicesData) {
-        return <Loader />;
+        return <Loader/>;
     }
 
     // Get devices from data
@@ -212,7 +204,7 @@ const DeviceTracking = () => {
                 </div>
                 <div className="mt-4 flex items-center space-x-3 md:mt-0">
                     <Button onClick={handleRefresh} variant="outline">
-                        <RefreshCw className="mr-2 h-4 w-4" />
+                        <RefreshCw className="mr-2 h-4 w-4"/>
                         Обновить
                     </Button>
                 </div>
@@ -223,7 +215,7 @@ const DeviceTracking = () => {
                 <div className="lg:col-span-1 space-y-6">
                     <DashboardCard
                         title="Активные Устройства"
-                        icon={<MapPin className="h-5 w-5" />}
+                        icon={<MapPin className="h-5 w-5"/>}
                     >
                         <div className="divide-y divide-slate-100">
                             {devices.length === 0 ? (
@@ -254,18 +246,18 @@ const DeviceTracking = () => {
                                                 )}
                                             </div>
                                             <div className="flex items-center space-x-2">
-                                                <Battery className="h-4 w-4 text-slate-400" />
+                                                <Battery className="h-4 w-4 text-slate-400"/>
                                                 <span className="text-xs text-slate-500">{device.battery}%</span>
                                             </div>
                                         </div>
                                         <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
                                             <div className="flex items-center space-x-1">
-                                                <Clock className="h-3 w-3" />
+                                                <Clock className="h-3 w-3"/>
                                                 <span>{formatDate(device.timestamp, false, true)}</span>
                                             </div>
                                             {device.speed > 0 && (
                                                 <div className="flex items-center space-x-1">
-                                                    <Navigation className="h-3 w-3" />
+                                                    <Navigation className="h-3 w-3"/>
                                                     <span>{device.speed.toFixed(1)} км/ч</span>
                                                 </div>
                                             )}
@@ -280,7 +272,7 @@ const DeviceTracking = () => {
                         <>
                             <DashboardCard
                                 title="История Перемещений"
-                                icon={<Calendar className="h-5 w-5" />}
+                                icon={<Calendar className="h-5 w-5"/>}
                             >
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
@@ -339,7 +331,7 @@ const DeviceTracking = () => {
 
                             <DashboardCard
                                 title="Точки Сбора"
-                                icon={<Flag className="h-5 w-5" />}
+                                icon={<Flag className="h-5 w-5"/>}
                             >
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
@@ -378,7 +370,7 @@ const DeviceTracking = () => {
                                                     {checkpoints.map((checkpoint) => (
                                                         <div key={checkpoint._id} className="py-2">
                                                             <div className="flex items-center">
-                                                                <Flag className="mr-2 h-4 w-4 text-emerald-500" />
+                                                                <Flag className="mr-2 h-4 w-4 text-emerald-500"/>
                                                                 <span className="text-sm font-medium">
                                                                     Точка сбора
                                                                 </span>
@@ -399,7 +391,7 @@ const DeviceTracking = () => {
                             {selectedDeviceDetail && (
                                 <DashboardCard
                                     title="Информация об устройстве"
-                                    icon={<Navigation className="h-5 w-5" />}
+                                    icon={<Navigation className="h-5 w-5"/>}
                                 >
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
@@ -451,7 +443,7 @@ const DeviceTracking = () => {
                 <div className="lg:col-span-3">
                     <DashboardCard
                         title="Карта Отслеживания"
-                        icon={<MapPin className="h-5 w-5" />}
+                        icon={<MapPin className="h-5 w-5"/>}
                         padding={false}
                     >
                         <div className="h-[700px]">

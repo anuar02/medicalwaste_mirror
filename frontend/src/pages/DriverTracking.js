@@ -42,65 +42,57 @@ const DriverTracking = () => {
         data: driversData,
         isLoading: driversLoading,
         refetch: refetchDrivers
-    } = useQuery(
-        'trackingDrivers',
-        () => apiService.tracking.getAllDevices(),
-        {
-            refetchInterval: 30000, // 30 seconds
-            staleTime: 10000, // 10 seconds
-        }
-    );
+    } = useQuery({
+        queryKey: ['trackingDrivers'],
+        queryFn: () => apiService.tracking.getAllDevices(),
+        refetchInterval: 30000, // 30 seconds
+        staleTime: 10000, // 10 seconds
+    });
 
     // Fetch history data when a driver is selected and history is enabled
     const {
         data: historyData,
         isLoading: historyLoading
-    } = useQuery(
-        ['driverHistory', selectedDriver, historyHours],
-        () => apiService.tracking.getDeviceHistory(selectedDriver, {
+    } = useQuery({
+        queryKey: ['driverHistory', selectedDriver, historyHours],
+        queryFn: () => apiService.tracking.getDeviceHistory(selectedDriver, {
             limit: 500,
             from: new Date(Date.now() - historyHours * 60 * 60 * 1000).toISOString()
         }),
-        {
-            enabled: !!selectedDriver && showHistory,
-            refetchInterval: 60000, // 1 minute
-        }
-    );
+        enabled: !!selectedDriver && showHistory,
+        refetchInterval: 60000, // 1 minute
+    });
 
-    // Fetch collection points
+// Fetch collection points
     const {
         data: collectionPointsData,
         isLoading: collectionPointsLoading
-    } = useQuery(
-        ['collectionPoints', selectedDriver, dateRange],
-        () => apiService.tracking.getCollectionPoints({
+    } = useQuery({
+        queryKey: ['collectionPoints', selectedDriver, dateRange],
+        queryFn: () => apiService.tracking.getCollectionPoints({
             driverId: selectedDriver,
             from: dateRange.from,
             to: dateRange.to
         }),
-        {
-            enabled: !!selectedDriver && showCollectionPoints
-        }
-    );
+        enabled: !!selectedDriver && showCollectionPoints
+    });
 
-    // Fetch driver statistics
+// Fetch driver statistics
     const {
         data: driverStatsData,
         isLoading: driverStatsLoading
-    } = useQuery(
-        ['driverStats', selectedDriver, dateRange],
-        () => apiService.tracking.getDriverStats(selectedDriver, {
+    } = useQuery({
+        queryKey: ['driverStats', selectedDriver, dateRange],
+        queryFn: () => apiService.tracking.getDriverStats(selectedDriver, {
             from: dateRange.from,
             to: dateRange.to
         }),
-        {
-            enabled: !!selectedDriver
-        }
-    );
+        enabled: !!selectedDriver
+    });
 
     // Command mutation for toggling collection mode
-    const toggleCollectionMutation = useMutation(
-        (driverId) => {
+    const toggleCollectionMutation = useMutation({
+        mutationFn: (driverId) => {
             // Get current collection mode from driver data
             const driver = driversData?.data?.data?.devicesLocations.find(d => d.deviceId === driverId);
             const isCurrentlyCollecting = driver?.isCollecting || false;
@@ -112,12 +104,10 @@ const DriverTracking = () => {
                 data: { isCollecting: !isCurrentlyCollecting }
             });
         },
-        {
-            onSuccess: () => {
-                queryClient.invalidateQueries('trackingDrivers');
-            }
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['trackingDrivers'] });
         }
-    );
+    });
 
     // When drivers data changes, update map if a driver is selected
     useEffect(() => {

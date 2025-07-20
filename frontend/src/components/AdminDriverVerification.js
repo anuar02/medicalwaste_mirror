@@ -22,37 +22,32 @@ const AdminDriverVerification = () => {
     const queryClient = useQueryClient();
 
     // Fetch pending driver verifications using @tanstack/react-query v3 syntax
-    const { data: pendingData, isLoading } = useQuery(
-        'pendingDrivers',
-        () => apiService.drivers.getPendingDrivers(),
-        {
-            refetchInterval: 30000 // Refresh every 30 seconds
-        }
-    );
+    const { data: pendingData, isLoading } = useQuery({
+        queryKey: ['pendingDrivers'],
+        queryFn: () => apiService.drivers.getPendingDrivers(),
+        refetchInterval: 30000 // Refresh every 30 seconds
+    });
 
     // Verification mutation using @tanstack/react-query v3 syntax
-    const verifyMutation = useMutation(
-        ({ driverId, approved, notes }) =>
+    const verifyMutation = useMutation({
+        mutationFn: ({ driverId, approved, notes }) =>
             apiService.drivers.verifyDriver(driverId, { approved, notes }),
-        {
-            onSuccess: (data, variables) => {
-                const action = variables.approved ? 'одобрена' : 'отклонена';
-                toast.success(`Заявка водителя ${action} успешно!`);
+        onSuccess: (data, variables) => {
+            const action = variables.approved ? 'одобрена' : 'отклонена';
+            toast.success(`Заявка водителя ${action} успешно!`);
 
-                // Refresh the pending drivers list
-                queryClient.invalidateQueries('pendingDrivers');
+            // Refresh the pending drivers list
+            queryClient.invalidateQueries({ queryKey: ['pendingDrivers'] });
 
-                // Close the modal
-                setSelectedDriver(null);
-                setVerificationNotes('');
-            },
-            onError: (error) => {
-                const message = error.response?.data?.message || 'Ошибка при обработке заявки';
-                toast.error(message);
-            }
+            // Close the modal
+            setSelectedDriver(null);
+            setVerificationNotes('');
+        },
+        onError: (error) => {
+            const message = error.response?.data?.message || 'Ошибка при обработке заявки';
+            toast.error(message);
         }
-    );
-
+    });
     const handleVerification = (approved) => {
         if (!selectedDriver) return;
 

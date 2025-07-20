@@ -485,8 +485,10 @@ const apiService = {
         deleteMedicalCompany: createCompatibleMethod((id) => api.delete(`/medical-companies/${id}`))
     },
 
-    // Telegram endpoints
     telegram: {
+        // Get Telegram connection status
+        getStatus: createCompatibleMethod(() => api.get('/telegram/status')),
+
         // Connect Telegram account with chatId
         connect: createCompatibleMethod((data) => api.post('/telegram/connect', data)),
 

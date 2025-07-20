@@ -41,13 +41,11 @@ const MedicalCompanyManagement = () => {
     const queryClient = useQueryClient();
 
     // Fetch companies using @tanstack/react-query v3 syntax
-    const { data: companiesData, isLoading } = useQuery(
-        'allMedicalCompanies',
-        () => apiService.medicalCompanies.getMedicalCompanies(),
-        {
-            refetchInterval: 60000 // Refresh every minute
-        }
-    );
+    const { data: companiesData, isLoading } = useQuery({
+        queryKey: ['allMedicalCompanies'],
+        queryFn: () => apiService.medicalCompanies.getMedicalCompanies(),
+        refetchInterval: 60000 // Refresh every minute
+    });
 
     // Create company mutation using @tanstack/react-query v3 syntax
     const createMutation = useMutation({

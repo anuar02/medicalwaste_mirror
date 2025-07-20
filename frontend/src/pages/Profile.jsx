@@ -44,30 +44,26 @@ const Profile = () => {
     const [telegramFormError, setTelegramFormError] = useState('');
 
     // Fetch user details
-    const { data: userData, isLoading: userLoading, error: userError, refetch: refetchUser } = useQuery(
-        'userProfile',
-        () => apiService.users.getProfile(),
-        {
-            onSuccess: (data) => {
-                const user = data.data.data.user;
-                setProfileData({
-                    username: user.username || '',
-                    email: user.email || '',
-                    department: user.department || '',
-                });
-            },
-        }
-    );
+    const { data: userData, isLoading: userLoading, error: userError, refetch: refetchUser } = useQuery({
+        queryKey: ['userProfile'],
+        queryFn: () => apiService.users.getProfile(),
+        onSuccess: (data) => {
+            const user = data.data.data.user;
+            setProfileData({
+                username: user.username || '',
+                email: user.email || '',
+                department: user.department || '',
+            });
+        },
+    });
 
-    // Fetch departments for dropdown
-    const { data: departmentsData } = useQuery(
-        'departments',
-        () => apiService.users.getDepartments(),
-        {
-            staleTime: Infinity,
-            enabled: false,
-        }
-    );
+// Fetch departments for dropdown
+    const { data: departmentsData } = useQuery({
+        queryKey: ['departments'],
+        queryFn: () => apiService.users.getDepartments(),
+        staleTime: Infinity,
+        enabled: false,
+    });
 
     // Update profile mutation
     const updateProfileMutation = useMutation({

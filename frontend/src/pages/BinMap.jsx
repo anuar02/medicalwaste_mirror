@@ -42,9 +42,9 @@ const BinMap = () => {
         error,
         refetch,
         isFetching
-    } = useQuery(
-        ['mapBins', filters],
-        () => {
+    } = useQuery({
+        queryKey: ['mapBins', filters],
+        queryFn: () => {
             const queryParams = {};
             if (filters.department) queryParams.department = filters.department;
             if (filters.wasteType) queryParams.wasteType = filters.wasteType;
@@ -53,11 +53,9 @@ const BinMap = () => {
 
             return apiService.wasteBins.getAll(queryParams);
         },
-        {
-            refetchInterval: 60000, // 1 minute
-            staleTime: 30000, // 30 seconds
-        }
-    );
+        refetchInterval: 60000, // 1 minute
+        staleTime: 30000, // 30 seconds
+    });
 
     // Handle department filter change
     const handleDepartmentChange = (e) => {
