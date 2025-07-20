@@ -52,17 +52,23 @@ build-frontend:
       # Copy package.json and package-lock.json
       COPY package*.json ./
 
-      # Install dependencies and upgrade React to latest version
+      # Install dependencies
       RUN npm ci
 
-      # Upgrade React and React-DOM to latest versions to ensure 'use' hook support
-      RUN npm install react@^18.3.0 react-dom@^18.3.0 || echo "React upgrade attempted"
+      # Fix react-query conflict by removing old version and keeping only @tanstack/react-query
+      RUN npm uninstall react-query
+
+      # Install the correct devtools package for @tanstack/react-query
+      RUN npm install @tanstack/react-query-devtools
+
+      # Ensure we have the latest React versions
+      RUN npm install react@^18.3.1 react-dom@^18.3.1
 
       # Copy application code
       COPY . .
 
-      # Build the application with legacy peer deps to handle any conflicts
-      RUN CI=false npm run build --legacy-peer-deps
+      # Build the application
+      RUN CI=false npm run build
 
       # Production stage
       FROM node:18-alpine
