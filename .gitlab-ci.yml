@@ -46,23 +46,19 @@ build-frontend:
       });
       EOF
 
-    # Create Dockerfile with React 19 compatibility fixes
+    # Create simple, working Dockerfile
     - |
       cat > temp/Dockerfile.frontend << 'EOF'
       # Build stage
-      FROM node:20-alpine as build
+      FROM node:18-alpine as build
 
       WORKDIR /app
 
-      # Copy package.json and package-lock.json first
+      # Copy package files
       COPY package*.json ./
 
-      # Clear npm cache and remove any existing node_modules
-      RUN npm cache clean --force && \
-          rm -rf node_modules package-lock.json
-
-      # Install dependencies with force flag to resolve conflicts
-      RUN npm install --legacy-peer-deps --force
+      # Install dependencies - use npm ci if package-lock exists, otherwise npm install
+      RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm install --legacy-peer-deps; fi
 
       # Copy application code
       COPY . .
@@ -74,8 +70,6 @@ build-frontend:
       # Set as environment variables for build
       ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID
       ENV REACT_APP_API_URL=$REACT_APP_API_URL
-
-      # Set CI to false to treat warnings as warnings, not errors
       ENV CI=false
       ENV GENERATE_SOURCEMAP=false
 
@@ -83,7 +77,7 @@ build-frontend:
       RUN npm run build
 
       # Production stage
-      FROM node:20-alpine
+      FROM node:18-alpine
 
       WORKDIR /app
 
@@ -99,10 +93,6 @@ build-frontend:
 
       # Expose port
       EXPOSE 4000
-
-      # Health check
-      HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-        CMD wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1
 
       # Start the server
       CMD ["node", "server.js"]
