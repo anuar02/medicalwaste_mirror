@@ -1723,3 +1723,5 @@
 {"duration":"5ms","ip":"::ffff:172.18.0.5","level":"info","message":"GET /api/waste-bins/overfilled?threshold=80","service":"medical-waste-api","status":200,"timestamp":"2025-07-19 21:49:41","userId":"687c0d8d09ff4775653b76ae"}
 {"duration":"3ms","ip":"::ffff:172.18.0.5","level":"info","message":"GET /api/waste-bins/overfilled?threshold=80","service":"medical-waste-api","status":200,"timestamp":"2025-07-19 21:49:49","userId":"687c0d8d09ff4775653b76ae"}
 {"duration":"5ms","ip":"::ffff:172.18.0.5","level":"info","message":"GET /api/waste-bins/ASD-124","service":"medical-waste-api","status":200,"timestamp":"2025-07-19 21:49:56","userId":"687c0d8d09ff4775653b76ae"}
+{"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-07-19 23:59:58"}
+{"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-07-19 23:59:59"}

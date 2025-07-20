@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     Plus,
     Building2,
@@ -40,7 +40,7 @@ const MedicalCompanyManagement = () => {
 
     const queryClient = useQueryClient();
 
-    // Fetch companies using react-query v3 syntax
+    // Fetch companies using @tanstack/react-query v3 syntax
     const { data: companiesData, isLoading } = useQuery(
         'allMedicalCompanies',
         () => apiService.medicalCompanies.getMedicalCompanies(),
@@ -49,7 +49,7 @@ const MedicalCompanyManagement = () => {
         }
     );
 
-    // Create company mutation using react-query v3 syntax
+    // Create company mutation using @tanstack/react-query v3 syntax
     const createMutation = useMutation(
         (data) => apiService.medicalCompanies.createMedicalCompany(data),
         {
@@ -65,7 +65,7 @@ const MedicalCompanyManagement = () => {
         }
     );
 
-    // Update company mutation using react-query v3 syntax
+    // Update company mutation using @tanstack/react-query v3 syntax
     const updateMutation = useMutation(
         ({ id, data }) => apiService.medicalCompanies.updateMedicalCompany(id, data),
         {
@@ -81,7 +81,7 @@ const MedicalCompanyManagement = () => {
         }
     );
 
-    // Delete company mutation using react-query v3 syntax
+    // Delete company mutation using @tanstack/react-query v3 syntax
     const deleteMutation = useMutation(
         (id) => apiService.medicalCompanies.deleteMedicalCompany(id),
         {

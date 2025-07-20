@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Truck, Building2, FileText, User } from 'lucide-react';
 import apiService from '../services/api';
 import Button from '../components/ui/Button';
@@ -28,7 +28,7 @@ const DriverRegistration = () => {
     const [errors, setErrors] = useState({});
     const queryClient = useQueryClient();
 
-    // Fetch medical companies using react-query v3 syntax
+    // Fetch medical companies using @tanstack/react-query v3 syntax
     const { data: companiesData, isLoading: companiesLoading } = useQuery(
         'medicalCompanies',
         () => apiService.medicalCompanies.getMedicalCompanies(),
@@ -37,7 +37,7 @@ const DriverRegistration = () => {
         }
     );
 
-    // Driver registration mutation using react-query v3 syntax
+    // Driver registration mutation using @tanstack/react-query v3 syntax
     const registerMutation = useMutation(
         (data) => apiService.drivers.registerDriver(data),
         {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     CheckCircle,
     XCircle,
@@ -21,7 +21,7 @@ const AdminDriverVerification = () => {
     const [verificationNotes, setVerificationNotes] = useState('');
     const queryClient = useQueryClient();
 
-    // Fetch pending driver verifications using react-query v3 syntax
+    // Fetch pending driver verifications using @tanstack/react-query v3 syntax
     const { data: pendingData, isLoading } = useQuery(
         'pendingDrivers',
         () => apiService.drivers.getPendingDrivers(),
@@ -30,7 +30,7 @@ const AdminDriverVerification = () => {
         }
     );
 
-    // Verification mutation using react-query v3 syntax
+    // Verification mutation using @tanstack/react-query v3 syntax
     const verifyMutation = useMutation(
         ({ driverId, approved, notes }) =>
             apiService.drivers.verifyDriver(driverId, { approved, notes }),
