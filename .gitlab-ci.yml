@@ -50,7 +50,7 @@ build-frontend:
     - |
       cat > temp/Dockerfile.frontend << 'EOF'
       # Build stage
-      FROM node:18-alpine as build
+      FROM node:20-alpine as build
 
       WORKDIR /app
 
@@ -66,34 +66,9 @@ build-frontend:
       # Copy application code
       COPY . .
 
-      # Find and remove problematic use hook imports (React 19 compatibility)
-      RUN echo "Searching for 'use' hook imports..." && \
-          find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -exec grep -l "import.*use.*from.*react" {} \; | head -10 || echo "No use imports found" && \
-          find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -exec sed -i \
-            -e 's/import { use,/import {/g' \
-            -e 's/import { use }/\/\/ use hook not available in React 18/g' \
-            -e 's/, use,/,/g' \
-            -e 's/, use }/}/g' \
-            -e 's/{ use,/{ /g' \
-            -e 's/{ use }/{ }/g' \
-            -e 's/React\.use(/\/\/ React.use(/g' \
-            -e 's/\buse(/\/\/ use(/g' {} \;
-
-      # Fix TanStack Query compatibility issues
-      RUN find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -exec sed -i \
-        -e 's/\.defaultQueryOptions(/\.setDefaultOptions(/g' \
-        -e 's/\.setDefaultQueryOptions(/\.setDefaultOptions(/g' \
-        -e "s/queryKey: '\([^']*\)'/queryKey: ['\1']/g" \
-        -e "s/queryKey: \"\([^\"]*\)\"/queryKey: ['\1']/g" \
-        {} \;
-
-      # Debug: Check React version and package-lock
+      # Debug: Check React version
       RUN echo "=== React version ===" && \
-          npm list react react-dom && \
-          echo "=== Checking for use hook imports ===" && \
-          find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -exec grep -H "import.*use.*from.*react" {} \; | head -10 || echo "No use imports found" && \
-          echo "=== Checking package.json ===" && \
-          cat package.json | grep -A2 -B2 react
+          npm list react react-dom
 
       # Build arguments for React environment variables
       ARG REACT_APP_GOOGLE_CLIENT_ID
@@ -111,7 +86,7 @@ build-frontend:
       RUN npm run build
 
       # Production stage
-      FROM node:18-alpine
+      FROM node:20-alpine
 
       WORKDIR /app
 
