@@ -611,45 +611,61 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
 
     // Calculate date range based on period
     const endDate = new Date();
-    const startDate = new Date();
+    const startDate = new Date(endDate); // Copy endDate first
 
     switch (period) {
         case '1h':
-            startDate.setHours(startDate.getHours() - 1);
+            startDate.setTime(startDate.getTime() - (1 * 60 * 60 * 1000)); // 1 hour in milliseconds
             break;
         case '6h':
-            startDate.setHours(startDate.getHours() - 6);
+            startDate.setTime(startDate.getTime() - (6 * 60 * 60 * 1000)); // 6 hours in milliseconds
             break;
         case '24h':
-            startDate.setDate(startDate.getDate() - 1);
+            startDate.setTime(startDate.getTime() - (24 * 60 * 60 * 1000)); // 24 hours in milliseconds
             break;
         case '7d':
-            startDate.setDate(startDate.getDate() - 7);
+            startDate.setTime(startDate.getTime() - (7 * 24 * 60 * 60 * 1000)); // 7 days in milliseconds
             break;
         case '30d':
-            startDate.setDate(startDate.getDate() - 30);
+            startDate.setTime(startDate.getTime() - (30 * 24 * 60 * 60 * 1000)); // 30 days in milliseconds
             break;
         default:
-            startDate.setDate(startDate.getDate() - 1);
+            startDate.setTime(startDate.getTime() - (24 * 60 * 60 * 1000)); // 24 hours default
     }
 
     console.log(`Getting history for period: ${period}, interval: ${interval}`);
     console.log(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
     try {
-        // For periods <= 24h, return raw data without aggregation
-        if (period === '1h' || period === '6h' || period === '24h') {
-            const history = await History.find({
-                binId: req.params.id,
-                createdAt: {  // Changed from 'timestamp' to 'createdAt'
-                    $gte: startDate,
-                    $lte: endDate
-                }
-            })
-                .sort({ createdAt: -1 })  // Changed from 'timestamp' to 'createdAt'
-                .limit(parseInt(limit));
+        // Simple approach: Get all data in range, then sample based on interval
+        const allHistory = await History.find({
+            binId: req.params.id,
+            createdAt: {
+                $gte: startDate,
+                $lte: endDate
+            }
+        })
+            .sort({ createdAt: -1 });
 
-            console.log(`Found ${history.length} raw records`);
+        console.log(`Found ${allHistory.length} total records in range`);
+
+        // If we have no data, return empty
+        if (allHistory.length === 0) {
+            return res.status(200).json({
+                status: 'success',
+                results: 0,
+                data: {
+                    history: [],
+                    period,
+                    interval,
+                    message: 'No data found in the specified time range'
+                }
+            });
+        }
+
+        // For short periods, return raw data
+        if (period === '1h' || period === '6h') {
+            const history = allHistory.slice(0, parseInt(limit));
 
             return res.status(200).json({
                 status: 'success',
@@ -658,118 +674,51 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
                     history,
                     period,
                     interval,
-                    aggregated: false,
-                    dateRange: {
-                        start: startDate.toISOString(),
-                        end: endDate.toISOString()
-                    }
+                    aggregated: false
                 }
             });
         }
 
-        // For longer periods (7d, 30d), use aggregation
-        const getIntervalMinutes = (interval) => {
-            switch (interval) {
-                case '5min': return 5;
-                case '15min': return 15;
-                case '30min': return 30;
-                case '1h': return 60;
-                case '6h': return 360;
-                case '1d': return 1440;
-                default: return 60;
+        // For longer periods, sample the data to get representative points
+        let sampledHistory = [];
+
+        if (period === '24h') {
+            // Take every hour (roughly)
+            const step = Math.max(1, Math.floor(allHistory.length / 24));
+            for (let i = 0; i < allHistory.length && sampledHistory.length < 24; i += step) {
+                sampledHistory.push(allHistory[i]);
             }
-        };
-
-        const intervalMinutes = getIntervalMinutes(interval);
-        console.log(`Using interval: ${intervalMinutes} minutes`);
-
-        // Simplified aggregation pipeline
-        const pipeline = [
-            // Match records in date range
-            {
-                $match: {
-                    binId: req.params.id,
-                    createdAt: {  // Changed from 'timestamp' to 'createdAt'
-                        $gte: startDate,
-                        $lte: endDate
-                    }
-                }
-            },
-            // Sort first to ensure we have data
-            {
-                $sort: { createdAt: -1 }
-            },
-            // Add time bucket calculation
-            {
-                $addFields: {
-                    timeBucket: {
-                        $dateTrunc: {
-                            date: "$createdAt",
-                            unit: interval === '6h' ? 'hour' : 'day',
-                            binSize: interval === '6h' ? 6 : 1
-                        }
-                    }
-                }
-            },
-            // Group by time bucket
-            {
-                $group: {
-                    _id: "$timeBucket",
-                    fullness: { $avg: "$fullness" },
-                    weight: { $avg: "$weight" },
-                    temperature: { $avg: "$temperature" },
-                    distance: { $avg: "$distance" },
-                    timestamp: { $first: "$timeBucket" },
-                    createdAt: { $first: "$timeBucket" },
-                    updatedAt: { $first: "$timeBucket" },
-                    recordCount: { $sum: 1 },
-                    binId: { $first: "$binId" }
-                }
-            },
-            // Sort by time bucket
-            {
-                $sort: { _id: -1 }
-            },
-            // Limit results
-            {
-                $limit: parseInt(limit)
-            },
-            // Project final format
-            {
-                $project: {
-                    _id: 1,
-                    binId: 1,
-                    fullness: { $round: [{ $ifNull: ["$fullness", 0] }, 1] },
-                    weight: { $round: [{ $ifNull: ["$weight", 0] }, 1] },
-                    temperature: { $round: [{ $ifNull: ["$temperature", 0] }, 1] },
-                    distance: { $round: [{ $ifNull: ["$distance", 0] }, 1] },
-                    timestamp: "$_id",
-                    createdAt: "$_id",
-                    updatedAt: "$_id",
-                    recordCount: 1,
-                    time: {
-                        $dateToString: {
-                            format: "%H:%M:%S %p",
-                            date: "$_id"
-                        }
-                    }
-                }
+        } else if (period === '7d') {
+            // Take every 6 hours (roughly) - aim for ~28 points
+            const step = Math.max(1, Math.floor(allHistory.length / 28));
+            for (let i = 0; i < allHistory.length && sampledHistory.length < 28; i += step) {
+                sampledHistory.push(allHistory[i]);
             }
-        ];
+        } else if (period === '30d') {
+            // Take daily samples - aim for ~30 points
+            const step = Math.max(1, Math.floor(allHistory.length / 30));
+            for (let i = 0; i < allHistory.length && sampledHistory.length < 30; i += step) {
+                sampledHistory.push(allHistory[i]);
+            }
+        }
 
-        console.log('Executing aggregation pipeline...');
-        const history = await History.aggregate(pipeline);
-        console.log(`Found ${history.length} aggregated records`);
+        // If sampling didn't work well, just take the most recent records
+        if (sampledHistory.length === 0) {
+            sampledHistory = allHistory.slice(0, parseInt(limit));
+        }
+
+        console.log(`Returning ${sampledHistory.length} sampled records`);
 
         res.status(200).json({
             status: 'success',
-            results: history.length,
+            results: sampledHistory.length,
             data: {
-                history,
+                history: sampledHistory,
                 period,
                 interval,
-                aggregated: true,
-                intervalMinutes,
+                aggregated: false,
+                sampled: true,
+                totalRecordsInRange: allHistory.length,
                 dateRange: {
                     start: startDate.toISOString(),
                     end: endDate.toISOString()
@@ -779,31 +728,7 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
 
     } catch (error) {
         console.error('Error in getBinHistory:', error);
-
-        // Fallback: if aggregation fails, return raw data
-        console.log('Aggregation failed, falling back to raw data...');
-        const history = await History.find({
-            binId: req.params.id,
-            createdAt: {
-                $gte: startDate,
-                $lte: endDate
-            }
-        })
-            .sort({ createdAt: -1 })
-            .limit(parseInt(limit));
-
-        res.status(200).json({
-            status: 'success',
-            results: history.length,
-            data: {
-                history,
-                period,
-                interval,
-                aggregated: false,
-                fallback: true,
-                error: error.message
-            }
-        });
+        return next(new AppError('Error fetching bin history', 500));
     }
 });
 
