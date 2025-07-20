@@ -219,7 +219,11 @@ const Dashboard = () => {
         enabled: preferences.autoRefresh && isOnline,
         interval: preferences.refreshInterval,
         onRefresh: () => {
-            queryClient.invalidateQueries(['wasteStatistics', 'alertBins', 'allBins', 'analytics', 'predictions']);
+            queryClient.invalidateQueries({ queryKey: ['wasteStatistics'] });
+            queryClient.invalidateQueries({ queryKey: ['alertBins'] });
+            queryClient.invalidateQueries({ queryKey: ['allBins'] });
+            queryClient.invalidateQueries({ queryKey: ['analytics'] });
+            queryClient.invalidateQueries({ queryKey: ['predictions'] });
         }
     });
 
@@ -470,12 +474,12 @@ const Dashboard = () => {
         setRefreshing(true);
         try {
             await Promise.all([
-                queryClient.invalidateQueries('wasteStatistics'),
-                queryClient.invalidateQueries('alertBins'),
-                queryClient.invalidateQueries('allBins'),
-                queryClient.invalidateQueries('analytics'),
-                queryClient.invalidateQueries('maintenancePredictions'),
-                queryClient.invalidateQueries('metrics')
+                queryClient.invalidateQueries({ queryKey: ['wasteStatistics'] }),
+                queryClient.invalidateQueries({ queryKey: ['alertBins'] }),
+                queryClient.invalidateQueries({ queryKey: ['allBins'] }),
+                queryClient.invalidateQueries({ queryKey: ['analytics'] }),
+                queryClient.invalidateQueries({ queryKey: ['maintenancePredictions'] }),
+                queryClient.invalidateQueries({ queryKey: ['metrics'] })
             ]);
             toast.success('Данные обновлены');
         } catch (error) {
