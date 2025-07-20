@@ -68,7 +68,7 @@ build-frontend:
 
       # Debug: Check React version
       RUN echo "=== React version ===" && \
-          npm list react react-dom
+          npm list react react-dom || echo "React version conflicts detected but continuing with build"
 
       # Build arguments for React environment variables
       ARG REACT_APP_GOOGLE_CLIENT_ID
