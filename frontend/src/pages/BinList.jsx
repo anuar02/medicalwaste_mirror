@@ -69,14 +69,12 @@ const BinList = () => {
         error,
         refetch,
         isFetching
-    } = useQuery(
-        ['bins', queryParams],
-        () => apiService.wasteBins.getAll(queryParams),
-        {
-            refetchInterval: 60000, // 1 minute
-            staleTime: 30000, // 30 seconds
-        }
-    );
+    } = useQuery({
+        queryKey: ['bins', queryParams],
+        queryFn: () => apiService.wasteBins.getAll(queryParams),
+        refetchInterval: 60000, // 1 minute
+        staleTime: 30000, // 30 seconds
+    });
 
     // Apply search and sort to fetched data
     const filteredBins = useMemo(() => {

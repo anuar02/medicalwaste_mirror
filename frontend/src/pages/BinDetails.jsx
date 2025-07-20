@@ -1,5 +1,5 @@
 // pages/BinDetails.jsx
-import React, { useState, useCallback, useMemo } from 'react';
+import React, {useState, useCallback, useMemo, useEffect} from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -54,9 +54,9 @@ const BinDetails = () => {
         isLoading: binLoading,
         error: binError,
         refetch: refetchBin
-    } = useQuery(
-        ['bin', binId],
-        createQueryWrapper(
+    } = useQuery({
+        queryKey: ['bin', binId],
+        queryFn: createQueryWrapper(
             async () => {
                 debug.log('Fetching bin data', { binId });
                 return measureApiCall(
@@ -66,29 +66,33 @@ const BinDetails = () => {
             },
             { context: 'Fetch Bin Details' }
         ).queryFn,
-        {
-            refetchInterval: 30000,
-            staleTime: 15000,
-            retry: 3,
-            enabled: !!binId,
-            onSuccess: (data) => {
-                debug.log('Bin data fetched successfully', data);
-            },
-            onError: (error) => {
-                debug.error('Failed to fetch bin data', error);
-            }
-        }
-    );
+        refetchInterval: 30000,
+        staleTime: 15000,
+        retry: 3,
+        enabled: !!binId
+    });
 
-    // Fetch bin history with enhanced error handling
+    useEffect(() => {
+        if (binResponse) {
+            debug.log('Bin data fetched successfully', binResponse);
+        }
+    }, [binResponse]);
+
+    useEffect(() => {
+        if (binError) {
+            debug.error('Failed to fetch bin data', binError);
+        }
+    }, [binError]);
+
+// NEW WAY (v5) - Fixed
     const {
         data: historyResponse,
         isLoading: historyLoading,
         error: historyError,
         refetch: refetchHistory
-    } = useQuery(
-        ['binHistory', binId, selectedTimePeriod],
-        createQueryWrapper(
+    } = useQuery({
+        queryKey: ['binHistory', binId, selectedTimePeriod],
+        queryFn: createQueryWrapper(
             async () => {
                 debug.log('Fetching history data', { binId, selectedTimePeriod });
 
@@ -114,22 +118,27 @@ const BinDetails = () => {
             },
             { context: 'Fetch Bin History' }
         ).queryFn,
-        {
-            refetchInterval: selectedTimePeriod === '1h' ? 60000 : 300000,
-            staleTime: selectedTimePeriod === '1h' ? 30000 : 120000,
-            retry: 2,
-            enabled: !!binId,
-            onSuccess: (data) => {
-                debug.log('History data fetched successfully', {
-                    period: selectedTimePeriod,
-                    dataLength: extractHistoryData(data)?.length
-                });
-            },
-            onError: (error) => {
-                debug.error('Failed to fetch history data', error);
-            }
+        refetchInterval: selectedTimePeriod === '1h' ? 60000 : 300000,
+        staleTime: selectedTimePeriod === '1h' ? 30000 : 120000,
+        retry: 2,
+        enabled: !!binId
+    });
+
+// Handle success/error with useEffect (v5 recommended approach)
+    useEffect(() => {
+        if (historyResponse) {
+            debug.log('History data fetched successfully', {
+                period: selectedTimePeriod,
+                dataLength: extractHistoryData(historyResponse)?.length
+            });
         }
-    );
+    }, [historyResponse, selectedTimePeriod]);
+
+    useEffect(() => {
+        if (historyError) {
+            debug.error('Failed to fetch history data', historyError);
+        }
+    }, [historyError]);
 
     // Extract and validate data
     const bin = useMemo(() => {
@@ -154,9 +163,8 @@ const BinDetails = () => {
         return [];
     }, [historyResponse, debug]);
 
-    // Enhanced mutations with better error handling
-    const deleteMutation = useMutation(
-        createMutationWrapper(
+    const deleteMutation = useMutation({
+        mutationFn: createMutationWrapper(
             async () => {
                 debug.log('Deleting bin', { binId });
                 return measureApiCall(
@@ -169,19 +177,17 @@ const BinDetails = () => {
                 successMessage: 'Контейнер успешно удален'
             }
         ).mutationFn,
-        {
-            onSuccess: () => {
-                debug.log('Bin deleted successfully');
-                navigate('/bins');
-            },
-            onError: (error) => {
-                debug.error('Failed to delete bin', error);
-            }
+        onSuccess: () => {
+            debug.log('Bin deleted successfully');
+            navigate('/bins');
+        },
+        onError: (error) => {
+            debug.error('Failed to delete bin', error);
         }
-    );
+    });
 
-    const updateStatusMutation = useMutation(
-        createMutationWrapper(
+    const updateStatusMutation = useMutation({
+        mutationFn: createMutationWrapper(
             async (newStatus) => {
                 debug.log('Updating bin status', { binId, newStatus });
                 return measureApiCall(
@@ -194,19 +200,18 @@ const BinDetails = () => {
                 successMessage: 'Статус контейнера обновлен'
             }
         ).mutationFn,
-        {
-            onSuccess: () => {
-                debug.log('Bin status updated successfully');
-                queryClient.invalidateQueries(['bin', binId]);
-            },
-            onError: (error) => {
-                debug.error('Failed to update bin status', error);
-            }
+        onSuccess: () => {
+            debug.log('Bin status updated successfully');
+            // Fixed for v5
+            queryClient.invalidateQueries({ queryKey: ['bin', binId] });
+        },
+        onError: (error) => {
+            debug.error('Failed to update bin status', error);
         }
-    );
+    });
 
-    const sendAlertMutation = useMutation(
-        createMutationWrapper(
+    const sendAlertMutation = useMutation({
+        mutationFn: createMutationWrapper(
             async () => {
                 debug.log('Sending manual alert', { binId });
                 return measureApiCall(
@@ -223,15 +228,13 @@ const BinDetails = () => {
                 successMessage: 'Оповещение отправлено'
             }
         ).mutationFn,
-        {
-            onSuccess: () => {
-                debug.log('Alert sent successfully');
-            },
-            onError: (error) => {
-                debug.error('Failed to send alert', error);
-            }
+        onSuccess: () => {
+            debug.log('Alert sent successfully');
+        },
+        onError: (error) => {
+            debug.error('Failed to send alert', error);
         }
-    );
+    });
 
     // Event handlers
     const handleTimePeriodChange = useCallback((period) => {
@@ -716,7 +719,7 @@ const BinDetails = () => {
                 onClose={() => setShowEditModal(false)}
                 bin={bin}
                 onSuccess={() => {
-                    queryClient.invalidateQueries(['bin', binId]);
+                    queryClient.invalidateQueries({ queryKey: ['bin', binId] });  // ✅ New v5 syntax
                     setShowEditModal(false);
                     toast.success('Контейнер успешно обновлен');
                 }}

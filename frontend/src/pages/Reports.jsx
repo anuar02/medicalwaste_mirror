@@ -38,14 +38,12 @@ const Reports = () => {
         error: statsError,
         refetch,
         isFetching
-    } = useQuery(
-        ['statistics', dateRange, reportType],
-        () => apiService.wasteBins.getStatistics(),
-        {
-            refetchInterval: 300000, // 5 minutes
-            staleTime: 60000, // 1 minute
-        }
-    );
+    } = useQuery({
+        queryKey: ['statistics', dateRange, reportType],
+        queryFn: () => apiService.wasteBins.getStatistics(),
+        refetchInterval: 300000, // 5 minutes
+        staleTime: 60000, // 1 minute
+    });
 
     // Handle date change
     const handleDateChange = (e) => {

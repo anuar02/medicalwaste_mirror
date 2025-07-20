@@ -50,9 +50,8 @@ const MedicalCompanyManagement = () => {
     );
 
     // Create company mutation using @tanstack/react-query v3 syntax
-    const createMutation = useMutation(
-        (data) => apiService.medicalCompanies.createMedicalCompany(data),
-        {
+    const createMutation = useMutation({
+    mutationFn: (data) => apiService.medicalCompanies.createMedicalCompany(data),
             onSuccess: () => {
                 toast.success('Медицинская компания успешно создана!');
                 queryClient.invalidateQueries('allMedicalCompanies');
@@ -66,9 +65,8 @@ const MedicalCompanyManagement = () => {
     );
 
     // Update company mutation using @tanstack/react-query v3 syntax
-    const updateMutation = useMutation(
-        ({ id, data }) => apiService.medicalCompanies.updateMedicalCompany(id, data),
-        {
+    const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => apiService.medicalCompanies.updateMedicalCompany(id, data),
             onSuccess: () => {
                 toast.success('Компания успешно обновлена!');
                 queryClient.invalidateQueries('allMedicalCompanies');
@@ -82,9 +80,8 @@ const MedicalCompanyManagement = () => {
     );
 
     // Delete company mutation using @tanstack/react-query v3 syntax
-    const deleteMutation = useMutation(
-        (id) => apiService.medicalCompanies.deleteMedicalCompany(id),
-        {
+    const deleteMutation = useMutation({
+    mutationFn: (id) => apiService.medicalCompanies.deleteMedicalCompany(id),
             onSuccess: () => {
                 toast.success('Компания удалена!');
                 queryClient.invalidateQueries('allMedicalCompanies');

@@ -70,9 +70,8 @@ const Profile = () => {
     );
 
     // Update profile mutation
-    const updateProfileMutation = useMutation(
-        (data) => apiService.users.updateProfile(data),
-        {
+    const updateProfileMutation = useMutation({
+    mutationFn: (data) => apiService.users.updateProfile(data),
             onSuccess: () => {
                 toast.success('Профиль успешно обновлен');
                 refetchUser();
@@ -84,9 +83,8 @@ const Profile = () => {
     );
 
     // Change password mutation
-    const changePasswordMutation = useMutation(
-        (data) => apiService.auth.changePassword(data),
-        {
+    const changePasswordMutation = useMutation({
+    mutationFn: (data) => apiService.auth.changePassword(data),
             onSuccess: () => {
                 toast.success('Пароль успешно изменен');
                 setPasswordData({
@@ -102,9 +100,8 @@ const Profile = () => {
     );
 
     // Connect Telegram mutation
-    const connectTelegramMutation = useMutation(
-        (data) => apiService.telegram.connect(data),
-        {
+    const connectTelegramMutation = useMutation({
+    mutationFn: (data) => apiService.telegram.connect(data),
             onSuccess: (response) => {
                 toast.success('Telegram успешно подключен');
                 // Update Telegram status directly from response
@@ -125,9 +122,8 @@ const Profile = () => {
     );
 
     // Disconnect Telegram mutation
-    const disconnectTelegramMutation = useMutation(
-        () => apiService.telegram.disconnect(),
-        {
+    const disconnectTelegramMutation = useMutation({
+    mutationFn: () => apiService.telegram.disconnect(),
             onSuccess: (response) => {
                 toast.success('Telegram отключен');
                 setTelegramStatus({
@@ -144,9 +140,8 @@ const Profile = () => {
     );
 
     // Toggle Telegram notifications mutation
-    const toggleNotificationsMutation = useMutation(
-        (data) => apiService.telegram.toggleNotifications(data),
-        {
+    const toggleNotificationsMutation = useMutation({
+    mutationFn: (data) => apiService.telegram.toggleNotifications(data),
             onSuccess: (response) => {
                 const status = response.data.data.user.notificationPreferences.receiveAlerts;
                 toast.success(`Уведомления ${status ? 'включены' : 'отключены'}`);
@@ -163,9 +158,8 @@ const Profile = () => {
     );
 
     // Send test notification mutation
-    const sendTestNotificationMutation = useMutation(
-        () => apiService.telegram.sendTestNotification(),
-        {
+    const sendTestNotificationMutation = useMutation({
+    mutationFn: () => apiService.telegram.sendTestNotification(),
             onSuccess: () => {
                 toast.success('Тестовое уведомление отправлено');
             },

@@ -38,9 +38,8 @@ const DriverRegistration = () => {
     );
 
     // Driver registration mutation using @tanstack/react-query v3 syntax
-    const registerMutation = useMutation(
-        (data) => apiService.drivers.registerDriver(data),
-        {
+    const registerMutation = useMutation({
+    mutationFn: (data) => apiService.drivers.registerDriver(data),
             onSuccess: () => {
                 toast.success('Заявка на регистрацию водителя отправлена! Ожидайте проверки администратора.');
                 // Reset form

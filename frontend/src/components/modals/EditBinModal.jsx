@@ -49,9 +49,8 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
     };
 
     // Update bin mutation
-    const updateMutation = useMutation(
-        (data) => apiService.wasteBins.update(bin.binId, data),
-        {
+    const updateMutation = useMutation({
+    mutationFn: (data) => apiService.wasteBins.update(bin.binId, data),
             onSuccess: () => {
                 toast.success('Контейнер успешно обновлен');
                 onSuccess?.();

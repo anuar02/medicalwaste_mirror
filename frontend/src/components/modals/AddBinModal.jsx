@@ -40,20 +40,18 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
     };
 
     // Create bin mutation
-    const createMutation = useMutation(
-        (data) => apiService.wasteBins.create(data),
-        {
-            onSuccess: () => {
-                toast.success('Контейнер успешно создан');
-                resetForm();
-                onSuccess?.();
-                onClose();
-            },
-            onError: (error) => {
-                toast.error(`Ошибка при создании контейнера: ${error.message}`);
-            },
+    const createMutation = useMutation({
+        mutationFn: (data) => apiService.wasteBins.create(data),
+        onSuccess: () => {
+            toast.success('Контейнер успешно создан');
+            resetForm();
+            onSuccess?.();
+            onClose();
+        },
+        onError: (error) => {
+            toast.error(`Ошибка при создании контейнера: ${error.message}`);
         }
-    );
+    });
 
     // Handle form submission
     const handleSubmit = (e) => {

@@ -191,15 +191,13 @@ const Header = ({ onMenuClick }) => {
     const [showUserMenu, setShowUserMenu] = useState(false);
 
     // Fetch alert bins count
-    const { data: alertBinsData } = useQuery(
-        'alertBinsCount',
-        () => apiService.wasteBins.getOverfilled(),
-        {
-            refetchInterval: 60000, // 1 minute
-            staleTime: 30000, // 30 seconds
-            select: (data) => data.data.results || 0,
-        }
-    );
+    const { data: alertBinsData } = useQuery({
+        queryKey: ['alertBinsCount'],
+        queryFn: () => apiService.wasteBins.getOverfilled(),
+        refetchInterval: 60000, // 1 minute
+        staleTime: 30000, // 30 seconds
+        select: (data) => data.data.results || 0,
+    });
 
     // Alert count
     const alertCount = alertBinsData || 0;

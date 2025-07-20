@@ -2,7 +2,6 @@ import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
 // Context Providers
 import { AuthProvider } from './contexts/AuthContext';
@@ -300,25 +299,6 @@ const App = () => {
                         </AuthProvider>
                     </BrowserRouter>
                 </ThemeProvider>
-
-                {/* React Query Devtools - Enhanced with better positioning */}
-                {process.env.NODE_ENV === 'development' && (
-                    <ReactQueryDevtools
-                        initialIsOpen={false}
-                        position="bottom-right"
-                        toggleButtonProps={{
-                            style: {
-                                background: '#0f172a',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '0.375rem',
-                                padding: '8px 12px',
-                                fontSize: '12px',
-                                fontWeight: '500'
-                            }
-                        }}
-                    />
-                )}
             </QueryClientProvider>
         </ErrorBoundary>
     );
