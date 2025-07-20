@@ -49,41 +49,17 @@ build-frontend:
 
       WORKDIR /app
 
-      # Copy package.json and package-lock.json
+      # Copy package.json and package-lock.json first
       COPY package*.json ./
 
-      # Clean install to avoid conflicts
-      RUN rm -rf node_modules package-lock.json
-
-      # Install dependencies fresh
-      RUN npm install
-
-      # Force reinstall React packages to ensure compatibility
-      RUN npm install --force react@^18.3.1 react-dom@^18.3.1
-
-      # Install the correct devtools package for @tanstack/react-query
-      RUN npm install @tanstack/react-query-devtools
-
-      # Downgrade @tanstack/react-query to a more stable version that doesn't require 'use' hook
-      RUN npm install @tanstack/react-query@^4.36.1 @tanstack/react-query-devtools@^4.36.1
+      # Install dependencies exactly as they work locally
+      RUN npm ci --only=production=false
 
       # Copy application code
       COPY . .
 
-      # Debug: Find and fix any remaining react-query imports before building
-      RUN find . -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" | xargs grep -l "from 'react-query'" | while read file; do \
-        echo "Fixing react-query import in: $file"; \
-        sed -i "s/from 'react-query'/from '@tanstack\/react-query'/g" "$file"; \
-      done || echo "No react-query imports found to fix"
-
-      # Also fix any imports with double quotes
-      RUN find . -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" | xargs grep -l 'from "react-query"' | while read file; do \
-        echo "Fixing react-query import in: $file"; \
-        sed -i 's/from "react-query"/from "@tanstack\/react-query"/g' "$file"; \
-      done || echo "No react-query imports with double quotes found to fix"
-
-      # Build the application
-      RUN CI=false npm run build
+      # Use the exact same build command that works locally
+      RUN npm run build
 
       # Production stage
       FROM node:18-alpine
