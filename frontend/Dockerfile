@@ -1,4 +1,14 @@
-stages:
+# Fix TanStack Query compatibility issues
+      RUN find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -exec sed -i \
+        -e 's/\.defaultQueryOptions(/\.setDefaultOptions(/g' \
+        -e 's/\.setDefaultQueryOptions(/\.setDefaultOptions(/g' \
+        -e "s/queryKey: '\([^']*\)'/queryKey: ['\1']/g" \
+        -e "s/queryKey: \"\([^\"]*\)\"/queryKey: ['\1']/g" \
+        {} \;
+
+      # Debug: Check React version and package-lock
+      RUN echo "=== React version ===" && \
+          stages:
   - build
   - deploy
 
@@ -49,21 +59,38 @@ build-frontend:
 
       WORKDIR /app
 
-      # Copy package.json first (not package-lock.json to force fresh install)
-      COPY package.json ./
+      # Copy package.json and package-lock.json first
+      COPY package*.json ./
 
-      # Clear npm cache and update to latest React if needed
+      # Clear npm cache and force fresh install with React 19 testing library compatibility
       RUN npm cache clean --force
 
-      # Install dependencies fresh (this will create new package-lock.json)
+      # Force install with legacy peer deps to handle React 19 testing library conflicts
       RUN npm install --legacy-peer-deps
 
       # Copy application code
       COPY . .
 
-      # Remove any use hook imports that cause issues
-      RUN find . -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" | \
-          xargs sed -i 's/import { use,/import {/g; s/import { use }/\/\/ removed use import/g; s/, use,/,/g; s/, use }/}/g'
+      # Find and remove problematic use hook imports
+      RUN echo "Searching for 'use' hook imports..." && \
+          find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -exec grep -l "import.*use.*from.*react" {} \; | head -10 && \
+          find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -exec sed -i \
+            -e 's/import { use,/import {/g' \
+            -e 's/import { use }/\/\/ use hook not available in React 18/g' \
+            -e 's/, use,/,/g' \
+            -e 's/, use }/}/g' \
+            -e 's/{ use,/{ /g' \
+            -e 's/{ use }/{ }/g' \
+            -e 's/React\.use(/\/\/ React.use(/g' \
+            -e 's/\buse(/\/\/ use(/g' {} \;
+
+      # Debug: Check React version and package-lock
+      RUN echo "=== React version ===" && \
+          npm list react react-dom && \
+          echo "=== Checking for use hook imports ===" && \
+          find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -exec grep -H "import.*use.*from.*react" {} \; | head -10 || echo "No use imports found" && \
+          echo "=== Checking package.json ===" && \
+          cat package.json | grep -A2 -B2 react
 
       # Set CI to false to treat warnings as warnings, not errors
       ENV CI=false
