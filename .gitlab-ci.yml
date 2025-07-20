@@ -57,11 +57,12 @@ build-frontend:
       # Copy package.json and package-lock.json first
       COPY package*.json ./
 
-      # Clear npm cache and force fresh install with React 19 testing library compatibility
-      RUN npm cache clean --force
+      # Clear npm cache and remove any existing node_modules
+      RUN npm cache clean --force && \
+          rm -rf node_modules package-lock.json
 
-      # Force install with legacy peer deps to handle React 19 testing library conflicts
-      RUN npm install --legacy-peer-deps
+      # Install dependencies with force flag to resolve conflicts
+      RUN npm install --legacy-peer-deps --force
 
       # Copy application code
       COPY . .
