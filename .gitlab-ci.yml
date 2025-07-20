@@ -58,7 +58,7 @@ build-frontend:
       COPY package*.json ./
 
       # Install dependencies - use npm ci if package-lock exists, otherwise npm install
-      RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm install --legacy-peer-deps; fi
+      RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
       # Copy application code
       COPY . .
