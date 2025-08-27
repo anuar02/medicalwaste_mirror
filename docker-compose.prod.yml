@@ -51,7 +51,7 @@ services:
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
 
   nginx:
-    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/nginx:${CI_COMMIT_SHA:-latest}
+    image: $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
     deploy:
       replicas: 1
       placement:
@@ -62,8 +62,8 @@ services:
         delay: 5s
         max_attempts: 5
     ports:
-      - "80:8080"
-      - "443:8443"  # Add HTTPS port
+      - "80:8080"   # HTTP (redirects to HTTPS)
+      - "443:8443"  # HTTPS
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro  # Mount SSL certificates
     networks:
@@ -71,6 +71,7 @@ services:
     environment:
       - FRONTEND_HOST=myapp_frontend
       - BACKEND_HOST=myapp_backend
+      - SERVER_NAME=$SERVER_NAME
 
 networks:
   myapp_app-network:
