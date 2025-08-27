@@ -376,12 +376,16 @@ deploy:
               delay: 5s
               max_attempts: 5
           ports:
-            - "80:8080"
+            - "80:8080"   # HTTP (redirects to HTTPS)
+            - "443:8443"  # HTTPS
+          volumes:
+            - /etc/letsencrypt:/etc/letsencrypt:ro  # Mount SSL certificates
           networks:
             - myapp_app-network
           environment:
             - FRONTEND_HOST=myapp_frontend
             - BACKEND_HOST=myapp_backend
+            - SERVER_NAME=$SERVER_NAME
 
       networks:
         myapp_app-network:
