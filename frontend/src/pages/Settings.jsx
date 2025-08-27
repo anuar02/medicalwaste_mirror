@@ -1,5 +1,6 @@
 // pages/Settings.jsx
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
     Settings as SettingsIcon,
@@ -22,6 +23,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 const Settings = () => {
     const { user, isAdmin } = useAuth();
+    const { t } = useTranslation();
 
     // State for different settings forms - moved before any conditionals
     const [notificationSettings, setNotificationSettings] = useState({
@@ -75,25 +77,25 @@ const Settings = () => {
     // Save notification settings
     const saveNotificationSettings = () => {
         // This would typically call a backend API
-        toast.success('Настройки уведомлений сохранены');
+        toast.success(t('settings.notificationsSaved'));
     };
 
     // Save security settings
     const saveSecuritySettings = () => {
         // This would typically call a backend API
-        toast.success('Настройки безопасности сохранены');
+        toast.success(t('settings.securitySaved'));
     };
 
     // Save system settings
     const saveSystemSettings = () => {
         // This would typically call a backend API
-        toast.success('Системные настройки сохранены');
+        toast.success(t('settings.systemSaved'));
     };
 
     // Backup system data
     const backupSystem = () => {
         // This would typically call a backend API to create a backup
-        toast.success('Резервная копия системы создана');
+        toast.success(t('settings.backupCreated'));
     };
 
     // Check if user has admin privileges - moved after all hooks
@@ -102,9 +104,9 @@ const Settings = () => {
             <div className="container mx-auto p-6">
                 <div className="flex flex-col items-center justify-center rounded-lg bg-amber-50 p-6 text-amber-800">
                     <AlertTriangle className="mb-4 h-12 w-12" />
-                    <h2 className="text-xl font-bold">Доступ запрещен</h2>
+                    <h2 className="text-xl font-bold">{t('settings.accessDenied')}</h2>
                     <p className="mt-2 text-center">
-                        У вас нет прав доступа к настройкам системы. Пожалуйста, обратитесь к администратору.
+                        {t('settings.noAccess')}
                     </p>
                 </div>
             </div>
@@ -115,10 +117,10 @@ const Settings = () => {
         <div className="container mx-auto p-4">
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-slate-800">
-                    Настройки Системы
+                    {t('settings.title')}
                 </h1>
                 <p className="mt-1 text-sm text-slate-500">
-                    Управление настройками системы мониторинга медицинских отходов
+                    {t('settings.subtitle')}
                 </p>
             </div>
 
@@ -127,7 +129,7 @@ const Settings = () => {
                 <div className="lg:col-span-1">
                     <div className="overflow-hidden rounded-xl bg-white shadow-sm">
                         <div className="border-b border-slate-100 px-6 py-4">
-                            <h2 className="text-lg font-semibold text-slate-800">Категории</h2>
+                            <h2 className="text-lg font-semibold text-slate-800">{t('settings.categories')}</h2>
                         </div>
                         <div className="space-y-1 p-2">
                             <a
@@ -135,28 +137,28 @@ const Settings = () => {
                                 className="flex items-center rounded-lg px-4 py-2 text-slate-700 hover:bg-slate-50"
                             >
                                 <Bell className="mr-3 h-5 w-5 text-slate-400" />
-                                <span>Уведомления</span>
+                                <span>{t('settings.notifications')}</span>
                             </a>
                             <a
                                 href="#security"
                                 className="flex items-center rounded-lg px-4 py-2 text-slate-700 hover:bg-slate-50"
                             >
                                 <Shield className="mr-3 h-5 w-5 text-slate-400" />
-                                <span>Безопасность</span>
+                                <span>{t('settings.security')}</span>
                             </a>
                             <a
                                 href="#system"
                                 className="flex items-center rounded-lg px-4 py-2 text-slate-700 hover:bg-slate-50"
                             >
                                 <Database className="mr-3 h-5 w-5 text-slate-400" />
-                                <span>Система</span>
+                                <span>{t('settings.system')}</span>
                             </a>
                             <a
                                 href="#users"
                                 className="flex items-center rounded-lg px-4 py-2 text-slate-700 hover:bg-slate-50"
                             >
                                 <Users className="mr-3 h-5 w-5 text-slate-400" />
-                                <span>Пользователи</span>
+                                <span>{t('settings.users')}</span>
                             </a>
                         </div>
                     </div>
@@ -164,24 +166,24 @@ const Settings = () => {
                     {/* System Info */}
                     <div className="mt-6 overflow-hidden rounded-xl bg-white shadow-sm">
                         <div className="border-b border-slate-100 px-6 py-4">
-                            <h2 className="text-lg font-semibold text-slate-800">Информация о системе</h2>
+                            <h2 className="text-lg font-semibold text-slate-800">{t('settings.systemInfo')}</h2>
                         </div>
                         <div className="p-6">
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-slate-500">Версия</span>
+                                    <span className="text-sm text-slate-500">{t('settings.version')}</span>
                                     <span className="text-sm font-medium text-slate-800">1.0.0</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-slate-500">Последнее обновление</span>
+                                    <span className="text-sm text-slate-500">{t('settings.lastUpdate')}</span>
                                     <span className="text-sm font-medium text-slate-800">15.03.2025</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-slate-500">Среда</span>
+                                    <span className="text-sm text-slate-500">{t('settings.environment')}</span>
                                     <span className="text-sm font-medium text-slate-800">Production</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-slate-500">База данных</span>
+                                    <span className="text-sm text-slate-500">{t('settings.database')}</span>
                                     <span className="text-sm font-medium text-slate-800">MongoDB</span>
                                 </div>
                                 <div className="mt-4">
@@ -191,7 +193,7 @@ const Settings = () => {
                                         variant="outline"
                                     >
                                         <Download className="mr-2 h-4 w-4" />
-                                        Создать резервную копию
+                                        {t('settings.createBackup')}
                                     </Button>
                                 </div>
                             </div>
@@ -206,7 +208,7 @@ const Settings = () => {
                         <div className="border-b border-slate-100 px-6 py-4">
                             <div className="flex items-center space-x-3">
                                 <Bell className="h-5 w-5 text-slate-400" />
-                                <h2 className="text-lg font-semibold text-slate-800">Настройки уведомлений</h2>
+                                <h2 className="text-lg font-semibold text-slate-800">{t('settings.notificationsTitle')}</h2>
                             </div>
                         </div>
                         <div className="p-6">
@@ -215,10 +217,10 @@ const Settings = () => {
                                 <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
                                     <div>
                                         <label htmlFor="emailNotifications" className="text-sm font-medium text-slate-700">
-                                            Уведомления по Email
+                                            {t('settings.emailNotifications')}
                                         </label>
                                         <p className="text-xs text-slate-500">
-                                            Получать уведомления о состоянии контейнеров по email
+                                            {t('settings.emailNotificationsDesc')}
                                         </p>
                                     </div>
                                     <div className="ml-4 flex h-6 items-center">
@@ -236,7 +238,7 @@ const Settings = () => {
                                 {/* Alert Threshold */}
                                 <div>
                                     <label htmlFor="alertThreshold" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Порог оповещения (%)
+                                        {t('settings.alertThreshold')}
                                     </label>
                                     <div className="flex items-center space-x-4">
                                         <input
@@ -255,14 +257,14 @@ const Settings = () => {
                     </span>
                                     </div>
                                     <p className="mt-1 text-xs text-slate-500">
-                                        Уведомления будут отправляться, когда заполненность контейнера превысит данный порог
+                                        {t('settings.alertThresholdDesc')}
                                     </p>
                                 </div>
 
                                 {/* Alert Frequency */}
                                 <div>
                                     <label htmlFor="alertFrequency" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Частота оповещений
+                                        {t('settings.alertFrequency')}
                                     </label>
                                     <select
                                         id="alertFrequency"
@@ -271,17 +273,17 @@ const Settings = () => {
                                         onChange={handleNotificationChange}
                                         className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                     >
-                                        <option value="realtime">В реальном времени</option>
-                                        <option value="hourly">Каждый час</option>
-                                        <option value="daily">Каждый день</option>
-                                        <option value="weekly">Каждую неделю</option>
+                                        <option value="realtime">{t('settings.freqRealtime')}</option>
+                                        <option value="hourly">{t('settings.freqHourly')}</option>
+                                        <option value="daily">{t('settings.freqDaily')}</option>
+                                        <option value="weekly">{t('settings.freqWeekly')}</option>
                                     </select>
                                 </div>
 
                                 {/* Recipient Emails */}
                                 <div>
                                     <label htmlFor="recipientEmails" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Email получателей
+                                        {t('settings.recipientEmails')}
                                     </label>
                                     <textarea
                                         id="recipientEmails"
@@ -289,11 +291,11 @@ const Settings = () => {
                                         rows="3"
                                         value={notificationSettings.recipientEmails}
                                         onChange={handleNotificationChange}
-                                        placeholder="Введите email-адреса через запятую"
+                                        placeholder={t('settings.recipientEmailsPlaceholder')}
                                         className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                     ></textarea>
                                     <p className="mt-1 text-xs text-slate-500">
-                                        Разделяйте несколько адресов запятыми
+                                        {t('settings.recipientEmailsHint')}
                                     </p>
                                 </div>
 
@@ -304,7 +306,7 @@ const Settings = () => {
                                         type="button"
                                     >
                                         <Save className="mr-2 h-4 w-4" />
-                                        Сохранить настройки
+                                        {t('settings.save')}
                                     </Button>
                                 </div>
                             </form>
@@ -316,7 +318,7 @@ const Settings = () => {
                         <div className="border-b border-slate-100 px-6 py-4">
                             <div className="flex items-center space-x-3">
                                 <Shield className="h-5 w-5 text-slate-400" />
-                                <h2 className="text-lg font-semibold text-slate-800">Настройки безопасности</h2>
+                                <h2 className="text-lg font-semibold text-slate-800">{t('settings.securityTitle')}</h2>
                             </div>
                         </div>
                         <div className="p-6">
@@ -324,7 +326,7 @@ const Settings = () => {
                                 {/* Session Timeout */}
                                 <div>
                                     <label htmlFor="sessionTimeout" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Время сессии (минуты)
+                                        {t('settings.sessionTimeout')}
                                     </label>
                                     <input
                                         type="number"
@@ -337,14 +339,14 @@ const Settings = () => {
                                         className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                     />
                                     <p className="mt-1 text-xs text-slate-500">
-                                        Пользователь будет автоматически выходить из системы после указанного времени бездействия
+                                        {t('settings.sessionTimeoutDesc')}
                                     </p>
                                 </div>
 
                                 {/* Maximum Login Attempts */}
                                 <div>
                                     <label htmlFor="maximumLoginAttempts" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Максимальное количество попыток входа
+                                        {t('settings.maxLoginAttempts')}
                                     </label>
                                     <input
                                         type="number"
@@ -357,14 +359,14 @@ const Settings = () => {
                                         className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                     />
                                     <p className="mt-1 text-xs text-slate-500">
-                                        Аккаунт будет временно заблокирован после указанного количества неудачных попыток входа
+                                        {t('settings.maxLoginAttemptsDesc')}
                                     </p>
                                 </div>
 
                                 {/* Password Policy */}
                                 <div>
                                     <label htmlFor="passwordPolicy" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Политика паролей
+                                        {t('settings.passwordPolicy')}
                                     </label>
                                     <select
                                         id="passwordPolicy"
@@ -373,16 +375,16 @@ const Settings = () => {
                                         onChange={handleSecurityChange}
                                         className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                     >
-                                        <option value="low">Низкая (минимум 6 символов)</option>
-                                        <option value="medium">Средняя (минимум 8 символов, буквы и цифры)</option>
-                                        <option value="high">Высокая (минимум 10 символов, буквы, цифры и спецсимволы)</option>
+                                        <option value="low">{t('settings.policyLow')}</option>
+                                        <option value="medium">{t('settings.policyMedium')}</option>
+                                        <option value="high">{t('settings.policyHigh')}</option>
                                     </select>
                                 </div>
 
                                 {/* Enforce Password Change */}
                                 <div>
                                     <label htmlFor="enforcePasswordChange" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Принудительная смена пароля (дни)
+                                        {t('settings.forceChangeDays')}
                                     </label>
                                     <input
                                         type="number"
@@ -395,7 +397,7 @@ const Settings = () => {
                                         className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                     />
                                     <p className="mt-1 text-xs text-slate-500">
-                                        Пользователи должны менять пароль каждые X дней (0 для отключения)
+                                        {t('settings.forceChangeDaysDesc')}
                                     </p>
                                 </div>
 
@@ -406,7 +408,7 @@ const Settings = () => {
                                         type="button"
                                     >
                                         <Save className="mr-2 h-4 w-4" />
-                                        Сохранить настройки
+                                        {t('settings.save')}
                                     </Button>
                                 </div>
                             </form>
@@ -418,7 +420,7 @@ const Settings = () => {
                         <div className="border-b border-slate-100 px-6 py-4">
                             <div className="flex items-center space-x-3">
                                 <Database className="h-5 w-5 text-slate-400" />
-                                <h2 className="text-lg font-semibold text-slate-800">Системные настройки</h2>
+                                <h2 className="text-lg font-semibold text-slate-800">{t('settings.systemTitle')}</h2>
                             </div>
                         </div>
                         <div className="p-6">
@@ -426,7 +428,7 @@ const Settings = () => {
                                 {/* Data Retention */}
                                 <div>
                                     <label htmlFor="dataRetentionDays" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Срок хранения данных (дни)
+                                        {t('settings.dataRetentionDays')}
                                     </label>
                                     <input
                                         type="number"
@@ -439,14 +441,14 @@ const Settings = () => {
                                         className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                     />
                                     <p className="mt-1 text-xs text-slate-500">
-                                        Исторические данные будут храниться указанное количество дней
+                                        {t('settings.dataRetentionDaysDesc')}
                                     </p>
                                 </div>
 
                                 {/* Backup Frequency */}
                                 <div>
                                     <label htmlFor="backupFrequency" className="mb-1 block text-sm font-medium text-slate-700">
-                                        Частота резервного копирования
+                                        {t('settings.backupFrequency')}
                                     </label>
                                     <select
                                         id="backupFrequency"
@@ -455,10 +457,10 @@ const Settings = () => {
                                         onChange={handleSystemChange}
                                         className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                     >
-                                        <option value="hourly">Каждый час</option>
-                                        <option value="daily">Каждый день</option>
-                                        <option value="weekly">Каждую неделю</option>
-                                        <option value="monthly">Каждый месяц</option>
+                                        <option value="hourly">{t('settings.freqHourly')}</option>
+                                        <option value="daily">{t('settings.freqDaily')}</option>
+                                        <option value="weekly">{t('settings.freqWeekly')}</option>
+                                        <option value="monthly">{t('settings.freqMonthly')}</option>
                                     </select>
                                 </div>
 
@@ -466,10 +468,10 @@ const Settings = () => {
                                 <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
                                     <div>
                                         <label htmlFor="maintenanceMode" className="text-sm font-medium text-slate-700">
-                                            Режим обслуживания
+                                            {t('settings.maintenanceMode')}
                                         </label>
                                         <p className="text-xs text-slate-500">
-                                            В этом режиме система будет недоступна для обычных пользователей
+                                            {t('settings.maintenanceModeDesc')}
                                         </p>
                                     </div>
                                     <div className="ml-4 flex h-6 items-center">
@@ -488,10 +490,10 @@ const Settings = () => {
                                 <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
                                     <div>
                                         <label htmlFor="debugMode" className="text-sm font-medium text-slate-700">
-                                            Режим отладки
+                                            {t('settings.debugMode')}
                                         </label>
                                         <p className="text-xs text-slate-500">
-                                            Включает расширенное логирование и отладочную информацию
+                                            {t('settings.debugModeDesc')}
                                         </p>
                                     </div>
                                     <div className="ml-4 flex h-6 items-center">
@@ -513,7 +515,7 @@ const Settings = () => {
                                         type="button"
                                     >
                                         <Save className="mr-2 h-4 w-4" />
-                                        Сохранить настройки
+                                        {t('settings.save')}
                                     </Button>
                                 </div>
                             </form>
@@ -525,12 +527,12 @@ const Settings = () => {
                         <div className="border-b border-slate-100 px-6 py-4">
                             <div className="flex items-center space-x-3">
                                 <Users className="h-5 w-5 text-slate-400" />
-                                <h2 className="text-lg font-semibold text-slate-800">Управление пользователями</h2>
+                                <h2 className="text-lg font-semibold text-slate-800">{t('settings.usersManagement')}</h2>
                             </div>
                         </div>
                         <div className="p-6">
                             <p className="text-center text-slate-500">
-                                Управление пользователями доступно через отдельный интерфейс администратора
+                                {t('settings.usersManagementDesc')}
                             </p>
                             <div className="mt-4 flex justify-center">
                                 <Button
@@ -538,7 +540,7 @@ const Settings = () => {
                                     onClick={() => window.location.href = '/admin/users'}
                                 >
                                     <Users className="mr-2 h-4 w-4" />
-                                    Управление пользователями
+                                    {t('settings.users')}
                                 </Button>
                             </div>
                         </div>

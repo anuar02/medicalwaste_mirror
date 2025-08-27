@@ -1,9 +1,11 @@
 // components/TelegramSettings.jsx - Tailwind CSS version
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 
 const TelegramSettings = ({ user, onUpdate }) => {
     const [chatId, setChatId] = useState('');
+    const { t } = useTranslation();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
@@ -19,11 +21,11 @@ const TelegramSettings = ({ user, onUpdate }) => {
 
         try {
             const response = await axios.post('/api/v1/telegram/connect', { chatId });
-            setSuccess('Telegram успешно подключен!');
+            setSuccess(t('telegram.successConnect'));
             onUpdate(response.data.data.user);
             setChatId(''); // Clear input
         } catch (err) {
-            setError(err.response?.data?.message || 'Ошибка подключения Telegram');
+            setError(err.response?.data?.message || t('telegram.connectError'));
         } finally {
             setLoading(false);
         }
@@ -36,10 +38,10 @@ const TelegramSettings = ({ user, onUpdate }) => {
 
         try {
             const response = await axios.post('/api/v1/telegram/disconnect');
-            setSuccess('Telegram успешно отключен');
+            setSuccess(t('telegram.successDisconnect'));
             onUpdate(response.data.data.user);
         } catch (err) {
-            setError(err.response?.data?.message || 'Ошибка отключения Telegram');
+            setError(err.response?.data?.message || t('telegram.disconnectError'));
         } finally {
             setLoading(false);
         }
@@ -54,10 +56,10 @@ const TelegramSettings = ({ user, onUpdate }) => {
             const response = await axios.post('/api/v1/telegram/toggle-notifications', {
                 receiveAlerts: !receiveNotifications
             });
-            setSuccess(`Уведомления ${!receiveNotifications ? 'включены' : 'отключены'}`);
+            setSuccess(!receiveNotifications ? t('telegram.notificationsEnabled') : t('telegram.notificationsDisabled'));
             onUpdate(response.data.data.user);
         } catch (err) {
-            setError(err.response?.data?.message || 'Ошибка изменения настроек уведомлений');
+            setError(err.response?.data?.message || t('telegram.toggleError'));
         } finally {
             setLoading(false);
         }
@@ -70,9 +72,9 @@ const TelegramSettings = ({ user, onUpdate }) => {
 
         try {
             await axios.post('/api/v1/telegram/test-notification');
-            setSuccess('Тестовое уведомление отправлено! Проверьте свой Telegram.');
+            setSuccess(t('telegram.testSent'));
         } catch (err) {
-            setError(err.response?.data?.message || 'Ошибка отправки тестового уведомления');
+            setError(err.response?.data?.message || t('telegram.testError'));
         } finally {
             setLoading(false);
         }
@@ -89,14 +91,14 @@ const TelegramSettings = ({ user, onUpdate }) => {
                         </svg>
                     </div>
                     <div>
-                        <h3 className="text-lg font-semibold text-slate-800">Telegram Уведомления</h3>
-                        <p className="text-sm text-slate-600">Настройка уведомлений о заполнении контейнеров</p>
+                        <h3 className="text-lg font-semibold text-slate-800">{t('telegram.title')}</h3>
+                        <p className="text-sm text-slate-600">{t('telegram.subtitle')}</p>
                     </div>
                 </div>
                 {isConnected && (
                     <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
                         <div className="mr-1.5 h-2 w-2 rounded-full bg-emerald-400"></div>
-                        Подключено
+                        {t('telegram.connected')}
                     </span>
                 )}
             </div>
@@ -137,18 +139,18 @@ const TelegramSettings = ({ user, onUpdate }) => {
                 <div className="space-y-6">
                     <div className="rounded-lg bg-slate-50 p-4">
                         <p className="text-sm text-slate-700 mb-4">
-                            Подключите свой Telegram аккаунт для получения уведомлений о заполнении контейнеров.
+                            {t('telegram.connectPrompt')}
                         </p>
 
                         <div className="space-y-4">
-                            <h4 className="text-sm font-medium text-slate-800">Как подключить:</h4>
+                            <h4 className="text-sm font-medium text-slate-800">{t('telegram.howToTitle')}</h4>
                             <div className="space-y-3">
                                 <div className="flex items-start space-x-3">
                                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-100 text-xs font-medium text-teal-600">
                                         1
                                     </div>
                                     <p className="text-sm text-slate-600">
-                                        Откройте Telegram и найдите <span className="font-medium">@your_bot_name</span>
+                                        {t('telegram.step1')} <span className="font-medium">@your_bot_name</span>
                                     </p>
                                 </div>
                                 <div className="flex items-start space-x-3">
@@ -156,7 +158,7 @@ const TelegramSettings = ({ user, onUpdate }) => {
                                         2
                                     </div>
                                     <p className="text-sm text-slate-600">
-                                        Запустите бота, нажав "Start" или отправив <code className="rounded bg-slate-200 px-1 py-0.5 text-xs">/start</code>
+                                        {t('telegram.step2')} <code className="rounded bg-slate-200 px-1 py-0.5 text-xs">/start</code>
                                     </p>
                                 </div>
                                 <div className="flex items-start space-x-3">
@@ -164,7 +166,7 @@ const TelegramSettings = ({ user, onUpdate }) => {
                                         3
                                     </div>
                                     <p className="text-sm text-slate-600">
-                                        Бот отправит вам ваш Chat ID
+                                        {t('telegram.step3')}
                                     </p>
                                 </div>
                                 <div className="flex items-start space-x-3">
@@ -172,7 +174,7 @@ const TelegramSettings = ({ user, onUpdate }) => {
                                         4
                                     </div>
                                     <p className="text-sm text-slate-600">
-                                        Скопируйте Chat ID и вставьте его ниже
+                                        {t('telegram.step4')}
                                     </p>
                                 </div>
                             </div>
@@ -182,14 +184,14 @@ const TelegramSettings = ({ user, onUpdate }) => {
                     <form onSubmit={handleConnect} className="space-y-4">
                         <div>
                             <label htmlFor="chatId" className="block text-sm font-medium text-slate-700 mb-2">
-                                Telegram Chat ID
+                                {t('telegram.chatIdLabel')}
                             </label>
                             <input
                                 type="text"
                                 id="chatId"
                                 value={chatId}
                                 onChange={(e) => setChatId(e.target.value)}
-                                placeholder="Введите ваш Telegram Chat ID"
+                                placeholder={t('telegram.chatIdPlaceholder')}
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm placeholder-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50"
                                 required
                             />
@@ -202,10 +204,10 @@ const TelegramSettings = ({ user, onUpdate }) => {
                             {loading ? (
                                 <div className="flex items-center justify-center space-x-2">
                                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                                    <span>Подключение...</span>
+                                    <span>{t('telegram.connecting')}</span>
                                 </div>
                             ) : (
-                                'Подключить Telegram'
+                                t('telegram.connectButton')
                             )}
                         </button>
                     </form>
@@ -218,18 +220,18 @@ const TelegramSettings = ({ user, onUpdate }) => {
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
                             <p className="text-sm text-slate-700">
-                                Ваш Telegram аккаунт подключен и{' '}
+                                {t('telegram.accountConnected')}{' '}
                                 {receiveNotifications ? (
-                                    <span className="font-medium text-emerald-600">получает уведомления</span>
+                                    <span className="font-medium text-emerald-600">{t('telegram.receiving')}</span>
                                 ) : (
-                                    <span className="font-medium text-red-600">не получает уведомления</span>
+                                    <span className="font-medium text-red-600">{t('telegram.notReceiving')}</span>
                                 )}
                             </p>
                         </div>
                     </div>
 
                     <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-slate-800">Доступные действия:</h4>
+                        <h4 className="text-sm font-medium text-slate-800">{t('telegram.actionsTitle')}</h4>
 
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <button
@@ -240,7 +242,7 @@ const TelegramSettings = ({ user, onUpdate }) => {
                                 <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                                 </svg>
-                                Тестовое уведомление
+                                {t('telegram.testNotification')}
                             </button>
 
                             <button
@@ -258,14 +260,14 @@ const TelegramSettings = ({ user, onUpdate }) => {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
                                         </svg>
-                                        Отключить уведомления
+                                        {t('telegram.disableNotifications')}
                                     </>
                                 ) : (
                                     <>
                                         <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.868 19.504L6.281 16.1a1 1 0 011.414 0l2.122 2.121a1 1 0 010 1.415l-3.536 3.536a1 1 0 01-1.415 0z" />
                                         </svg>
-                                        Включить уведомления
+                                        {t('telegram.enableNotifications')}
                                     </>
                                 )}
                             </button>
@@ -280,7 +282,7 @@ const TelegramSettings = ({ user, onUpdate }) => {
                                 <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                 </svg>
-                                Отключить Telegram
+                                {t('telegram.disconnectTelegram')}
                             </div>
                         </button>
                     </div>

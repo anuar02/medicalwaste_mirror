@@ -1,5 +1,6 @@
 // components/modals/EditBinModal.jsx
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 import { useMutation } from '@tanstack/react-query';
 import { X, Save, Trash2 } from 'lucide-react';
@@ -9,6 +10,7 @@ import apiService from '../../services/api';
 
 const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
     // Form state
+    const { t } = useTranslation();
     const [formData, setFormData] = useState({
         department: '',
         wasteType: '',
@@ -50,17 +52,16 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
 
     // Update bin mutation
     const updateMutation = useMutation({
-    mutationFn: (data) => apiService.wasteBins.update(bin.binId, data),
-            onSuccess: () => {
-                toast.success('Контейнер успешно обновлен');
-                onSuccess?.();
-                onClose();
-            },
-            onError: (error) => {
-                toast.error(`Ошибка при обновлении контейнера: ${error.message}`);
-            },
-        }
-    );
+        mutationFn: (data) => apiService.wasteBins.update(bin.binId, data),
+        onSuccess: () => {
+            toast.success(t('binModals.updated'));
+            onSuccess?.();
+            onClose();
+        },
+        onError: (error) => {
+            toast.error(t('binModals.updateError', { message: error.message }));
+        },
+    });
 
     // Handle form submission
     const handleSubmit = (e) => {
@@ -73,21 +74,21 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
 
     // Waste type options
     const wasteTypeOptions = [
-        'Острые Медицинские Отходы',
-        'Инфекционные Отходы',
-        'Патологические Отходы',
-        'Фармацевтические Отходы',
-        'Химические Отходы',
-        'Радиоактивные Отходы',
-        'Общие Медицинские Отходы',
+        t('wasteTypes.sharps', 'Острые Медицинские Отходы'),
+        t('wasteTypes.infectious', 'Инфекционные Отходы'),
+        t('wasteTypes.pathological', 'Патологические Отходы'),
+        t('wasteTypes.pharmaceutical', 'Фармацевтические Отходы'),
+        t('wasteTypes.chemical', 'Химические Отходы'),
+        t('wasteTypes.radioactive', 'Радиоактивные Отходы'),
+        t('wasteTypes.general', 'Общие Медицинские Отходы'),
     ];
 
     // Status options
     const statusOptions = [
-        { value: 'active', label: 'Активен' },
-        { value: 'maintenance', label: 'Обслуживание' },
-        { value: 'offline', label: 'Офлайн' },
-        { value: 'decommissioned', label: 'Выведен' },
+        { value: 'active', label: t('status.active', 'Активен') },
+        { value: 'maintenance', label: t('status.maintenance', 'Обслуживание') },
+        { value: 'offline', label: t('status.offline', 'Офлайн') },
+        { value: 'decommissioned', label: t('status.decommissioned', 'Выведен') },
     ];
 
     return (
@@ -96,7 +97,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                 {/* Header */}
                 <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-xl font-semibold text-slate-800">
-                        Редактирование контейнера {bin.binId}
+                        {t('binModals.editTitle', { id: bin.binId, defaultValue: `Редактирование контейнера ${bin.binId}` })}
                     </h2>
                     <button
                         onClick={onClose}
@@ -111,7 +112,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                     {/* Department */}
                     <div>
                         <label className="mb-1 block text-sm font-medium text-slate-700">
-                            Отделение
+                            {t('binModals.department', 'Отделение')}
                         </label>
                         <input
                             type="text"
@@ -126,7 +127,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                     {/* Waste Type */}
                     <div>
                         <label className="mb-1 block text-sm font-medium text-slate-700">
-                            Тип отходов
+                            {t('binModals.wasteType', 'Тип отходов')}
                         </label>
                         <select
                             name="wasteType"
@@ -135,7 +136,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                             className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                             required
                         >
-                            <option value="" disabled>Выберите тип отходов</option>
+                            <option value="" disabled>{t('binModals.chooseWasteType', 'Выберите тип отходов')}</option>
                             {wasteTypeOptions.map((type) => (
                                 <option key={type} value={type}>
                                     {type}
@@ -147,7 +148,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                     {/* Status */}
                     <div>
                         <label className="mb-1 block text-sm font-medium text-slate-700">
-                            Статус
+                            {t('binModals.status', 'Статус')}
                         </label>
                         <select
                             name="status"
@@ -167,7 +168,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                     {/* Alert Threshold */}
                     <div>
                         <label className="mb-1 block text-sm font-medium text-slate-700">
-                            Порог оповещения (%)
+                            {t('binModals.alertThreshold', 'Порог оповещения (%)')}
                         </label>
                         <div className="flex items-center space-x-2">
                             <input
@@ -189,7 +190,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                     {/* Capacity */}
                     <div>
                         <label className="mb-1 block text-sm font-medium text-slate-700">
-                            Емкость (литры)
+                            {t('binModals.capacity', 'Емкость (литры)')}
                         </label>
                         <input
                             type="number"
@@ -210,14 +211,14 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                             variant="outline"
                             onClick={onClose}
                         >
-                            Отмена
+                            {t('common.cancel', 'Отмена')}
                         </Button>
                         <Button
                             type="submit"
                             isLoading={updateMutation.isLoading}
                         >
                             <Save className="mr-2 h-4 w-4" />
-                            Сохранить
+                            {t('common.save', 'Сохранить')}
                         </Button>
                     </div>
                 </form>

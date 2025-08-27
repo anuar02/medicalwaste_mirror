@@ -1,5 +1,6 @@
 // components/modals/AddBinModal.jsx
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 import { useMutation } from '@tanstack/react-query';
 import { X, Plus, MapPin } from 'lucide-react';
@@ -9,6 +10,7 @@ import apiService from '../../services/api';
 
 const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
     // Form state
+    const { t } = useTranslation();
     const [formData, setFormData] = useState({
         binId: '',
         department: '',
@@ -43,13 +45,13 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
     const createMutation = useMutation({
         mutationFn: (data) => apiService.wasteBins.create(data),
         onSuccess: () => {
-            toast.success('Контейнер успешно создан');
+            toast.success(t('binModals.created'));
             resetForm();
             onSuccess?.();
             onClose();
         },
         onError: (error) => {
-            toast.error(`Ошибка при создании контейнера: ${error.message}`);
+            toast.error(t('binModals.createError', { message: error.message }));
         }
     });
 
@@ -79,24 +81,24 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
 
     // Department options - would typically come from API
     const departmentOptions = [
-        'Хирургическое Отделение',
-        'Терапевтическое Отделение',
-        'Педиатрическое Отделение',
-        'Акушерское Отделение',
-        'Инфекционное Отделение',
-        'Лаборатория',
-        'Реанимация',
+        t('departments.surgery', 'Хирургическое Отделение'),
+        t('departments.therapy', 'Терапевтическое Отделение'),
+        t('departments.pediatrics', 'Педиатрическое Отделение'),
+        t('departments.obstetrics', 'Акушерское Отделение'),
+        t('departments.infection', 'Инфекционное Отделение'),
+        t('departments.laboratory', 'Лаборатория'),
+        t('departments.icu', 'Реанимация'),
     ];
 
     // Waste type options
     const wasteTypeOptions = [
-        'Острые Медицинские Отходы',
-        'Инфекционные Отходы',
-        'Патологические Отходы',
-        'Фармацевтические Отходы',
-        'Химические Отходы',
-        'Радиоактивные Отходы',
-        'Общие Медицинские Отходы',
+        t('wasteTypes.sharps', 'Острые Медицинские Отходы'),
+        t('wasteTypes.infectious', 'Инфекционные Отходы'),
+        t('wasteTypes.pathological', 'Патологические Отходы'),
+        t('wasteTypes.pharmaceutical', 'Фармацевтические Отходы'),
+        t('wasteTypes.chemical', 'Химические Отходы'),
+        t('wasteTypes.radioactive', 'Радиоактивные Отходы'),
+        t('wasteTypes.general', 'Общие Медицинские Отходы'),
     ];
 
     return (
@@ -105,7 +107,7 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                 {/* Header */}
                 <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-xl font-semibold text-slate-800">
-                        Добавление нового контейнера
+                        {t('binModals.addTitle', 'Добавление нового контейнера')}
                     </h2>
                     <button
                         onClick={onClose}
@@ -121,16 +123,16 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                         {/* Bin ID */}
                         <div>
                             <label className="mb-1 block text-sm font-medium text-slate-700">
-                                ID Контейнера (формат DEPT-123)
+                                {t('binModals.idLabel', 'ID Контейнера (формат DEPT-123)')}
                             </label>
                             <input
                                 type="text"
                                 name="binId"
                                 value={formData.binId}
                                 onChange={handleChange}
-                                placeholder="MED-001"
+                                placeholder={t('binModals.idPlaceholder', 'MED-001')}
                                 pattern="[A-Z]+-\d{3,}"
-                                title="ID должен быть в формате DEPT-123"
+                                title={t('binModals.idTitle', 'ID должен быть в формате DEPT-123')}
                                 className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                 required
                             />
@@ -139,7 +141,7 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                         {/* Department */}
                         <div>
                             <label className="mb-1 block text-sm font-medium text-slate-700">
-                                Отделение
+                                {t('binModals.department', 'Отделение')}
                             </label>
                             <input
                                 type="text"
@@ -160,7 +162,7 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                         {/* Waste Type */}
                         <div>
                             <label className="mb-1 block text-sm font-medium text-slate-700">
-                                Тип отходов
+                                {t('binModals.wasteType', 'Тип отходов')}
                             </label>
                             <select
                                 name="wasteType"
@@ -180,7 +182,7 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                         {/* Capacity */}
                         <div>
                             <label className="mb-1 block text-sm font-medium text-slate-700">
-                                Емкость (литры)
+                                {t('binModals.capacity', 'Емкость (литры)')}
                             </label>
                             <input
                                 type="number"
@@ -197,7 +199,7 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                         {/* Alert Threshold */}
                         <div className="md:col-span-2">
                             <label className="mb-1 block text-sm font-medium text-slate-700">
-                                Порог оповещения (%)
+                                {t('binModals.alertThreshold', 'Порог оповещения (%)')}
                             </label>
                             <div className="flex items-center space-x-2">
                                 <input
@@ -220,13 +222,13 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                         <div className="md:col-span-2">
                             <div className="flex items-center space-x-2">
                                 <MapPin className="h-4 w-4 text-slate-400" />
-                                <h3 className="text-sm font-medium text-slate-700">Местоположение</h3>
+                                <h3 className="text-sm font-medium text-slate-700">{t('binModals.location', 'Местоположение')}</h3>
                             </div>
                             <div className="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2">
                                 {/* Latitude */}
                                 <div>
                                     <label className="mb-1 block text-xs font-medium text-slate-700">
-                                        Широта
+                                        {t('binModals.latitude', 'Широта')}
                                     </label>
                                     <input
                                         type="number"
@@ -243,7 +245,7 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                                 {/* Longitude */}
                                 <div>
                                     <label className="mb-1 block text-xs font-medium text-slate-700">
-                                        Долгота
+                                        {t('binModals.longitude', 'Долгота')}
                                     </label>
                                     <input
                                         type="number"
@@ -260,7 +262,7 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                                 {/* Floor */}
                                 <div>
                                     <label className="mb-1 block text-xs font-medium text-slate-700">
-                                        Этаж
+                                        {t('binModals.floor', 'Этаж')}
                                     </label>
                                     <input
                                         type="number"
@@ -276,7 +278,7 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                                 {/* Room */}
                                 <div>
                                     <label className="mb-1 block text-xs font-medium text-slate-700">
-                                        Кабинет/Палата
+                                        {t('binModals.room', 'Кабинет/Палата')}
                                     </label>
                                     <input
                                         type="text"
@@ -299,14 +301,14 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                             onClick={onClose}
                             disabled={createMutation.isLoading}
                         >
-                            Отмена
+                            {t('common.cancel', 'Отмена')}
                         </Button>
                         <Button
                             type="submit"
                             isLoading={createMutation.isLoading}
                         >
                             <Plus className="mr-2 h-4 w-4" />
-                            Добавить контейнер
+                            {t('binModals.addButton', 'Добавить контейнер')}
                         </Button>
                     </div>
                 </form>

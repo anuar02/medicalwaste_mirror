@@ -1,11 +1,13 @@
 // layouts/AuthLayout.jsx
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Navigate, Outlet } from 'react-router-dom';
 import Logo from '../components/ui/Logo';
 import { useAuth } from '../contexts/AuthContext';
 
 const AuthLayout = () => {
     const { isAuthenticated, loading } = useAuth();
+    const { t } = useTranslation();
 
     // If user is already authenticated, redirect to dashboard
     if (isAuthenticated && !loading) {
@@ -18,12 +20,8 @@ const AuthLayout = () => {
                 {/* Logo and branding */}
                 <div className="mb-8 text-center">
                     <Logo size={100} className="mx-auto" />
-                    <h1 className="mt-4 text-2xl font-bold text-slate-800">
-                        Система Мониторинга Медицинских Отходов
-                    </h1>
-                    <p className="mt-2 text-sm text-slate-500">
-                        Вход в панель управления и мониторинга
-                    </p>
+                    <h1 className="mt-4 text-2xl font-bold text-slate-800">{t('auth.title')}</h1>
+                    <p className="mt-2 text-sm text-slate-500">{t('auth.subtitle')}</p>
                 </div>
 
                 {/* Content from child routes */}
@@ -33,11 +31,11 @@ const AuthLayout = () => {
 
                 {/* Footer */}
                 <div className="mt-8 text-center text-xs text-slate-500">
-                    <p className="mb-2">&copy; {new Date().getFullYear()} МедВейст. Все права защищены.</p>
+                    <p className="mb-2">&copy; {new Date().getFullYear()} {t('auth.copyright')}</p>
                     <div className="flex justify-center space-x-4">
-                        <a href="#" className="hover:text-teal-600">Условия использования</a>
-                        <a href="#" className="hover:text-teal-600">Политика конфиденциальности</a>
-                        <a href="#" className="hover:text-teal-600">Помощь</a>
+                        <a href="#" className="hover:text-teal-600">{t('auth.terms')}</a>
+                        <a href="#" className="hover:text-teal-600">{t('auth.privacy')}</a>
+                        <a href="#" className="hover:text-teal-600">{t('auth.help')}</a>
                     </div>
                 </div>
             </div>

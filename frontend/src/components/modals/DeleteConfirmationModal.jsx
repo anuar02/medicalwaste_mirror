@@ -1,5 +1,6 @@
 // components/modals/DeleteConfirmationModal.jsx
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 import { X, AlertTriangle, Trash2 } from 'lucide-react';
 import Button from '../ui/Button';
@@ -12,6 +13,7 @@ const DeleteConfirmationModal = ({
                                      message = 'Вы уверены, что хотите удалить этот элемент? Это действие нельзя отменить.',
                                      isDeleting = false
                                  }) => {
+    const { t } = useTranslation();
     // If modal is not open, don't render anything
     if (!isOpen) return null;
 
@@ -45,7 +47,7 @@ const DeleteConfirmationModal = ({
                         onClick={onClose}
                         disabled={isDeleting}
                     >
-                        Отмена
+                        {t('common.cancel', 'Отмена')}
                     </Button>
                     <Button
                         type="button"
@@ -54,7 +56,7 @@ const DeleteConfirmationModal = ({
                         isLoading={isDeleting}
                     >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Удалить
+                        {t('common.delete', 'Удалить')}
                     </Button>
                 </div>
             </div>

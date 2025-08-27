@@ -1,5 +1,6 @@
 // layouts/DashboardLayout.jsx
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard,
@@ -26,13 +27,14 @@ import Logo from '../components/ui/Logo';
 
 const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
     const { pathname } = useLocation();
+    const { t, i18n } = useTranslation();
     const { user, isAdmin } = useAuth();
 
     // Define navigation items
     const navItems = [
         {
             icon: <LayoutDashboard className="h-5 w-5" />,
-            label: 'Панель Мониторинга',
+            label: t('nav.dashboard'),
             path: '/',
         },
         // {
@@ -43,56 +45,56 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
         // },
         {
             icon: <Trash2 className="h-5 w-5" />,
-            label: 'Контейнеры',
+            label: t('nav.bins'),
             path: '/bins',
         },
         {
             icon: <MapPin className="h-5 w-5" />,
-            label: 'Карта',
+            label: t('nav.map'),
             path: '/map',
         },
         {
             icon: <BarChart3 className="h-5 w-5" />,
-            label: 'Отчеты',
+            label: t('nav.reports'),
             path: '/reports',
         },
         {
             icon: <Cpu className="h-5 w-5" />,
-            label: 'Устройства',
+            label: t('nav.devices'),
             path: '/admin/devices',
             adminOnly: true,
         },
         {
             icon: <User className="h-5 w-5" />,
-            label: 'Стать Водителем',
+            label: t('nav.beDriver'),
             path: '/driver/register',
             userOnly: true, // Only show to regular users
         },
         {
             icon: <UserCheck className="h-5 w-5" />,
-            label: 'Проверка Водителей',
+            label: t('nav.driverVerification'),
             path: '/admin/drivers',
             adminOnly: true,
         },
         {
             icon: <Building2 className="h-5 w-5" />,
-            label: 'Мед. Компании',
+            label: t('nav.medicalCompanies'),
             path: '/admin/companies',
             adminOnly: true,
         },
         {
             icon: <Navigation className="h-5 w-5" />,
-            label: 'Отслеживание',
+            label: t('nav.tracking'),
             path: '/tracking',
         },
         {
             icon: <Truck className="h-5 w-5" />,
-            label: 'Водители',
+            label: t('nav.drivers'),
             path: '/drivers',
         },
         {
             icon: <Settings className="h-5 w-5" />,
-            label: 'Настройки',
+            label: t('nav.settings'),
             path: '/settings',
             adminOnly: true,
         },
@@ -127,7 +129,7 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
             <div className="flex h-16 items-center border-b border-slate-200 px-6">
                 <Link to="/" className="flex items-center space-x-2">
                     <Logo size={32} />
-                    <span className="text-lg font-semibold text-slate-800">MedWaste</span>
+                    <span className="text-lg font-semibold text-slate-800">{t('app.brand')}</span>
                 </Link>
             </div>
 
@@ -177,9 +179,9 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
                 <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3 text-sm">
                     <div className="flex items-center space-x-2">
                         <Wifi className="h-4 w-4 text-emerald-500" />
-                        <span className="font-medium text-slate-700">Система активна</span>
+                        <span className="font-medium text-slate-700">{t('app.systemActive')}</span>
                     </div>
-                    <span className="text-xs text-slate-500">v1.0.0</span>
+                    <span className="text-xs text-slate-500">{t('app.version')}</span>
                 </div>
             </div>
         </div>
@@ -189,6 +191,7 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
 const Header = ({ onMenuClick }) => {
     const { user, logout } = useAuth();
     const [showUserMenu, setShowUserMenu] = useState(false);
+    const { t, i18n } = useTranslation();
 
     // Fetch alert bins count
     const { data: alertBinsData } = useQuery({
@@ -240,7 +243,7 @@ const Header = ({ onMenuClick }) => {
                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700">
                             {user?.username?.substring(0, 1).toUpperCase() || 'U'}
                         </div>
-                        <span className="hidden sm:inline-block">{user?.username || 'Пользователь'}</span>
+                        <span className="hidden sm:inline-block">{user?.username || t('header.user')}</span>
                         <ChevronDown className="h-4 w-4 text-slate-400" />
                     </button>
 
@@ -253,7 +256,7 @@ const Header = ({ onMenuClick }) => {
                                 onClick={() => setShowUserMenu(false)}
                             >
                                 <User className="mr-2 h-4 w-4 text-slate-400" />
-                                Мой профиль
+                                {t('nav.profile')}
                             </Link>
                             <button
                                 onClick={() => {
@@ -263,10 +266,22 @@ const Header = ({ onMenuClick }) => {
                                 className="flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-slate-50"
                             >
                                 <LogOut className="mr-2 h-4 w-4" />
-                                Выйти
+                                {t('header.logout')}
                             </button>
                         </div>
                     )}
+                </div>
+                {/* Language Switcher */}
+                <div>
+                    <select
+                        aria-label="Language"
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm"
+                        value={i18n.language?.startsWith('ru') ? 'ru' : 'en'}
+                        onChange={(e) => i18n.changeLanguage(e.target.value)}
+                    >
+                        <option value="ru">RU</option>
+                        <option value="en">EN</option>
+                    </select>
                 </div>
             </div>
         </header>

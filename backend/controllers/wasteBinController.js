@@ -637,15 +637,14 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
     console.log(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
     try {
-        // Simple approach: Get all data in range, then sample based on interval
         const allHistory = await History.find({
             binId: req.params.id,
-            createdAt: {
+            timestamp: {  // ← Use 'timestamp' instead
                 $gte: startDate,
                 $lte: endDate
             }
         })
-            .sort({ createdAt: -1 });
+            .sort({ timestamp: -1 });
 
         console.log(`Found ${allHistory.length} total records in range`);
 

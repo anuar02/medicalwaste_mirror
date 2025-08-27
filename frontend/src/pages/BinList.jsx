@@ -1,5 +1,6 @@
 // pages/BinList.jsx
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -23,6 +24,7 @@ import BinFilters from '../components/bins/BinFilters';
 
 const BinList = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
     const [searchParams, setSearchParams] = useSearchParams();
     const { isSupervisor } = useAuth();
 
@@ -174,7 +176,7 @@ const BinList = () => {
 
     // Loading state
     if (isLoading) {
-        return <Loader text="Загрузка контейнеров..." />;
+        return <Loader text={t('binList.loading', 'Загрузка контейнеров...')} />;
     }
 
     // Error state
@@ -183,8 +185,8 @@ const BinList = () => {
             <div className="container mx-auto p-6">
                 <div className="rounded-lg bg-red-50 p-4 text-red-600">
                     <AlertTriangle className="mb-2 h-6 w-6" />
-                    <h3 className="text-lg font-semibold">Ошибка загрузки данных</h3>
-                    <p>{error.message || 'Не удалось загрузить список контейнеров'}</p>
+                    <h3 className="text-lg font-semibold">{t('binList.errorTitle', 'Ошибка загрузки данных')}</h3>
+                    <p>{error.message || t('binList.errorSubtitle', 'Не удалось загрузить список контейнеров')}</p>
                     <Button
                         className="mt-4"
                         onClick={handleRefresh}
@@ -192,7 +194,7 @@ const BinList = () => {
                         color="red"
                     >
                         <RefreshCw className="mr-2 h-4 w-4" />
-                        Попробовать снова
+                        {t('dashboard.retry', 'Попробовать снова')}
                     </Button>
                 </div>
             </div>
@@ -205,10 +207,10 @@ const BinList = () => {
             <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800">
-                        Контейнеры
+                        {t('binList.title', 'Контейнеры')}
                     </h1>
                     <p className="mt-1 text-sm text-slate-500">
-                        Управление и мониторинг контейнеров для медицинских отходов
+                        {t('binList.subtitle', 'Управление и мониторинг контейнеров для медицинских отходов')}
                     </p>
                 </div>
                 <div className="mt-4 flex space-x-3 md:mt-0">
@@ -218,7 +220,7 @@ const BinList = () => {
                         onClick={() => setShowFilters(!showFilters)}
                     >
                         <Filter className="mr-2 h-4 w-4" />
-                        Фильтры {showFilters ? '↑' : '↓'}
+                        {t('binList.filters', 'Фильтры')} {showFilters ? '↑' : '↓'}
                     </Button>
                     <Button
                         variant="outline"
@@ -227,14 +229,14 @@ const BinList = () => {
                         isLoading={isFetching}
                     >
                         <RefreshCw className="mr-2 h-4 w-4" />
-                        Обновить
+                        {t('dashboard.refresh', 'Обновить')}
                     </Button>
                     {isSupervisor && (
                         <Button
                             onClick={() => setShowAddModal(true)}
                         >
                             <Plus className="mr-2 h-4 w-4" />
-                            Добавить
+                            {t('common.add', 'Добавить')}
                         </Button>
                     )}
                 </div>
@@ -246,7 +248,7 @@ const BinList = () => {
                 <div className="relative w-full sm:w-64 lg:w-96">
                     <input
                         type="text"
-                        placeholder="Поиск контейнеров..."
+                        placeholder={t('binList.searchPlaceholder', 'Поиск контейнеров...')}
                         value={search}
                         onChange={handleSearchChange}
                         className="block w-full rounded-lg border border-slate-200 pl-10 pr-10 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
@@ -267,7 +269,7 @@ const BinList = () => {
                 {/* Sort dropdown */}
                 <div className="flex items-center space-x-2">
                     <label htmlFor="sort" className="text-sm font-medium text-slate-600">
-                        Сортировка:
+                        {t('binList.sortLabel', 'Сортировка:')}
                     </label>
                     <div className="relative">
                         <select
@@ -276,12 +278,12 @@ const BinList = () => {
                             onChange={handleSortChange}
                             className="block appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-10 py-2 text-sm text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                         >
-                            <option value="fullness:desc">Заполненность (↓)</option>
-                            <option value="fullness:asc">Заполненность (↑)</option>
-                            <option value="lastUpdate:desc">Последнее обновление (↓)</option>
-                            <option value="lastUpdate:asc">Последнее обновление (↑)</option>
-                            <option value="binId:asc">ID контейнера (А-Я)</option>
-                            <option value="binId:desc">ID контейнера (Я-А)</option>
+                            <option value="fullness:desc">{t('binList.sortFullnessDesc', 'Заполненность (↓)')}</option>
+                            <option value="fullness:asc">{t('binList.sortFullnessAsc', 'Заполненность (↑)')}</option>
+                            <option value="lastUpdate:desc">{t('binList.sortLastUpdateDesc', 'Последнее обновление (↓)')}</option>
+                            <option value="lastUpdate:asc">{t('binList.sortLastUpdateAsc', 'Последнее обновление (↑)')}</option>
+                            <option value="binId:asc">{t('binList.sortIdAsc', 'ID контейнера (А-Я)')}</option>
+                            <option value="binId:desc">{t('binList.sortIdDesc', 'ID контейнера (Я-А)')}</option>
                         </select>
                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-slate-400">
                             {sort.endsWith(':asc') ? (
@@ -313,7 +315,7 @@ const BinList = () => {
             {/* Results summary */}
             <div className="mb-4 flex items-center justify-between">
                 <p className="text-sm text-slate-500">
-                    Показано {filteredBins.length} {getResultCountText(filteredBins.length)} из {binsData?.data?.data?.bins?.length || 0}
+                    {t('binList.shownOf', { count: filteredBins.length, total: binsData?.data?.data?.bins?.length || 0, defaultValue: `Показано ${filteredBins.length} ${getResultCountText(filteredBins.length)} из ${binsData?.data?.data?.bins?.length || 0}` })}
                 </p>
 
                 {/* Active filters */}
@@ -354,7 +356,7 @@ const BinList = () => {
                     {filter === 'alert' && (
                         <span className="flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-700">
                             <AlertTriangle className="mr-1 h-3 w-3" />
-                            Требуют внимания
+                            {t('dashboard.needsAttention', 'Требуют внимания')}
                             <button
                                 onClick={() => setFilter('')}
                                 className="ml-1 text-amber-500 hover:text-amber-700"
@@ -372,9 +374,9 @@ const BinList = () => {
                     <div className="rounded-full bg-slate-100 p-3">
                         <Search className="h-6 w-6 text-slate-400" />
                     </div>
-                    <h3 className="mt-4 text-lg font-medium text-slate-700">Контейнеры не найдены</h3>
+                    <h3 className="mt-4 text-lg font-medium text-slate-700">{t('binList.notFoundTitle', 'Контейнеры не найдены')}</h3>
                     <p className="mt-1 text-sm text-slate-500">
-                        Попробуйте изменить параметры поиска или фильтры
+                        {t('binList.notFoundSubtitle', 'Попробуйте изменить параметры поиска или фильтры')}
                     </p>
                     <Button
                         variant="outline"
@@ -382,7 +384,7 @@ const BinList = () => {
                         onClick={handleFilterReset}
                     >
                         <X className="mr-2 h-4 w-4" />
-                        Сбросить фильтры
+                        {t('binList.resetFilters', 'Сбросить фильтры')}
                     </Button>
                 </div>
             ) : (

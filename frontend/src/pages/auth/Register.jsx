@@ -1,13 +1,14 @@
 // pages/auth/Register.jsx
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, UserPlus, AlertCircle, ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from '../../components/ui/Button';
-import Logo from '../../components/ui/Logo';
 
 const Register = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
     const { register } = useAuth();
 
     // Form state
@@ -53,14 +54,14 @@ const Register = () => {
 
         if (formData.username) {
             if (formData.username.length < 3 || formData.username.length > 30) {
-                usernameValidation.message = 'Имя пользователя должно быть от 3 до 30 символов';
+                usernameValidation.message = t('register.usernameLength');
             } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
-                usernameValidation.message = 'Имя может содержать только буквы, цифры, подчеркивания и дефисы';
+                usernameValidation.message = t('register.usernameChars');
             } else {
                 usernameValidation.isValid = true;
             }
         } else if (validation.username.touched) {
-            usernameValidation.message = 'Имя пользователя обязательно';
+            usernameValidation.message = t('register.usernameRequired');
         }
 
         // Email validation
@@ -73,12 +74,12 @@ const Register = () => {
         if (formData.email) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(formData.email)) {
-                emailValidation.message = 'Пожалуйста, введите корректный email';
+                emailValidation.message = t('register.emailInvalid');
             } else {
                 emailValidation.isValid = true;
             }
         } else if (validation.email.touched) {
-            emailValidation.message = 'Email обязателен';
+            emailValidation.message = t('register.emailRequired');
         }
 
         // Check password strength
@@ -106,14 +107,14 @@ const Register = () => {
 
         if (formData.password) {
             if (formData.password.length < 8) {
-                passwordValidation.message = 'Пароль должен быть не менее 8 символов';
+                passwordValidation.message = t('register.passwordMin');
             } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/.test(formData.password)) {
-                passwordValidation.message = 'Пароль должен содержать минимум одну заглавную букву, одну строчную букву, одну цифру и один специальный символ';
+                passwordValidation.message = t('register.passwordPolicy');
             } else {
                 passwordValidation.isValid = true;
             }
         } else if (validation.password.touched) {
-            passwordValidation.message = 'Пароль обязателен';
+            passwordValidation.message = t('register.passwordRequired');
         }
 
         // Password confirmation validation
@@ -125,12 +126,12 @@ const Register = () => {
 
         if (formData.passwordConfirm) {
             if (formData.password !== formData.passwordConfirm) {
-                passwordConfirmValidation.message = 'Пароли не совпадают';
+                passwordConfirmValidation.message = t('register.passwordMismatch');
             } else {
                 passwordConfirmValidation.isValid = true;
             }
         } else if (validation.passwordConfirm.touched) {
-            passwordConfirmValidation.message = 'Подтверждение пароля обязательно';
+            passwordConfirmValidation.message = t('register.passwordConfirmRequired');
         }
 
         setValidation({
@@ -200,13 +201,13 @@ const Register = () => {
             });
 
             if (!result.success) {
-                setError(result.error || 'Ошибка при регистрации');
+                setError(result.error || t('register.error'));
             } else {
                 // Success animation or redirect
                 navigate('/dashboard');
             }
         } catch (err) {
-            setError('Произошла ошибка при попытке регистрации');
+            setError(t('register.tryError'));
             console.error(err);
         } finally {
             setIsLoading(false);
@@ -226,14 +227,14 @@ const Register = () => {
             <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
                 <div className="border-b border-slate-100 p-6">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-semibold text-slate-800">Регистрация</h2>
+                        <h2 className="text-xl font-semibold text-slate-800">{t('register.title')}</h2>
                         <Link to="/login" className="flex items-center text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors">
                             <ArrowLeft className="mr-1 h-4 w-4" />
-                            Вернуться ко входу
+                            {t('register.backToLogin')}
                         </Link>
                     </div>
                     <p className="mt-1 text-sm text-slate-500">
-                        Заполните форму для создания аккаунта
+                        {t('register.subtitle')}
                     </p>
                 </div>
 
@@ -251,7 +252,7 @@ const Register = () => {
                         {/* Username */}
                         <div>
                             <label htmlFor="username" className="mb-1 block text-sm font-medium text-slate-700">
-                                Имя пользователя
+                                {t('register.username')}
                             </label>
                             <div className="relative">
                                 <input
@@ -317,7 +318,7 @@ const Register = () => {
                         {/* Password */}
                         <div>
                             <label htmlFor="password" className="mb-1 block text-sm font-medium text-slate-700">
-                                Пароль
+                                {t('register.password')}
                             </label>
                             <div className="relative">
                                 <input
@@ -399,7 +400,7 @@ const Register = () => {
                         {/* Confirm Password */}
                         <div>
                             <label htmlFor="passwordConfirm" className="mb-1 block text-sm font-medium text-slate-700">
-                                Подтвердите пароль
+                                {t('register.passwordConfirm')}
                             </label>
                             <div className="relative">
                                 <input
@@ -456,15 +457,15 @@ const Register = () => {
                             className="mt-6"
                         >
                             <UserPlus className="mr-2 h-4 w-4" />
-                            Зарегистрироваться
+                            {t('register.submit')}
                         </Button>
 
                         {/* Login link */}
                         <div className="mt-4 text-center">
                             <p className="text-sm text-slate-600">
-                                Уже есть аккаунт?{' '}
+                                {t('register.haveAccount')}{' '}
                                 <Link to="/login" className="font-medium text-teal-600 hover:text-teal-700 transition-colors">
-                                    Войти
+                                    {t('register.login')}
                                 </Link>
                             </p>
                         </div>

@@ -1,5 +1,6 @@
 // pages/auth/Login.jsx
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,6 +10,7 @@ import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 const Login = () => {
     const navigate = useNavigate();
+    const { t, i18n } = useTranslation();
     const { login, googleLogin } = useAuth();
 
     // Form state
@@ -37,9 +39,9 @@ const Login = () => {
     useEffect(() => {
         if (!googleClientId) {
             console.error('Google Client ID is not configured');
-            setError('Google authentication is not properly configured');
+            setError(t('login.googleNotConfigured'));
         }
-    }, [googleClientId]);
+    }, [googleClientId, t]);
 
     // Validate form data
     useEffect(() => {
@@ -52,7 +54,7 @@ const Login = () => {
                 newValidation.email = {
                     ...newValidation.email,
                     isValid: false,
-                    message: 'Пожалуйста, введите корректный email'
+                    message: t('login.emailInvalid')
                 };
             } else {
                 newValidation.email = {
@@ -65,7 +67,7 @@ const Login = () => {
             newValidation.email = {
                 ...newValidation.email,
                 isValid: false,
-                message: 'Email обязателен'
+                message: t('login.emailRequired')
             };
         }
 
@@ -75,7 +77,7 @@ const Login = () => {
                 newValidation.password = {
                     ...newValidation.password,
                     isValid: false,
-                    message: 'Пароль должен содержать минимум 6 символов'
+                    message: t('login.passwordMin')
                 };
             } else {
                 newValidation.password = {
@@ -88,7 +90,7 @@ const Login = () => {
             newValidation.password = {
                 ...newValidation.password,
                 isValid: false,
-                message: 'Пароль обязателен'
+                message: t('login.passwordRequired')
             };
         }
 
@@ -206,9 +208,9 @@ const Login = () => {
             <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
                 {/* Header - Compact padding */}
                 <div className="border-b border-slate-100 px-6 py-3">
-                    <h2 className="text-xl font-semibold text-slate-800">Вход в систему</h2>
+                    <h2 className="text-xl font-semibold text-slate-800">{t('login.title')}</h2>
                     <p className="text-sm text-slate-500">
-                        Введите свои учетные данные для доступа
+                        {t('login.subtitle')}
                     </p>
                 </div>
 
@@ -260,7 +262,7 @@ const Login = () => {
                         {/* Password */}
                         <div>
                             <label htmlFor="password" className="mb-1 block text-sm font-medium text-slate-700">
-                                Пароль
+                                {t('login.password')}
                             </label>
                             <div className="relative">
                                 <input
@@ -273,7 +275,7 @@ const Login = () => {
                                     onChange={handleChange}
                                     onBlur={handleBlur}
                                     className={`block w-full rounded-lg border px-3 py-2 text-slate-700 focus:ring-teal-500 pr-10 transition-all duration-200 ${getInputStatusClass('password')}`}
-                                    placeholder="Введите пароль"
+                                    placeholder={t('login.passwordPlaceholder')}
                                 />
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
                                     {validation.password.touched && (
@@ -311,14 +313,14 @@ const Login = () => {
                                     className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                                 />
                                 <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-600">
-                                    Запомнить меня
+                                    {t('login.rememberMe')}
                                 </label>
                             </div>
                             <Link
                                 to="/forgot-password"
                                 className="text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors"
                             >
-                                Забыли пароль?
+                                {t('login.forgotPassword')}
                             </Link>
                         </div>
 
@@ -332,7 +334,7 @@ const Login = () => {
                             className="!mt-3"
                         >
                             <LogIn className="mr-2 h-4 w-4" />
-                            Войти
+                            {t('login.submit')}
                         </Button>
 
                         {/* Google Sign-In */}
@@ -344,7 +346,7 @@ const Login = () => {
                                         <div className="w-full border-t border-slate-200"></div>
                                     </div>
                                     <div className="relative flex justify-center text-sm">
-                                        <span className="bg-white px-2 text-slate-500">или продолжить с</span>
+                                        <span className="bg-white px-2 text-slate-500">{t('login.orContinueWith')}</span>
                                     </div>
                                 </div>
 
@@ -358,7 +360,7 @@ const Login = () => {
                                                 text="signin_with"
                                                 shape="rectangular"
                                                 width="100%"
-                                                locale="ru"
+                                                locale={i18n.language?.startsWith('ru') ? 'ru' : 'en'}
                                                 theme="outline"
                                                 logo_alignment="center"
                                                 disabled={isGoogleLoading}
@@ -372,12 +374,12 @@ const Login = () => {
                         {/* Register link - Compact margin */}
                         <div className="mt-3 text-center">
                             <p className="text-sm text-slate-600">
-                                Еще нет аккаунта?{' '}
+                                {t('login.noAccount')}{' '}
                                 <Link
                                     to="/register"
                                     className="font-medium text-teal-600 hover:text-teal-700 transition-colors"
                                 >
-                                    Зарегистрироваться
+                                    {t('login.register')}
                                 </Link>
                             </p>
                         </div>

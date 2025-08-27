@@ -1,4 +1,5 @@
 import React, { Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -35,26 +36,26 @@ const NotFound = React.lazy(() => import('./pages/NotFound'));
 const DeviceTracking = React.lazy(() => import('./pages/DeviceTracking'));
 
 // Enhanced Loading component with better UX
-const LoadingScreen = () => (
-    <div className="flex h-screen w-full items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center space-y-4">
-            {/* Enhanced spinner with pulsing effect */}
-            <div className="relative">
-                <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-teal-500"></div>
-                <div className="absolute inset-0 h-12 w-12 animate-pulse rounded-full border-4 border-teal-100"></div>
-            </div>
-            <div className="text-center">
-                <p className="text-lg font-medium text-slate-700">Загрузка...</p>
-                <p className="text-sm text-slate-500">Подготовка панели мониторинга</p>
-            </div>
-
-            {/* Loading progress simulation */}
-            <div className="w-48 bg-slate-200 rounded-full h-1.5">
-                <div className="bg-teal-500 h-1.5 rounded-full animate-pulse" style={{ width: '70%' }}></div>
+const LoadingScreen = () => {
+    const { t } = useTranslation();
+    return (
+        <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+            <div className="flex flex-col items-center space-y-4">
+                <div className="relative">
+                    <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-teal-500"></div>
+                    <div className="absolute inset-0 h-12 w-12 animate-pulse rounded-full border-4 border-teal-100"></div>
+                </div>
+                <div className="text-center">
+                    <p className="text-lg font-medium text-slate-700">{t('loading.title')}</p>
+                    <p className="text-sm text-slate-500">{t('loading.subtitle')}</p>
+                </div>
+                <div className="w-48 bg-slate-200 rounded-full h-1.5">
+                    <div className="bg-teal-500 h-1.5 rounded-full animate-pulse" style={{ width: '70%' }}></div>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {

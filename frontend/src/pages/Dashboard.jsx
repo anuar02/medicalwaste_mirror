@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
@@ -315,6 +316,7 @@ const AnalyticsSummary = React.memo(({ analytics, isLoading }) => {
 const Dashboard = () => {
     // ===== STATE MANAGEMENT =====
     const [showTelegramModal, setShowTelegramModal] = useState(false);
+    const { t } = useTranslation();
     const [refreshing, setRefreshing] = useState(false);
     const [selectedTimeframe, setSelectedTimeframe] = useState('month');
     const [lastAlertCount, setLastAlertCount] = useLocalStorage('lastAlertCount', 0);
@@ -692,10 +694,10 @@ const Dashboard = () => {
                 <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
                     <AlertTriangle className="h-16 w-16 text-red-500 mb-4" />
                     <h2 className="text-xl font-semibold text-slate-800 mb-2">
-                        Ошибка загрузки данных
+                        {t('dashboard.errorTitle', 'Ошибка загрузки данных')}
                     </h2>
                     <p className="text-slate-600 mb-6">
-                        Не удалось загрузить данные панели мониторинга
+                        {t('dashboard.errorSubtitle', 'Не удалось загрузить данные панели мониторинга')}
                     </p>
                     <button
                         onClick={handleRefresh}
@@ -703,7 +705,7 @@ const Dashboard = () => {
                         className="flex items-center px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
                     >
                         <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                        Попробовать снова
+                        {t('dashboard.retry', 'Попробовать снова')}
                     </button>
                 </div>
             </div>
@@ -730,23 +732,23 @@ const Dashboard = () => {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between">
                 <div className="flex-1">
                     <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">
-                        Панель Мониторинга
+                        {t('dashboard.title', 'Панель Мониторинга')}
                     </h1>
                     <div className="mt-1 flex items-center space-x-4 flex-wrap">
                         <p className="text-sm text-slate-500">
-                            Система управления медицинскими отходами с ИИ-аналитикой
+                            {t('dashboard.subtitle', 'Система управления медицинскими отходами с ИИ-аналитикой')}
                         </p>
                         <div className="flex items-center space-x-2">
                             <div className={`h-2 w-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
-                            <span className="text-xs text-slate-500">{isOnline ? 'Онлайн' : 'Офлайн'}</span>
+                            <span className="text-xs text-slate-500">{isOnline ? t('dashboard.online', 'Онлайн') : t('dashboard.offline', 'Офлайн')}</span>
                             {isAutoRefreshing && (
                                 <>
                                     <div className="h-1 w-1 rounded-full bg-blue-500 animate-pulse" />
-                                    <span className="text-xs text-blue-600">Авто-обновление</span>
+                                    <span className="text-xs text-blue-600">{t('dashboard.autoRefresh', 'Авто-обновление')}</span>
                                 </>
                             )}
                             {statsStale && (
-                                <span className="text-xs text-amber-600">Данные устарели</span>
+                                <span className="text-xs text-amber-600">{t('dashboard.staleData', 'Данные устарели')}</span>
                             )}
                         </div>
                     </div>
@@ -759,10 +761,10 @@ const Dashboard = () => {
                         onChange={(e) => setSelectedTimeframe(e.target.value)}
                         className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                     >
-                        <option value="day">День</option>
-                        <option value="week">Неделя</option>
-                        <option value="month">Месяц</option>
-                        <option value="year">Год</option>
+                        <option value="day">{t('dashboard.day', 'День')}</option>
+                        <option value="week">{t('dashboard.week', 'Неделя')}</option>
+                        <option value="month">{t('dashboard.month', 'Месяц')}</option>
+                        <option value="year">{t('dashboard.year', 'Год')}</option>
                     </select>
 
                     {/* Quick Actions */}
@@ -770,7 +772,7 @@ const Dashboard = () => {
                         <button
                             onClick={() => handleExportData('csv')}
                             className="flex items-center px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-                            title="Экспорт данных"
+                            title={t('dashboard.exportData', 'Экспорт данных')}
                         >
                             <Download className="h-4 w-4" />
                         </button>
@@ -781,7 +783,7 @@ const Dashboard = () => {
                             className="flex items-center px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
                         >
                             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                            Обновить
+                            {t('dashboard.refresh', 'Обновить')}
                         </button>
 
                         <button
@@ -789,7 +791,7 @@ const Dashboard = () => {
                             className="flex items-center px-3 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
                         >
                             <Bell className="h-4 w-4 mr-2" />
-                            Уведомления
+                            {t('dashboard.notifications', 'Уведомления')}
                         </button>
                     </div>
                 </div>
@@ -798,44 +800,44 @@ const Dashboard = () => {
             {/* Enhanced Stats Overview */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
-                    title="Всего Контейнеров"
+                    title={t('dashboard.totalBins', 'Всего Контейнеров')}
                     value={stats.totalBins || 0}
                     icon={<Trash2 className="h-5 w-5" />}
                     color="blue"
                     trend={0}
-                    subtitle="Активных в системе"
+                    subtitle={t('dashboard.activeInSystem', 'Активных в системе')}
                     onClick={() => window.location.href = '/bins'}
                 />
                 <MetricCard
-                    title="Средняя Заполненность"
+                    title={t('dashboard.avgFullness', 'Средняя Заполненность')}
                     value={formatPercentage(stats.avgFullness || 0)}
                     icon={<AreaChart className="h-5 w-5" />}
                     color="teal"
                     trend={predictiveInsights.avgFullnessTrend}
-                    subtitle={`За ${
-                        selectedTimeframe === 'day' ? 'день' :
-                            selectedTimeframe === 'week' ? 'неделю' :
-                                selectedTimeframe === 'month' ? 'месяц' : 'год'
+                    subtitle={`${t('dashboard.forLabel', 'За')} ${
+                        selectedTimeframe === 'day' ? t('dashboard.day', 'День') :
+                            selectedTimeframe === 'week' ? t('dashboard.week', 'Неделя') :
+                                selectedTimeframe === 'month' ? t('dashboard.month', 'Месяц') : t('dashboard.year', 'Год')
                     }`}
                     onClick={() => window.location.href = '/analytics'}
                 />
                 <MetricCard
-                    title="Требуют Внимания"
+                    title={t('dashboard.needsAttention', 'Требуют Внимания')}
                     value={alertCount || 0}
                     icon={<AlertTriangle className="h-5 w-5" />}
                     color={alertCount > 5 ? "red" : "amber"}
                     trend={alertCount > 5 ? 8.2 : -3.1}
-                    subtitle="Превышен порог"
-                    prediction={`${predictiveInsights.predictedOverflows} переполнений в ближайшие 24ч`}
+                    subtitle={t('dashboard.thresholdExceeded', 'Превышен порог')}
+                    prediction={`${predictiveInsights.predictedOverflows} ${t('dashboard.overflowsNext24h', 'переполнений в ближайшие 24ч')}`}
                     onClick={() => window.location.href = '/bins?filter=alert'}
                 />
                 <MetricCard
-                    title="Эффективность ИИ"
+                    title={t('dashboard.aiEfficiency', 'Эффективность ИИ')}
                     value={`${Math.round(predictiveInsights.efficiencyScore * 100)}%`}
                     icon={<Brain className="h-5 w-5" />}
                     color="purple"
                     trend={5.2}
-                    subtitle="Точность прогнозов"
+                    subtitle={t('dashboard.predictionAccuracy', 'Точность прогнозов')}
                     isLoading={analyticsLoading || metricsLoading}
                     onClick={() => window.location.href = '/predictions'}
                 />
@@ -844,19 +846,19 @@ const Dashboard = () => {
             {/* Analytics Summary */}
             {analytics && Object.keys(analytics).length > 0 && (
                 <DashboardCard
-                    title="Аналитические Показатели"
+                    title={t('dashboard.analyticsMetrics', 'Аналитические Показатели')}
                     icon={<PieChart />}
                     action={
                         <div className="flex items-center space-x-2">
                             <button
                                 onClick={() => handleExportData('xlsx')}
                                 className="text-slate-400 hover:text-slate-600 transition-colors"
-                                title="Экспорт аналитики"
+                                title={t('dashboard.exportAnalytics', 'Экспорт аналитики')}
                             >
                                 <Download className="h-4 w-4" />
                             </button>
                             <Link to="/analytics" className="text-teal-600 hover:text-teal-700">
-                                Подробная аналитика
+                                {t('dashboard.moreAnalytics', 'Подробная аналитика')}
                             </Link>
                         </div>
                     }
@@ -871,19 +873,19 @@ const Dashboard = () => {
                 <div className="lg:col-span-2 space-y-6">
                     {/* Department Chart */}
                     <DashboardCard
-                        title="Заполненность по Отделениям"
+                        title={t('dashboard.byDepartment', 'Заполненность по Отделениям')}
                         icon={<BarChart3 />}
                         action={
                             <div className="flex items-center space-x-2">
                                 <button
                                     onClick={() => setPreferences(prev => ({ ...prev, compactView: !prev.compactView }))}
                                     className="text-slate-400 hover:text-slate-600 transition-colors"
-                                    title={preferences.compactView ? "Развернуть" : "Свернуть"}
+                                    title={preferences.compactView ? t('dashboard.expand', 'Развернуть') : t('dashboard.collapse', 'Свернуть')}
                                 >
                                     {preferences.compactView ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
                                 </button>
                                 <Link to="/departments" className="text-teal-600 hover:text-teal-700">
-                                    Подробнее
+                                    {t('dashboard.details', 'Подробнее')}
                                 </Link>
                             </div>
                         }
@@ -906,7 +908,7 @@ const Dashboard = () => {
                                 <div className="flex items-center justify-center h-full text-slate-500">
                                     <div className="text-center">
                                         <BarChart3 className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                                        <p>Нет данных по отделениям</p>
+                                        <p>{t('dashboard.noDepartmentData', 'Нет данных по отделениям')}</p>
                                     </div>
                                 </div>
                             )}
@@ -916,17 +918,17 @@ const Dashboard = () => {
                     {/* AI Predictions Panel */}
                     {preferences.showPredictions && (
                         <DashboardCard
-                            title="ИИ Прогнозы Обслуживания"
+                            title={t('dashboard.aiMaintenancePredictions', 'ИИ Прогнозы Обслуживания')}
                             icon={<Brain />}
                             action={
                                 <div className="flex items-center space-x-2">
                                     <span className={`h-2 w-2 rounded-full ${predictionsLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
                                     <span className="text-xs text-slate-500">
-                                        {predictionsLoading ? 'Анализ...' : 'Готово'}
+                                        {predictionsLoading ? t('dashboard.analyzing', 'Анализ...') : t('dashboard.ready', 'Готово')}
                                     </span>
                                     {topPredictions.length > 0 && (
                                         <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
-                                            {topPredictions.length} прогнозов
+                                            {topPredictions.length} {t('dashboard.predictionsLabel', 'прогнозов')}
                                         </span>
                                     )}
                                 </div>
@@ -936,19 +938,19 @@ const Dashboard = () => {
                                 <div className="flex items-center justify-center py-12">
                                     <div className="text-center">
                                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
-                                        <p className="text-sm text-slate-500">ИИ анализирует данные...</p>
+                                        <p className="text-sm text-slate-500">{t('dashboard.aiAnalyzing', 'ИИ анализирует данные...')}</p>
                                     </div>
                                 </div>
                             ) : predictionsError ? (
                                 <div className="flex items-center justify-center py-12 text-center">
                                     <div>
                                         <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
-                                        <p className="text-sm text-slate-600">Ошибка загрузки прогнозов</p>
+                                        <p className="text-sm text-slate-600">{t('dashboard.predictionsError', 'Ошибка загрузки прогнозов')}</p>
                                         <button
                                             onClick={() => queryClient.invalidateQueries(['maintenancePredictions'])}
                                             className="text-xs text-teal-600 hover:text-teal-700 mt-1"
                                         >
-                                            Попробовать снова
+                                            {t('dashboard.retry', 'Попробовать снова')}
                                         </button>
                                     </div>
                                 </div>
@@ -958,7 +960,7 @@ const Dashboard = () => {
                                         <div className="flex items-center space-x-2">
                                             <Zap className="h-4 w-4 text-purple-600" />
                                             <span className="text-sm font-medium text-purple-800">
-                                                Найдено {topPredictions.length} прогнозов для оптимизации
+                                                {t('dashboard.foundPredictions', { count: topPredictions.length, defaultValue: `Найдено ${topPredictions.length} прогнозов для оптимизации` })}
                                             </span>
                                         </div>
                                     </div>
@@ -980,7 +982,7 @@ const Dashboard = () => {
                                             className="flex items-center justify-center w-full py-2 text-sm text-purple-600 hover:text-purple-700 font-medium transition-colors"
                                         >
                                             <Eye className="h-4 w-4 mr-2" />
-                                            Просмотреть все прогнозы
+                                            {t('dashboard.viewAllPredictions', 'Просмотреть все прогнозы')}
                                         </Link>
                                     </div>
                                 </div>
@@ -988,10 +990,10 @@ const Dashboard = () => {
                                 <div className="flex flex-col items-center justify-center py-12 text-center">
                                     <Brain className="h-12 w-12 text-slate-400 mb-3" />
                                     <h3 className="text-sm font-semibold text-slate-800">
-                                        Нет активных прогнозов
+                                        {t('dashboard.noActivePredictions', 'Нет активных прогнозов')}
                                     </h3>
                                     <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                                        ИИ не обнаружил контейнеров, требующих внимания в ближайшее время
+                                        {t('dashboard.noBinsNeedAttention', 'ИИ не обнаружил контейнеров, требующих внимания в ближайшее время')}
                                     </p>
                                 </div>
                             )}
@@ -1000,13 +1002,13 @@ const Dashboard = () => {
 
                     {/* Waste Type Distribution */}
                     <DashboardCard
-                        title="Распределение по Типам Отходов"
+                        title={t('dashboard.byWasteTypes', 'Распределение по Типам Отходов')}
                         icon={<Trash2 />}
                         action={
                             <button
                                 onClick={() => handleExportData('pdf')}
                                 className="text-slate-400 hover:text-slate-600 transition-colors"
-                                title="Экспорт отчета"
+                                title={t('dashboard.exportReport', 'Экспорт отчета')}
                             >
                                 <Download className="h-4 w-4" />
                             </button>
@@ -1026,7 +1028,7 @@ const Dashboard = () => {
                                 ) : (
                                     <div className="text-center text-slate-500">
                                         <Trash2 className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                                        <p>Нет данных по типам отходов</p>
+                                        <p>{t('dashboard.noWasteTypeData', 'Нет данных по типам отходов')}</p>
                                     </div>
                                 )}
                             </div>
@@ -1048,10 +1050,10 @@ const Dashboard = () => {
                                         </div>
                                         <div className="text-right shrink-0">
                                             <div className="text-sm font-semibold text-slate-800">
-                                                {stat.binCount} контейнеров
+                                                {stat.binCount} {t('dashboard.binsLabelGenitive', 'контейнеров')}
                                             </div>
                                             <div className="text-xs text-slate-500">
-                                                {formatPercentage(stat.avgFullness)} заполнено
+                                                {formatPercentage(stat.avgFullness)} {t('dashboard.filled', 'заполнено')}
                                             </div>
                                         </div>
                                     </div>
@@ -1069,7 +1071,7 @@ const Dashboard = () => {
                 <div className="space-y-6">
                     {/* Attention Required */}
                     <DashboardCard
-                        title="Требуют Внимания"
+                        title={t('dashboard.needsAttention', 'Требуют Внимания')}
                         icon={<AlertTriangle />}
                         action={
                             <div className="flex items-center space-x-2">
@@ -1082,7 +1084,7 @@ const Dashboard = () => {
                                     to="/bins?filter=alert"
                                     className="flex items-center text-xs font-medium text-teal-600 hover:text-teal-700"
                                 >
-                                    Просмотреть все
+                                    {t('dashboard.viewAll', 'Просмотреть все')}
                                     <ArrowUpRight className="ml-1 h-3 w-3" />
                                 </Link>
                             </div>
@@ -1115,10 +1117,10 @@ const Dashboard = () => {
                                 <div className="flex flex-col items-center justify-center py-8 text-center">
                                     <CheckCircle className="mb-3 h-10 w-10 text-emerald-500" />
                                     <h3 className="text-sm font-semibold text-slate-800">
-                                        Все контейнеры в норме
+                                        {t('dashboard.allGood', 'Все контейнеры в норме')}
                                     </h3>
                                     <p className="mt-1 text-xs text-slate-500">
-                                        Нет контейнеров, требующих внимания
+                                        {t('dashboard.noBinsNeedAttention', 'Нет контейнеров, требующих внимания')}
                                     </p>
                                 </div>
                             )}
@@ -1126,7 +1128,7 @@ const Dashboard = () => {
                     </DashboardCard>
 
                     {/* System Metrics */}
-                    <DashboardCard title="Метрики Системы" icon={<Activity />}>
+                    <DashboardCard title={t('dashboard.systemMetrics', 'Метрики Системы')} icon={<Activity />}>
                         <div className="space-y-3">
                             {[
                                 {
@@ -1185,39 +1187,39 @@ const Dashboard = () => {
                     </DashboardCard>
 
                     {/* Enhanced Quick Actions */}
-                    <DashboardCard title="Быстрые Действия" icon={<ArrowUpRight />}>
+                    <DashboardCard title={t('dashboard.quickActions', 'Быстрые Действия')} icon={<ArrowUpRight />}>
                         <div className="grid grid-cols-2 gap-3">
                             {[
                                 {
                                     to: '/bins',
                                     icon: Trash2,
-                                    label: 'Контейнеры',
+                                    label: t('dashboard.bins', 'Контейнеры'),
                                     badge: alertCount > 0 ? alertCount : null,
                                     badgeColor: 'bg-red-500'
                                 },
-                                { to: '/map', icon: MapPin, label: 'Карта' },
+                                { to: '/map', icon: MapPin, label: t('dashboard.map', 'Карта') },
                                 {
                                     to: '/analytics',
                                     icon: BarChart3,
-                                    label: 'Аналитика',
+                                    label: t('dashboard.analytics', 'Аналитика'),
                                     new: true
                                 },
                                 {
                                     to: '/predictions',
                                     icon: Brain,
-                                    label: 'ИИ Прогнозы',
+                                    label: t('dashboard.aiPredictions', 'ИИ Прогнозы'),
                                     new: true,
                                     badge: topPredictions.length > 0 ? topPredictions.length : null,
                                     badgeColor: 'bg-purple-500'
                                 },
-                                { to: '/reports', icon: Activity, label: 'Отчеты' },
-                                { to: '/settings', icon: Settings, label: 'Настройки' },
+                                { to: '/reports', icon: Activity, label: t('dashboard.reports', 'Отчеты') },
+                                { to: '/settings', icon: Settings, label: t('dashboard.settings', 'Настройки') },
                                 {
                                     onClick: () => setShowTelegramModal(true),
                                     icon: Bell,
                                     label: 'Telegram'
                                 },
-                                { to: '/collections', icon: Calendar, label: 'Сборы' }
+                                { to: '/collections', icon: Calendar, label: t('dashboard.collections', 'Сборы') }
                             ].map((action, index) => (
                                 <div key={action.label} className="relative hover:scale-105 transition-transform duration-200">
                                     {action.to ? (
