@@ -1,16 +1,22 @@
-#!/bin/sh
-set -e
+  #!/bin/sh
+  set -e
 
-echo "Environment variables:"
-echo "FRONTEND_HOST: ${FRONTEND_HOST}"
-echo "BACKEND_HOST: ${BACKEND_HOST}"
+  # Debug - print environment variables
+  echo "Environment variables:"
+  echo "FRONTEND_HOST: ${FRONTEND_HOST}"
+  echo "BACKEND_HOST: ${BACKEND_HOST}"
+  echo "SERVER_NAME: ${SERVER_NAME}"
 
-envsubst '${FRONTEND_HOST} ${BACKEND_HOST}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
+  # Replace environment variables in the config
+  envsubst '${FRONTEND_HOST} ${BACKEND_HOST} ${SERVER_NAME}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
 
-echo "Generated Nginx config:"
-cat /etc/nginx/conf.d/default.conf
+  # Debug - print the generated config
+  echo "Generated Nginx config:"
+  cat /etc/nginx/conf.d/default.conf
 
-echo "Testing Nginx configuration..."
-nginx -t
+  # Test nginx configuration
+  echo "Testing Nginx configuration..."
+  nginx -t
 
-exec "$@"
+  # Start nginx
+  exec "$@"

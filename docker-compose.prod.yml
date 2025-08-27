@@ -63,6 +63,9 @@ services:
         max_attempts: 5
     ports:
       - "80:8080"
+      - "443:8443"  # Add HTTPS port
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro  # Mount SSL certificates
     networks:
       - myapp_app-network
     environment:
