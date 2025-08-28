@@ -41,9 +41,6 @@ const BinDetails = () => {
     const queryClient = useQueryClient();
     const debug = useApiDebug();
 
-    const containerHeight = useMemo(() => Number(bin?.containerHeight) || 50, [bin]);
-    const distance = useMemo(() => Number(bin?.distance) || 0, [bin]);
-
     // State for modals and UI
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -157,6 +154,9 @@ const BinDetails = () => {
         }
         return extracted;
     }, [binResponse, debug]);
+
+    const containerHeight = useMemo(() => Number(bin?.containerHeight) || 50, [bin]);
+    const distance = useMemo(() => Number(bin?.distance) || 0, [bin]);
 
     const processedHistory = useMemo(() => {
         const rawHistory = extractHistoryData(historyResponse);
