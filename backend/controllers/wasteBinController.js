@@ -552,45 +552,80 @@ const createBin = asyncHandler(async (req, res, next) => {
  * Update a waste bin
  */
 const updateBin = asyncHandler(async (req, res, next) => {
-    const {
-        department,
-        wasteType,
-        status,
-        alertThreshold,
-        capacity,
-        latitude,
-        longitude,
-        floor,
-        room
-    } = req.body;
+    const { id } = req.params;
+    const updateData = req.body;
 
-    // Find bin
-    const bin = await WasteBin.findOne({ binId: req.params.id });
+    // Find the bin first
+    let bin = await WasteBin.findOne({ binId: id });
+
     if (!bin) {
         return next(new AppError('No waste bin found with that ID', 404));
     }
 
-    // Update fields if provided
-    if (department) bin.department = department;
-    if (wasteType) bin.wasteType = wasteType;
-    if (status) bin.status = status;
-    if (alertThreshold) bin.alertThreshold = alertThreshold;
-    if (capacity) bin.capacity = capacity;
+    // List of allowed fields to update
+    const allowedFields = [
+        'department',
+        'wasteType',
+        'status',
+        'alertThreshold',
+        'capacity',
+        'containerHeight' // Make sure this is included
+    ];
 
-    // Update location if coordinates provided
-    if (latitude || longitude || floor || room) {
-        if (latitude) bin.location.coordinates[1] = latitude;
-        if (longitude) bin.location.coordinates[0] = longitude;
-        if (floor) bin.location.floor = floor;
-        if (room) bin.location.room = room;
+    // Filter update data to only include allowed fields
+    const filteredData = {};
+    allowedFields.forEach(field => {
+        if (updateData[field] !== undefined) {
+            filteredData[field] = updateData[field];
+        }
+    });
+
+    // Validate containerHeight if provided
+    if (filteredData.containerHeight !== undefined) {
+        const height = parseInt(filteredData.containerHeight);
+        if (isNaN(height) || height < 10 || height > 200) {
+            return next(new AppError('Container height must be between 10 and 200 cm', 400));
+        }
+        filteredData.containerHeight = height;
     }
 
-    // Save bin
-    await bin.save();
+    // Validate alertThreshold if provided
+    if (filteredData.alertThreshold !== undefined) {
+        const threshold = parseInt(filteredData.alertThreshold);
+        if (isNaN(threshold) || threshold < 50 || threshold > 95) {
+            return next(new AppError('Alert threshold must be between 50 and 95 percent', 400));
+        }
+        filteredData.alertThreshold = threshold;
+    }
+
+    // Update the bin
+    const updatedBin = await WasteBin.findOneAndUpdate(
+        { binId: id },
+        {
+            ...filteredData,
+            lastUpdate: new Date()
+        },
+        {
+            new: true,           // Return updated document
+            runValidators: true  // Run schema validators
+        }
+    );
+
+    // Convert to JSON to ensure virtual fields are included
+    const binData = updatedBin.toJSON();
+
+    // Log the update for debugging
+    console.log('Bin update:', {
+        binId: binData.binId,
+        updatedFields: Object.keys(filteredData),
+        containerHeight: binData.containerHeight,
+        distance: binData.distance,
+        calculatedFullness: binData.fullness
+    });
 
     res.status(200).json({
         status: 'success',
-        data: { bin }
+        data: { bin: binData }
     });
 });
 
