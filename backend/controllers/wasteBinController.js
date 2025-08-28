@@ -562,6 +562,10 @@ const updateBin = asyncHandler(async (req, res, next) => {
         return next(new AppError('No waste bin found with that ID', 404));
     }
 
+    // Check if containerHeight is being updated
+    const isContainerHeightChanging = updateData.containerHeight !== undefined &&
+        updateData.containerHeight !== bin.containerHeight;
+
     // List of allowed fields to update
     const allowedFields = [
         'department',
@@ -569,7 +573,7 @@ const updateBin = asyncHandler(async (req, res, next) => {
         'status',
         'alertThreshold',
         'capacity',
-        'containerHeight' // Make sure this is included
+        'containerHeight'
     ];
 
     // Filter update data to only include allowed fields
@@ -610,6 +614,43 @@ const updateBin = asyncHandler(async (req, res, next) => {
             runValidators: true  // Run schema validators
         }
     );
+
+    // If containerHeight changed, optionally update recent history records
+    if (isContainerHeightChanging) {
+        try {
+            // Update recent history records (last 24 hours) with new container height
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+            const recentHistory = await History.find({
+                binId: id,
+                timestamp: { $gte: oneDayAgo }
+            });
+
+            if (recentHistory.length > 0) {
+                const bulkUpdates = recentHistory.map(record => {
+                    const newFullness = Math.max(0, Math.min(100,
+                        Math.round(((updatedBin.containerHeight - record.distance) / updatedBin.containerHeight) * 100)
+                    ));
+
+                    return {
+                        updateOne: {
+                            filter: { _id: record._id },
+                            update: {
+                                containerHeight: updatedBin.containerHeight,
+                                fullness: newFullness
+                            }
+                        }
+                    };
+                });
+
+                await History.bulkWrite(bulkUpdates);
+                console.log(`Updated ${bulkUpdates.length} recent history records for bin ${id}`);
+            }
+        } catch (historyUpdateError) {
+            console.error('Failed to update history records:', historyUpdateError);
+            // Don't fail the main operation
+        }
+    }
 
     // Convert to JSON to ensure virtual fields are included
     const binData = updatedBin.toJSON();
@@ -652,242 +693,155 @@ const deleteBin = asyncHandler(async (req, res, next) => {
  * Get history for a specific bin
  */
 const getBinHistory = asyncHandler(async (req, res, next) => {
-    // Check if bin exists
-    const bin = await WasteBin.findOne({ binId: req.params.id });
+    const { id } = req.params;
+    const {
+        period = '24h',
+        interval = '1h',
+        page = 1,
+        limit = 100,
+        aggregation = 'avg'
+    } = req.query;
+
+    // Validate bin exists
+    const bin = await WasteBin.findOne({ binId: id });
     if (!bin) {
-        return next(new AppError('No waste bin found with that ID', 404));
+        return next(new AppError('Waste bin not found', 404));
     }
 
-    // Get parameters from query or use defaults
-    const { period = '24h', interval = '1h', limit = 100 } = req.query;
+    let startDate = new Date();
+    let timeFrame = 'hour';
 
     // Calculate date range based on period
-    const endDate = new Date();
-    const startDate = new Date(endDate); // Copy endDate first
-
     switch (period) {
         case '1h':
-            startDate.setTime(startDate.getTime() - (1 * 60 * 60 * 1000)); // 1 hour in milliseconds
+            startDate = new Date(Date.now() - 60 * 60 * 1000);
+            timeFrame = 'hour';
             break;
         case '6h':
-            startDate.setTime(startDate.getTime() - (6 * 60 * 60 * 1000)); // 6 hours in milliseconds
+            startDate = new Date(Date.now() - 6 * 60 * 60 * 1000);
+            timeFrame = 'hour';
             break;
         case '24h':
-            startDate.setTime(startDate.getTime() - (24 * 60 * 60 * 1000)); // 24 hours in milliseconds
+            startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            timeFrame = 'hour';
             break;
         case '7d':
-            startDate.setTime(startDate.getTime() - (7 * 24 * 60 * 60 * 1000)); // 7 days in milliseconds
+            startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            timeFrame = 'day';
             break;
         case '30d':
-            startDate.setTime(startDate.getTime() - (30 * 24 * 60 * 60 * 1000)); // 30 days in milliseconds
+            startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            timeFrame = 'day';
             break;
         default:
-            startDate.setTime(startDate.getTime() - (24 * 60 * 60 * 1000)); // 24 hours default
+            startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            timeFrame = 'hour';
     }
 
-    console.log(`Getting history for period: ${period}, interval: ${interval}`);
-    console.log(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
-
     try {
-        const allHistory = await History.find({
-            binId: req.params.id,
-            timestamp: {  // ← Use 'timestamp' instead
-                $gte: startDate,
-                $lte: endDate
-            }
-        })
-            .sort({ timestamp: -1 });
+        let historyData;
 
-        console.log(`Found ${allHistory.length} total records in range`);
+        if (aggregation === 'raw') {
+            // Get raw history data
+            historyData = await History.find({
+                binId: id,
+                timestamp: { $gte: startDate }
+            })
+                .sort({ timestamp: 1 })
+                .limit(parseInt(limit))
+                .select('distance containerHeight fullness weight temperature timestamp');
+        } else {
+            // Get aggregated data
+            historyData = await History.getAggregatedHistory(id, timeFrame);
 
-        // If we have no data, return empty
-        if (allHistory.length === 0) {
-            return res.status(200).json({
-                status: 'success',
-                results: 0,
-                data: {
-                    history: [],
-                    period,
-                    interval,
-                    message: 'No data found in the specified time range'
-                }
-            });
+            // Filter by date range
+            historyData = historyData.filter(item =>
+                item.firstTimestamp >= startDate
+            );
         }
-
-        // For short periods, return raw data
-        if (period === '1h' || period === '6h') {
-            const history = allHistory.slice(0, parseInt(limit));
-
-            return res.status(200).json({
-                status: 'success',
-                results: history.length,
-                data: {
-                    history,
-                    period,
-                    interval,
-                    aggregated: false
-                }
-            });
-        }
-
-        // For longer periods, sample the data to get representative points
-        let sampledHistory = [];
-
-        if (period === '24h') {
-            // Take every hour (roughly)
-            const step = Math.max(1, Math.floor(allHistory.length / 24));
-            for (let i = 0; i < allHistory.length && sampledHistory.length < 24; i += step) {
-                sampledHistory.push(allHistory[i]);
-            }
-        } else if (period === '7d') {
-            // Take every 6 hours (roughly) - aim for ~28 points
-            const step = Math.max(1, Math.floor(allHistory.length / 28));
-            for (let i = 0; i < allHistory.length && sampledHistory.length < 28; i += step) {
-                sampledHistory.push(allHistory[i]);
-            }
-        } else if (period === '30d') {
-            // Take daily samples - aim for ~30 points
-            const step = Math.max(1, Math.floor(allHistory.length / 30));
-            for (let i = 0; i < allHistory.length && sampledHistory.length < 30; i += step) {
-                sampledHistory.push(allHistory[i]);
-            }
-        }
-
-        // If sampling didn't work well, just take the most recent records
-        if (sampledHistory.length === 0) {
-            sampledHistory = allHistory.slice(0, parseInt(limit));
-        }
-
-        console.log(`Returning ${sampledHistory.length} sampled records`);
 
         res.status(200).json({
             status: 'success',
-            results: sampledHistory.length,
+            results: historyData.length,
             data: {
-                history: sampledHistory,
+                binId: id,
                 period,
-                interval,
-                aggregated: false,
-                sampled: true,
-                totalRecordsInRange: allHistory.length,
-                dateRange: {
-                    start: startDate.toISOString(),
-                    end: endDate.toISOString()
-                }
+                startDate,
+                endDate: new Date(),
+                history: historyData
             }
         });
 
     } catch (error) {
-        console.error('Error in getBinHistory:', error);
-        return next(new AppError('Error fetching bin history', 500));
+        console.error('History query error:', error);
+        return next(new AppError('Failed to retrieve bin history', 500));
     }
 });
 
 /**
  * Update waste bin level from sensor data
  */
-const updateBinLevel = asyncHandler(async (req, res) => {
-    const { binId, distance, fullness, temperature, weight, batteryVoltage, macAddress, latitude, longitude } = req.body;
+const updateBinLevel = asyncHandler(async (req, res, next) => {
+    const { binId, distance, latitude, longitude, macAddress, weight, temperature } = req.body;
 
-    if (!binId) {
-        return res.status(400).json({
-            status: 'fail',
-            message: 'Bin ID is required'
-        });
+    // Validate required fields
+    if (!binId || distance === undefined) {
+        return next(new AppError('binId and distance are required', 400));
     }
 
     // Find the bin
     let bin = await WasteBin.findOne({ binId });
 
-    // If bin not found but we have a MAC address, try finding by MAC
-    if (!bin && macAddress) {
-        bin = await WasteBin.findOne({ 'deviceInfo.macAddress': macAddress });
-    }
-
     if (!bin) {
-        return res.status(404).json({
-            status: 'fail',
-            message: 'Bin not found'
-        });
+        return next(new AppError('Waste bin not found', 404));
     }
 
-    // Store previous fullness for threshold comparison
-    const previousFullness = bin.fullness;
-
-    // Update bin with sensor data
-    bin.fullness = fullness !== undefined ? fullness : (distance ? 100 - distance : bin.fullness);
-    bin.distance = distance !== undefined ? distance : bin.distance;
-
-    if (temperature !== undefined) bin.temperature = temperature;
-    if (weight !== undefined) bin.weight = weight || 0;
-
-    // Update device info if available
-    if (bin.deviceInfo) {
-        if (batteryVoltage !== undefined) bin.deviceInfo.batteryVoltage = batteryVoltage;
-        bin.deviceInfo.lastSeen = new Date();
+    // Ensure containerHeight exists (fallback to 50cm)
+    if (!bin.containerHeight) {
+        bin.containerHeight = 50;
     }
 
-    // Update location if provided
-    if (latitude || longitude) {
-        if (latitude) bin.location.coordinates[1] = latitude;
-        if (longitude) bin.location.coordinates[0] = longitude;
-    }
+    // Clamp distance to valid range
+    const clampedDistance = Math.max(0, Math.min(bin.containerHeight, distance));
 
-    bin.lastUpdate = new Date();
-    await bin.save();
-
-    // Create history record
-    await History.create({
-        binId: bin.binId,
-        fullness: bin.fullness,
-        temperature: bin.temperature,
-        weight: bin.weight,
-        distance: distance,
-        time: new Date().toLocaleTimeString(),
-        timestamp: new Date()
+    // Update sensor data using the model method
+    await bin.updateWithSensorData({
+        distance: clampedDistance,
+        weight,
+        temperature,
+        latitude,
+        longitude,
+        macAddress
     });
 
-    // Check if bin has exceeded alert threshold and send Telegram notification
-    let alertSent = false;
-    if (bin.fullness >= bin.alertThreshold && previousFullness < bin.alertThreshold) {
-        try {
-            // Get users from the bin's department for targeted notifications
-            const departmentUsers = bin.department
-                ? await User.find({ department: bin.department }).select('_id')
-                : null;
-
-            const userIds = departmentUsers ? departmentUsers.map(user => user._id) : null;
-
-            // Format bin data for the notification
-            const binData = {
-                binId: bin.binId,
-                department: bin.department,
-                wasteType: bin.wasteType,
-                fullness: bin.fullness,
-                alertThreshold: bin.alertThreshold,
-                location: {
-                    floor: bin.location?.floor || '1',
-                    room: bin.location?.room || 'Unknown'
-                },
-                lastUpdate: bin.lastUpdate
-            };
-
-            // Send alert notification
-            const notificationResults = await sendAlertNotification(binData, userIds);
-
-            logger.info(`Alert notifications sent for bin ${binId}. Results: ${JSON.stringify(notificationResults)}`);
-            alertSent = notificationResults && notificationResults.some(result => result.success);
-        } catch (error) {
-            logger.error(`Failed to send alert notifications for bin ${binId}: ${error.message}`);
-            // Continue even if notifications fail
-        }
+    // Create history record with calculated fullness
+    try {
+        await History.createRecord({
+            binId: bin.binId,
+            distance: clampedDistance,
+            containerHeight: bin.containerHeight,
+            weight: weight || 0,
+            temperature: temperature || 22.0
+        });
+    } catch (historyError) {
+        console.error('Failed to create history record:', historyError);
+        // Don't fail the main operation if history fails
     }
+
+    // Calculate current fullness for response
+    const calculatedFullness = Math.max(0, Math.min(100,
+        Math.round(((bin.containerHeight - clampedDistance) / bin.containerHeight) * 100)
+    ));
 
     res.status(200).json({
         status: 'success',
+        message: 'Waste level updated successfully',
         data: {
-            bin,
-            alertSent
+            binId: bin.binId,
+            distance: clampedDistance,
+            containerHeight: bin.containerHeight,
+            fullness: calculatedFullness,
+            lastUpdate: bin.lastUpdate
         }
     });
 });
