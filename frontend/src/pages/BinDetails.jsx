@@ -246,9 +246,9 @@ const BinDetails = () => {
 
     // Event handlers
     const handleTimePeriodChange = useCallback((period) => {
-        debug.log('Changing time period', {from: selectedTimePeriod, to: period});
+        debug.log('Changing time period', {to: period});
         setSelectedTimePeriod(period);
-    }, [selectedTimePeriod, debug]);
+    }, [debug]);
 
     const handleDelete = useCallback(() => {
         deleteMutation.mutate();

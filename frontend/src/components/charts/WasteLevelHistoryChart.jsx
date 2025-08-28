@@ -1,4 +1,4 @@
-import React, {useState, useMemo} from 'react';
+import React, {useState, useMemo, useEffect} from 'react';
 import PropTypes from 'prop-types';
 import {
     LineChart,
@@ -45,13 +45,34 @@ const CustomTooltip = ({active, payload, label}) => {
                         </span>
                     </div>
 
+                    {data.distance && (
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Расстояние:</span>
+                            <span className="text-xs text-slate-600">{data.distance} см</span>
+                        </div>
+                    )}
+
+                    {data.temperature && (
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Температура:</span>
+                            <span className="text-xs text-slate-600">{data.temperature.toFixed(1)}°C</span>
+                        </div>
+                    )}
+
+                    {data.count && data.count > 1 && (
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Измерений:</span>
+                            <span className="text-xs text-slate-600">{data.count}</span>
+                        </div>
+                    )}
+
                     {trend !== 0 && (
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-slate-600">Тенденция:</span>
                             <span className={`text-xs flex items-center ${
                                 trend > 0 ? 'text-red-500' : 'text-green-500'
                             }`}>
-                                {trend > 0 ? '↗' : '↘'} {Math.abs(trend).toFixed(1)}%/ч
+                                {trend > 0 ? '↗' : '↘'} {Math.abs(trend).toFixed(1)}%
                             </span>
                         </div>
                     )}
@@ -75,11 +96,11 @@ const CustomTooltip = ({active, payload, label}) => {
 // Time period selector component
 const TimePeriodSelector = ({selectedPeriod, onPeriodChange, className = ''}) => {
     const periods = [
-        {key: '1h', label: '1ч', hours: 1},
-        {key: '6h', label: '6ч', hours: 6},
-        {key: '24h', label: '24ч', hours: 24},
-        {key: '7d', label: '7д', hours: 168},
-        {key: '30d', label: '30д', hours: 720},
+        {key: '1h', label: '1ч'},
+        {key: '6h', label: '6ч'},
+        {key: '24h', label: '24ч'},
+        {key: '7d', label: '7д'},
+        {key: '30d', label: '30д'},
     ];
 
     return (
@@ -87,7 +108,7 @@ const TimePeriodSelector = ({selectedPeriod, onPeriodChange, className = ''}) =>
             {periods.map(period => (
                 <button
                     key={period.key}
-                    onClick={() => onPeriodChange(period.key, period.hours)}
+                    onClick={() => onPeriodChange(period.key)}
                     className={`px-3 py-1 text-sm rounded-md transition-all duration-200 ${
                         selectedPeriod === period.key
                             ? 'bg-white text-teal-700 shadow-sm font-medium'
@@ -102,7 +123,7 @@ const TimePeriodSelector = ({selectedPeriod, onPeriodChange, className = ''}) =>
 };
 
 const WasteLevelHistoryChart = ({
-                                    data,
+                                    data = [],
                                     alertThreshold = 80,
                                     criticalThreshold = 95,
                                     showPrediction = true,
@@ -110,33 +131,57 @@ const WasteLevelHistoryChart = ({
                                     showBrush = true,
                                     height = 400,
                                     className = '',
-                                    onPeriodChange // Make sure this is properly destructured from props
+                                    onPeriodChange,
+                                    selectedPeriod = '24h'
                                 }) => {
-    const [selectedPeriod, setSelectedPeriod] = useState('24h');
     const [hoveredPoint, setHoveredPoint] = useState(null);
 
-    // Handler for period changes
-    const handlePeriodChange = (period, hours) => {
-        setSelectedPeriod(period);
-        if (onPeriodChange) {
-            onPeriodChange(period, hours);
+    // Debug log to see what data we're receiving
+    useEffect(() => {
+        if (process.env.NODE_ENV === 'development') {
+            console.log('📊 WasteLevelHistoryChart received data:', {
+                length: data.length,
+                firstItem: data[0],
+                lastItem: data[data.length - 1],
+                selectedPeriod
+            });
         }
-    };
+    }, [data, selectedPeriod]);
 
     // Enhanced data processing with trend calculation and predictions
     const processedData = useMemo(() => {
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            return [];
+        }
+
         const chartData = data.map((item, index) => {
+            // Ensure we have a proper timestamp
+            let timestamp = item.timestamp;
+            if (typeof timestamp === 'string') {
+                timestamp = new Date(timestamp);
+            }
+
             const processed = {
                 ...item,
-                formattedTime: formatTime(item.timestamp),
-                timestamp: new Date(item.timestamp),
+                formattedTime: formatTime(timestamp),
+                timestamp: timestamp,
+                // Ensure fullness is a number
+                fullness: Number(item.fullness) || 0,
             };
 
-            // Calculate trend (rate of change)
+            // Calculate trend (rate of change) between consecutive points
             if (index > 0 && showTrend) {
                 const prevItem = data[index - 1];
-                const timeDiff = (new Date(item.timestamp) - new Date(prevItem.timestamp)) / (1000 * 60 * 60); // hours
-                processed.trend = timeDiff > 0 ? (item.fullness - prevItem.fullness) / timeDiff : 0;
+                const prevTimestamp = new Date(prevItem.timestamp);
+                const timeDiff = (timestamp - prevTimestamp) / (1000 * 60 * 60); // hours
+
+                if (timeDiff > 0) {
+                    processed.trend = (item.fullness - prevItem.fullness) / timeDiff;
+                } else {
+                    processed.trend = 0;
+                }
+            } else {
+                processed.trend = 0;
             }
 
             // Simple prediction based on trend
@@ -144,7 +189,7 @@ const WasteLevelHistoryChart = ({
                 const remainingCapacity = 100 - item.fullness;
                 const hoursToFull = remainingCapacity / processed.trend;
 
-                if (hoursToFull < 48) { // Only show if less than 48 hours
+                if (hoursToFull > 0 && hoursToFull < 48) { // Only show if less than 48 hours
                     processed.prediction = {
                         timeToFull: hoursToFull < 1 ?
                             `${Math.round(hoursToFull * 60)}мин` :
@@ -156,6 +201,7 @@ const WasteLevelHistoryChart = ({
             return processed;
         });
 
+        // Sort by timestamp to ensure proper order
         return chartData.sort((a, b) => a.timestamp - b.timestamp);
     }, [data, showTrend, showPrediction]);
 
@@ -194,6 +240,52 @@ const WasteLevelHistoryChart = ({
     // Enhanced gradient definition
     const gradientId = `wasteLevelGradient-${Math.random().toString(36).substr(2, 9)}`;
 
+    // Calculate statistics
+    const statistics = useMemo(() => {
+        if (processedData.length === 0) return null;
+
+        const fullnessValues = processedData.map(d => d.fullness);
+        const max = Math.max(...fullnessValues);
+        const avg = fullnessValues.reduce((sum, val) => sum + val, 0) / fullnessValues.length;
+        const latest = processedData[processedData.length - 1];
+
+        // Calculate recent average (last 24 hours or half the dataset)
+        const recentCount = Math.min(24, Math.floor(processedData.length / 2));
+        const recentData = processedData.slice(-recentCount);
+        const recentAvg = recentData.reduce((sum, d) => sum + d.fullness, 0) / recentData.length;
+
+        return {
+            max,
+            avg,
+            recentAvg,
+            latestTrend: latest?.trend || 0,
+            recentCount
+        };
+    }, [processedData]);
+
+    // If no data, show empty state
+    if (!processedData || processedData.length === 0) {
+        return (
+            <div className={`space-y-4 ${className}`}>
+                <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-slate-800">
+                        История уровня заполнения
+                    </h3>
+                    <TimePeriodSelector
+                        selectedPeriod={selectedPeriod}
+                        onPeriodChange={onPeriodChange || (() => {})}
+                    />
+                </div>
+                <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
+                    <div className="text-slate-400 text-lg">Нет данных для отображения</div>
+                    <p className="text-slate-500 text-sm mt-2">
+                        История заполнения появится после получения данных с датчиков
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className={`space-y-4 ${className}`}>
             {/* Header with controls */}
@@ -217,7 +309,7 @@ const WasteLevelHistoryChart = ({
 
                 <TimePeriodSelector
                     selectedPeriod={selectedPeriod}
-                    onPeriodChange={handlePeriodChange} // Use the local handler
+                    onPeriodChange={onPeriodChange || (() => {})}
                 />
             </div>
 
@@ -382,37 +474,36 @@ const WasteLevelHistoryChart = ({
             </div>
 
             {/* Statistics summary */}
-            {processedData.length > 0 && (
+            {statistics && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-slate-600 text-xs uppercase tracking-wide">Максимум</div>
                         <div className="text-lg font-semibold text-slate-800">
-                            {Math.max(...processedData.map(d => d.fullness)).toFixed(1)}%
+                            {statistics.max.toFixed(1)}%
                         </div>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-slate-600 text-xs uppercase tracking-wide">Среднее</div>
                         <div className="text-lg font-semibold text-slate-800">
-                            {(processedData.reduce((sum, d) => sum + d.fullness, 0) / processedData.length).toFixed(1)}%
+                            {statistics.avg.toFixed(1)}%
                         </div>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3">
-                        <div className="text-slate-600 text-xs uppercase tracking-wide">Последние 24ч</div>
+                        <div className="text-slate-600 text-xs uppercase tracking-wide">
+                            Последние {statistics.recentCount} точек
+                        </div>
                         <div className="text-lg font-semibold text-slate-800">
-                            {processedData.length > 24 ?
-                                (processedData.slice(-24).reduce((sum, d) => sum + d.fullness, 0) / 24).toFixed(1) :
-                                'Н/Д'
-                            }%
+                            {statistics.recentAvg.toFixed(1)}%
                         </div>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-slate-600 text-xs uppercase tracking-wide">Тенденция</div>
                         <div className={`text-lg font-semibold ${
-                            processedData[processedData.length - 1]?.trend > 0 ? 'text-red-600' :
-                                processedData[processedData.length - 1]?.trend < 0 ? 'text-green-600' : 'text-slate-600'
+                            statistics.latestTrend > 0.1 ? 'text-red-600' :
+                                statistics.latestTrend < -0.1 ? 'text-green-600' : 'text-slate-600'
                         }`}>
-                            {processedData[processedData.length - 1]?.trend ?
-                                `${processedData[processedData.length - 1].trend > 0 ? '+' : ''}${processedData[processedData.length - 1].trend.toFixed(1)}%/ч` :
+                            {statistics.latestTrend !== 0 ?
+                                `${statistics.latestTrend > 0 ? '+' : ''}${statistics.latestTrend.toFixed(1)}%` :
                                 'Стабильно'
                             }
                         </div>
@@ -432,8 +523,12 @@ WasteLevelHistoryChart.propTypes = {
                 PropTypes.string,
                 PropTypes.instanceOf(Date)
             ]).isRequired,
+            distance: PropTypes.number,
+            temperature: PropTypes.number,
+            weight: PropTypes.number,
+            count: PropTypes.number,
         })
-    ).isRequired,
+    ),
     alertThreshold: PropTypes.number,
     criticalThreshold: PropTypes.number,
     showPrediction: PropTypes.bool,
