@@ -2,15 +2,30 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Clock, MapPin } from 'lucide-react';
+import { ArrowUpRight, Clock, MapPin, Ruler } from 'lucide-react';
 import BinStatusBadge from '../bins/BinStatusBadge';
 import { formatDate, formatPercentage } from '../../utils/formatters';
 
 const BinStatusCard = ({ bin, showAction = false }) => {
+    // Calculate fullness based on distance and container height
+    const calculateFullness = () => {
+        if (!bin.distance || !bin.containerHeight) return 0;
+
+        // If distance >= containerHeight, bin is empty (0%)
+        // If distance = 0, bin is full (100%)
+        const fullnessPercentage = Math.max(0, Math.min(100,
+            ((bin.containerHeight - bin.distance) / bin.containerHeight) * 100
+        ));
+
+        return Math.round(fullnessPercentage);
+    };
+
+    const fullness = bin.fullness || calculateFullness();
+
     // Get color based on fullness level
     const getColor = () => {
-        if (bin.fullness > 80) return 'bg-red-500';
-        if (bin.fullness > 60) return 'bg-amber-500';
+        if (fullness > 80) return 'bg-red-500';
+        if (fullness > 60) return 'bg-amber-500';
         return 'bg-teal-500';
     };
 
@@ -44,10 +59,10 @@ const BinStatusCard = ({ bin, showAction = false }) => {
                             <div className="absolute inset-0 bg-slate-100"></div>
                             <div
                                 className={`absolute bottom-0 w-full transition-all duration-500 ${getColor()}`}
-                                style={{ height: `${bin.fullness}%` }}
+                                style={{ height: `${fullness}%` }}
                             ></div>
                             <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
-                                {formatPercentage(bin.fullness)}
+                                {formatPercentage(fullness)}
                             </div>
                         </div>
                     </div>
@@ -61,21 +76,12 @@ const BinStatusCard = ({ bin, showAction = false }) => {
                 <div className="space-y-2 text-xs">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center text-slate-500">
-                            <Clock className="mr-1 h-3 w-3" />
-                            Обновлено:
+                            <Ruler className="mr-1 h-3 w-3" />
+                            Расстояние:
                         </div>
                         <span className="font-medium text-slate-700">
-              {formatDate(bin.lastUpdate, false, true)}
-            </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center text-slate-500">
-                            <MapPin className="mr-1 h-3 w-3" />
-                            Комната:
-                        </div>
-                        <span className="font-medium text-slate-700">
-              {bin.location?.room || 'Не указано'}
-            </span>
+                            {bin.location?.room || 'Не указано'}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -88,7 +94,9 @@ BinStatusCard.propTypes = {
         binId: PropTypes.string.isRequired,
         department: PropTypes.string.isRequired,
         wasteType: PropTypes.string.isRequired,
-        fullness: PropTypes.number.isRequired,
+        distance: PropTypes.number,
+        containerHeight: PropTypes.number,
+        fullness: PropTypes.number, // Optional - will be calculated if not provided
         alertThreshold: PropTypes.number.isRequired,
         status: PropTypes.string.isRequired,
         lastUpdate: PropTypes.string.isRequired,

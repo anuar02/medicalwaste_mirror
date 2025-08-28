@@ -36,15 +36,23 @@ const wasteBinSchema = new mongoose.Schema({
             message: 'Please provide a valid waste type'
         }
     },
-    fullness: {
+    // Container physical dimensions
+    containerHeight: {
         type: Number,
-        default: 0,
-        min: [0, 'Fullness cannot be less than 0%'],
-        max: [100, 'Fullness cannot exceed 100%']
+        default: 50, // Default 50cm height
+        min: [10, 'Container height must be at least 10cm'],
+        max: [200, 'Container height cannot exceed 200cm'],
+        required: true
     },
+    capacity: {
+        type: Number,
+        default: 50, // Default capacity in liters
+        min: [0, 'Capacity cannot be negative']
+    },
+    // Sensor readings
     distance: {
         type: Number,
-        default: 0,
+        default: 50, // Default to containerHeight (empty)
         min: [0, 'Distance cannot be negative']
     },
     weight: {
@@ -65,11 +73,6 @@ const wasteBinSchema = new mongoose.Schema({
             enum: ['active', 'offline', 'maintenance'],
             default: 'active'
         }
-    },
-    capacity: {
-        type: Number,
-        default: 50, // Default capacity in liters
-        min: [0, 'Capacity cannot be negative']
     },
     location: {
         type: {
@@ -163,6 +166,20 @@ wasteBinSchema.index({ binId: 1 });
 wasteBinSchema.index({ department: 1 });
 wasteBinSchema.index({ 'location.coordinates': '2dsphere' }); // Add geospatial index
 
+// Virtual for calculated fullness percentage based on distance and container height
+wasteBinSchema.virtual('fullness').get(function() {
+    if (!this.distance || !this.containerHeight) return 0;
+
+    // Calculate fullness: distance from sensor to waste surface
+    // If distance >= containerHeight, bin is empty (0%)
+    // If distance = 0, bin is full (100%)
+    const fullnessPercentage = Math.max(0, Math.min(100,
+        ((this.containerHeight - this.distance) / this.containerHeight) * 100
+    ));
+
+    return Math.round(fullnessPercentage);
+});
+
 // Virtual for estimated fill time
 wasteBinSchema.virtual('estimatedFillTime').get(function() {
     // Simple prediction based on last update and current fullness
@@ -195,12 +212,9 @@ wasteBinSchema.methods.needsCollection = function() {
 
 // Add new data point and recalculate
 wasteBinSchema.methods.updateWithSensorData = async function(data) {
-    // Update basic fields
+    // Update distance reading (primary sensor data)
     if (data.distance !== undefined) {
-        this.distance = data.distance;
-        // Calculate fullness based on distance
-        // Assuming max distance = 100cm (empty), min distance = 0cm (full)
-        this.fullness = Math.max(0, Math.min(100, (1 - data.distance/100) * 100));
+        this.distance = Math.max(0, Math.min(this.containerHeight, data.distance));
     }
 
     // Update weight if provided
@@ -218,11 +232,21 @@ wasteBinSchema.methods.updateWithSensorData = async function(data) {
         this.location.coordinates = [data.longitude, data.latitude];
     }
 
+    // Update device info
+    if (data.macAddress) {
+        this.deviceInfo.macAddress = data.macAddress;
+        this.deviceInfo.lastSeen = new Date();
+        this.deviceInfo.status = 'active';
+    }
+
     // Update timestamps
     this.lastUpdate = new Date();
 
+    // Store current fullness for comparison
+    const currentFullness = this.fullness;
+
     // If bin was emptied (fullness decreased significantly), record as collection
-    if (this.fullness < 20 && this._previousFullness && this._previousFullness > 70) {
+    if (currentFullness < 20 && this._previousFullness && this._previousFullness > 70) {
         this.collectionHistory.push({
             collectedAt: new Date(),
             fullnessAtCollection: this._previousFullness,
@@ -232,9 +256,27 @@ wasteBinSchema.methods.updateWithSensorData = async function(data) {
     }
 
     // Store previous values for next comparison
-    this._previousFullness = this.fullness;
+    this._previousFullness = currentFullness;
     this._previousWeight = this.weight;
 
+    return this.save();
+};
+
+// Method to update container configuration
+wasteBinSchema.methods.updateConfiguration = async function(config) {
+    if (config.containerHeight !== undefined) {
+        this.containerHeight = Math.max(10, Math.min(200, config.containerHeight));
+    }
+
+    if (config.alertThreshold !== undefined) {
+        this.alertThreshold = Math.max(50, Math.min(95, config.alertThreshold));
+    }
+
+    if (config.capacity !== undefined) {
+        this.capacity = Math.max(0, config.capacity);
+    }
+
+    this.lastUpdate = new Date();
     return this.save();
 };
 

@@ -469,9 +469,26 @@ const getBin = asyncHandler(async (req, res, next) => {
         return next(new AppError('No waste bin found with that ID', 404));
     }
 
+    // Ensure containerHeight exists (for backward compatibility)
+    if (!bin.containerHeight) {
+        bin.containerHeight = 50; // Default value
+        await bin.save();
+    }
+
+    // Convert to JSON to include virtual fields (like calculated fullness)
+    const binData = bin.toJSON();
+
+    // Log for debugging
+    console.log('Bin data:', {
+        binId: binData.binId,
+        distance: binData.distance,
+        containerHeight: binData.containerHeight,
+        calculatedFullness: binData.fullness
+    });
+
     res.status(200).json({
         status: 'success',
-        data: { bin }
+        data: { bin: binData }
     });
 });
 

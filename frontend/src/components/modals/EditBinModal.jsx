@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 import { useMutation } from '@tanstack/react-query';
-import { X, Save, Trash2 } from 'lucide-react';
+import { X, Save, Ruler } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../ui/Button';
 import apiService from '../../services/api';
@@ -17,6 +17,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
         alertThreshold: 80,
         status: 'active',
         capacity: 50,
+        containerHeight: 50, // New field for container height
     });
 
     // Initialize form data when bin changes
@@ -28,6 +29,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                 alertThreshold: bin.alertThreshold || 80,
                 status: bin.status || 'active',
                 capacity: bin.capacity || 50,
+                containerHeight: bin.containerHeight || 50, // Default to 50cm
             });
         }
     }, [bin]);
@@ -37,7 +39,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
         const { name, value } = e.target;
 
         // Handle numeric inputs
-        if (name === 'alertThreshold' || name === 'capacity') {
+        if (name === 'alertThreshold' || name === 'capacity' || name === 'containerHeight') {
             setFormData({
                 ...formData,
                 [name]: parseInt(value, 10) || 0,
@@ -93,7 +95,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+            <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-xl font-semibold text-slate-800">
@@ -165,6 +167,34 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                         </select>
                     </div>
 
+                    {/* Container Height - New Field */}
+                    <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">
+                            <div className="flex items-center">
+                                <Ruler className="mr-2 h-4 w-4" />
+                                {t('binModals.containerHeight', 'Высота контейнера (см)')}
+                            </div>
+                        </label>
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="range"
+                                name="containerHeight"
+                                min="10"
+                                max="200"
+                                step="5"
+                                value={formData.containerHeight}
+                                onChange={handleChange}
+                                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-500"
+                            />
+                            <span className="min-w-[50px] text-center text-sm font-medium text-slate-700">
+                                {formData.containerHeight}см
+                            </span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                            {t('binModals.containerHeightHelp', 'Высота контейнера влияет на расчет заполненности по данным датчика расстояния')}
+                        </p>
+                    </div>
+
                     {/* Alert Threshold */}
                     <div>
                         <label className="mb-1 block text-sm font-medium text-slate-700">
@@ -182,8 +212,8 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                                 className="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-500"
                             />
                             <span className="min-w-[40px] text-center text-sm font-medium text-slate-700">
-                {formData.alertThreshold}%
-              </span>
+                                {formData.alertThreshold}%
+                            </span>
                         </div>
                     </div>
 
@@ -203,6 +233,29 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                             required
                         />
                     </div>
+
+                    {/* Current Sensor Reading Display */}
+                    {bin.distance !== undefined && (
+                        <div className="rounded-lg bg-slate-50 p-3">
+                            <h4 className="text-sm font-medium text-slate-700 mb-2">
+                                {t('binModals.currentReading', 'Текущие показания датчика')}
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                <div>
+                                    <span className="text-slate-500">Расстояние:</span>
+                                    <span className="ml-2 font-medium">{bin.distance}см</span>
+                                </div>
+                                <div>
+                                    <span className="text-slate-500">Заполненность:</span>
+                                    <span className="ml-2 font-medium">
+                                        {Math.max(0, Math.min(100,
+                                            Math.round(((formData.containerHeight - bin.distance) / formData.containerHeight) * 100)
+                                        ))}%
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Form actions */}
                     <div className="flex justify-end space-x-3 pt-4">
