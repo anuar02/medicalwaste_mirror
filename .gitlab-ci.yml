@@ -362,7 +362,23 @@ deploy:
             - FRONTEND_URL=$FRONTEND_URL
             - TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
             - BCRYPT_ROUNDS=12
-      
+        
+        mongodb:
+          image: mongo:4.4
+          deploy:
+            replicas: 1
+            placement:
+              constraints:
+                - node.hostname==ip-10-0-1-166
+            restart_policy:
+              condition: any
+              delay: 5s
+              max_attempts: 5
+          volumes:
+            - mongodb_data:/data/db
+          networks:
+            - myapp_app-network
+        
         nginx:
           image: $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
           deploy:
@@ -389,6 +405,9 @@ deploy:
       networks:
         myapp_app-network:
           external: true
+      
+      volumes:
+        mongodb_data:
       EOF
     - echo "=== Generated docker-compose.prod.yml content ==="
     - head -50 docker-compose.prod.yml
