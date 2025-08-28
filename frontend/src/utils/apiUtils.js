@@ -14,18 +14,22 @@ export const debugApiResponse = (response, label = 'API Response') => {
         if (response?.data) {
             console.log('Data Type:', typeof response.data);
             console.log('Is Array:', Array.isArray(response.data));
+            console.log('Data Keys:', Object.keys(response.data));
 
             if (response.data.data) {
                 console.log('Nested Data:', response.data.data);
                 console.log('Nested Data Type:', typeof response.data.data);
+                if (typeof response.data.data === 'object') {
+                    console.log('Nested Data Keys:', Object.keys(response.data.data));
+                }
+            }
+
+            if (response.data.history) {
+                console.log('History Data Length:', response.data.history?.length);
             }
 
             if (response.data.bin) {
                 console.log('Bin Data:', response.data.bin);
-            }
-
-            if (response.data.history) {
-                console.log('History Data:', response.data.history);
             }
         }
         console.groupEnd();
@@ -40,11 +44,12 @@ export const extractBinData = (response) => {
 
         // Common patterns for bin data
         const possiblePaths = [
-            response?.data?.data?.bin,
-            response?.data?.bin,
-            response?.data?.data,
-            response?.data,
-            response?.bin
+            response?.data?.data?.bin,    // nested structure
+            response?.data?.bin,          // direct bin property
+            response?.data?.data,         // data is the bin itself
+            response?.data,               // response.data is the bin
+            response?.bin,                // direct bin property on response
+            response                      // response itself is the bin
         ];
 
         for (const path of possiblePaths) {
@@ -62,17 +67,19 @@ export const extractBinData = (response) => {
     }
 };
 
-// Safe data extractor for history data
+// Enhanced history data extractor for your specific API structure
 export const extractHistoryData = (response) => {
     try {
         debugApiResponse(response, 'Extracting History Data');
 
-        // Common patterns for history data
+        // Your API structure: { data: { history: [...] } }
         const possiblePaths = [
-            response?.data?.data?.history,
-            response?.data?.history,
-            response?.data?.data,
-            response?.data
+            response?.data?.data?.history,    // { data: { data: { history: [...] } } }
+            response?.data?.history,          // { data: { history: [...] } } <- Your structure
+            response?.data?.data,             // { data: { data: [...] } }
+            response?.data,                   // { data: [...] }
+            response?.history,                // { history: [...] }
+            response                          // [...] - direct array
         ];
 
         for (const path of possiblePaths) {
@@ -82,12 +89,17 @@ export const extractHistoryData = (response) => {
             }
         }
 
-        // If we get an object with a history property
+        // Special case: if response.data is an object with various properties,
+        // look for any array that might be history data
         if (response?.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
             for (const [key, value] of Object.entries(response.data)) {
-                if (Array.isArray(value) && key.toLowerCase().includes('history')) {
-                    console.log('✅ Found history array at key:', key);
-                    return value;
+                if (Array.isArray(value)) {
+                    // Check if this array looks like history data
+                    if (value.length > 0 && value[0] &&
+                        (value[0]._id || value[0].timestamp || value[0].time || value[0].avgFullness)) {
+                        console.log('✅ Found history-like array at key:', key, 'with', value.length, 'items');
+                        return value;
+                    }
                 }
             }
         }
@@ -109,7 +121,9 @@ export const extractListData = (response, itemType = 'items') => {
             response?.data?.data?.items,
             response?.data?.data,
             response?.data?.items,
-            response?.data
+            response?.data,
+            response?.items,
+            response
         ];
 
         for (const path of possiblePaths) {
@@ -179,9 +193,9 @@ export const validateBinData = (bin) => {
     }
 
     // Validate numeric fields
-    const numericFields = ['fullness', 'alertThreshold', 'capacity'];
+    const numericFields = ['fullness', 'alertThreshold', 'capacity', 'distance', 'containerHeight'];
     numericFields.forEach(field => {
-        if (bin[field] !== undefined && (isNaN(bin[field]) || bin[field] < 0)) {
+        if (bin[field] !== undefined && (isNaN(Number(bin[field])) || Number(bin[field]) < 0)) {
             console.warn(`⚠️ Invalid ${field} value:`, bin[field]);
         }
     });
@@ -198,7 +212,7 @@ export const validateBinData = (bin) => {
     return true;
 };
 
-// Validate history data structure
+// Enhanced history data validation for your API structure
 export const validateHistoryData = (history) => {
     if (!Array.isArray(history)) {
         console.warn('⚠️ History data is not an array:', typeof history);
@@ -212,37 +226,40 @@ export const validateHistoryData = (history) => {
 
     // Check first few items for required fields
     const sampleSize = Math.min(3, history.length);
-    const requiredFields = ['timestamp', 'fullness'];
+
+    // Your API returns items with _id, avgFullness, avgDistance, etc.
+    const requiredFields = ['_id', 'avgFullness'];
+    const optionalFields = ['avgDistance', 'avgTemperature', 'avgWeight', 'firstTimestamp', 'lastTimestamp', 'count'];
 
     for (let i = 0; i < sampleSize; i++) {
         const item = history[i];
-        const missingFields = requiredFields.filter(field =>
-            item[field] === undefined &&
-            item[field.replace('timestamp', 'time')] === undefined &&
-            item[field.replace('timestamp', 'createdAt')] === undefined
-        );
+        const missingRequired = requiredFields.filter(field => item[field] === undefined);
 
-        if (missingFields.length > 0) {
-            console.warn(`⚠️ History item ${i} missing fields:`, missingFields);
+        if (missingRequired.length > 0) {
+            console.warn(`⚠️ History item ${i} missing required fields:`, missingRequired);
             console.log('Available fields:', Object.keys(item));
         }
 
-        // Validate timestamp
-        const timestamp = item.timestamp || item.time || item.createdAt;
-        if (timestamp && isNaN(new Date(timestamp).getTime())) {
-            console.warn(`⚠️ Invalid timestamp in history item ${i}:`, timestamp);
+        // Validate timestamp (could be _id, firstTimestamp, or lastTimestamp)
+        const timestamp = item._id || item.firstTimestamp || item.lastTimestamp;
+        if (timestamp) {
+            const parsedDate = new Date(timestamp);
+            if (isNaN(parsedDate.getTime())) {
+                console.warn(`⚠️ Invalid timestamp in history item ${i}:`, timestamp);
+            }
         }
 
         // Validate fullness
-        if (item.fullness !== undefined && (isNaN(item.fullness) || item.fullness < 0 || item.fullness > 100)) {
-            console.warn(`⚠️ Invalid fullness in history item ${i}:`, item.fullness);
+        if (item.avgFullness !== undefined &&
+            (isNaN(Number(item.avgFullness)) || Number(item.avgFullness) < 0 || Number(item.avgFullness) > 100)) {
+            console.warn(`⚠️ Invalid avgFullness in history item ${i}:`, item.avgFullness);
         }
     }
 
     return true;
 };
 
-// Process and clean history data
+// Process and clean history data for your API structure
 export const processHistoryData = (rawHistory) => {
     try {
         if (!Array.isArray(rawHistory)) {
@@ -254,8 +271,16 @@ export const processHistoryData = (rawHistory) => {
 
         const processed = rawHistory
             .map((item, index) => {
-                // Handle different timestamp field names
-                const timestamp = item.timestamp || item.time || item.createdAt || item.date;
+                // Handle your API's timestamp format
+                // Your API uses _id as a date-time string like "2025-08-28 11:00"
+                // and also provides firstTimestamp and lastTimestamp
+                let timestamp = item.firstTimestamp || item.lastTimestamp || item._id;
+
+                // If _id is a time string like "2025-08-28 11:00", convert to proper ISO string
+                if (typeof timestamp === 'string' && timestamp.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)) {
+                    timestamp = timestamp + ':00.000Z'; // Convert to proper ISO format
+                }
+
                 const parsedTimestamp = new Date(timestamp);
 
                 // Skip items with invalid timestamps
@@ -264,10 +289,10 @@ export const processHistoryData = (rawHistory) => {
                     return null;
                 }
 
-                // Clean and validate fullness
-                let fullness = Number(item.fullness);
+                // Use avgFullness from your API
+                let fullness = Number(item.avgFullness);
                 if (isNaN(fullness)) {
-                    console.warn(`⚠️ Invalid fullness in item ${index}, setting to 0:`, item.fullness);
+                    console.warn(`⚠️ Invalid avgFullness in item ${index}, setting to 0:`, item.avgFullness);
                     fullness = 0;
                 }
 
@@ -275,13 +300,16 @@ export const processHistoryData = (rawHistory) => {
                 fullness = Math.max(0, Math.min(100, fullness));
 
                 return {
-                    time: timestamp,
+                    time: parsedTimestamp.toISOString(), // Standardize time format
                     fullness: fullness,
                     timestamp: parsedTimestamp,
-                    temperature: item.temperature ? Number(item.temperature) : null,
-                    weight: item.weight ? Number(item.weight) : null,
-                    trend: item.trend || 0,
-                    prediction: item.prediction || null,
+                    temperature: item.avgTemperature ? Number(item.avgTemperature) : null,
+                    weight: item.avgWeight ? Number(item.avgWeight) : null,
+                    distance: item.avgDistance ? Number(item.avgDistance) : null,
+                    containerHeight: item.avgContainerHeight ? Number(item.avgContainerHeight) : null,
+                    count: item.count || 1, // Number of readings averaged
+                    trend: 0, // Calculate if needed
+                    prediction: null, // Add prediction logic if needed
                     // Preserve original item for debugging
                     _original: process.env.NODE_ENV === 'development' ? item : undefined
                 };
@@ -293,6 +321,11 @@ export const processHistoryData = (rawHistory) => {
 
         if (processed.length !== rawHistory.length) {
             console.warn(`⚠️ Filtered out ${rawHistory.length - processed.length} invalid items`);
+        }
+
+        // Add trend calculation
+        for (let i = 1; i < processed.length; i++) {
+            processed[i].trend = processed[i].fullness - processed[i - 1].fullness;
         }
 
         return processed;
@@ -319,7 +352,7 @@ export const smartExtractData = (response, dataType = 'data') => {
         return extractor(response);
     } catch (error) {
         console.error(`❌ Error in smart extraction for ${dataType}:`, error);
-        return dataType === 'history' ? [] : null;
+        return dataType === 'history' || dataType === 'list' ? [] : null;
     }
 };
 
