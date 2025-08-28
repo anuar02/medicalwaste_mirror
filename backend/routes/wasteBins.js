@@ -11,28 +11,6 @@ const logActivity = (action) => {
     };
 };
 
-// Simple cache middleware (basic version - you can enhance with Redis later)
-const simpleCache = (seconds = 300) => {
-    const cache = new Map();
-
-    return (req, res, next) => {
-        const key = req.originalUrl;
-        const cached = cache.get(key);
-
-        if (cached && (Date.now() - cached.timestamp) < (seconds * 1000)) {
-            return res.json(cached.data);
-        }
-
-        const originalSend = res.json;
-        res.json = function (data) {
-            cache.set(key, {data, timestamp: Date.now()});
-            originalSend.call(this, data);
-        };
-
-        next();
-    };
-};
-
 const {
     getAllBins,
     getBin,
@@ -149,6 +127,10 @@ const createBinValidation = [
         .optional()
         .isFloat({min: 1, max: 1000})
         .withMessage('Capacity must be between 1 and 1000 liters'),
+    body('containerHeight')
+        .optional()
+        .isInt({min: 10, max: 200})
+        .withMessage('Container height must be between 10 and 200 cm'),
     body('alertThreshold')
         .optional()
         .isInt({min: 50, max: 95})
@@ -185,7 +167,7 @@ const createBinValidation = [
         .withMessage('Maintenance interval must be between 1 and 365 days')
 ];
 
-// Enhanced update validation
+// Enhanced update validation - ADDED containerHeight support
 const updateBinValidation = [
     body('department')
         .optional()
@@ -198,6 +180,10 @@ const updateBinValidation = [
         .optional()
         .isIn(wasteTypes)
         .withMessage('Invalid waste type'),
+    body('containerHeight')
+        .optional()
+        .isInt({min: 10, max: 200})
+        .withMessage('Container height must be between 10 and 200 cm'),
     body('alertThreshold')
         .optional()
         .isInt({min: 50, max: 95})
@@ -449,12 +435,11 @@ router.patch('/device-commands/:commandId/executed',
 // ===========================================
 router.use(auth);
 
-// Read operations with caching
+// Read operations - CACHE REMOVED for immediate updates
 router.get('/',
     ...paginationValidation,
     ...filterValidation,
     validateRequest,
-    simpleCache(300), // 5 minutes cache
     getAllBins
 );
 
@@ -463,14 +448,12 @@ router.get('/nearby',
     query('longitude').isFloat({min: -180, max: 180}),
     query('radius').optional().isFloat({min: 0.1, max: 50}),
     validateRequest,
-    simpleCache(60), // 1 minute cache
     getNearbyBins
 );
 
 router.get('/overfilled',
     query('threshold').optional().isInt({min: 70, max: 100}),
     validateRequest,
-    simpleCache(60),
     getOverfilledBins
 );
 
@@ -478,7 +461,6 @@ router.get('/statistics',
     query('period').optional().isIn(['hour', 'day', 'week', 'month', 'year']),
     query('department').optional().trim(),
     validateRequest,
-    simpleCache(300),
     getStatistics
 );
 
@@ -487,22 +469,19 @@ router.get('/analytics',
     query('endDate').optional().isISO8601(),
     query('groupBy').optional().isIn(['hour', 'day', 'week', 'month']),
     validateRequest,
-    simpleCache(600), // 10 minutes cache
     getBinAnalytics
 );
 
 router.get('/metrics',
     validateRequest,
-    simpleCache(300),
     getBinMetrics
 );
 
-// Individual bin operations
+// Individual bin operations - CACHE REMOVED
 router.get('/:id',
     param('id').trim().notEmpty(),
     validateRequest,
     checkBinOwnership,
-    simpleCache(60),
     getBin
 );
 
@@ -601,12 +580,11 @@ router.patch('/alerts/:alertId/dismiss',
     dismissAlert
 );
 
-// Prediction and maintenance
+// Prediction and maintenance - CACHE REMOVED
 router.get('/:id/predict-maintenance',
     param('id').trim().notEmpty(),
     validateRequest,
     checkBinOwnership,
-    simpleCache(3600), // 1 hour cache
     predictMaintenance
 );
 
@@ -649,7 +627,6 @@ router.get('/collection-routes',
     query('date').optional().isISO8601(),
     query('optimize').optional().isBoolean(),
     validateRequest,
-    simpleCache(900), // 15 minutes cache
     getCollectionRoutes
 );
 
@@ -686,7 +663,7 @@ router.patch('/bulk-update',
     bulkUpdateBins
 );
 
-// Data export
+// Data export - CACHE REMOVED
 router.get('/export/:format',
     param('format').isIn(['csv', 'xlsx', 'pdf']),
     query('startDate').optional().isISO8601(),
