@@ -18,6 +18,141 @@
 		"settings": "Настройки",
 		"profile": "Мой Профиль"
 	},
+	"binDetails": {
+		"title": "Контейнер {{binId}}",
+		"actions": {
+			"backToList": "Вернуться к списку",
+			"tryAgain": "Попробовать снова",
+			"export": "Экспорт",
+			"alert": "Оповещение",
+			"edit": "Редактировать",
+			"maintenance": "Обслуживание",
+			"activate": "Активировать",
+			"delete": "Удалить",
+			"retry": "Повторить"
+		},
+		"errors": {
+			"loadingTitle": "Ошибка при загрузке данных",
+			"loadingMessage": "Не удалось загрузить данные о контейнере",
+			"notFoundTitle": "Контейнер не найден",
+			"notFoundMessage": "Контейнер с ID \"{{binId}}\" не существует или был удален",
+			"historyLoadError": "Ошибка загрузки истории"
+		},
+		"info": {
+			"unknownDepartment": "Неизвестное отделение",
+			"unknownWasteType": "Тип отходов не указан",
+			"notSpecified": "Не указано",
+			"unknown": "Неизвестно",
+			"id": "ID",
+			"department": "Отделение",
+			"wasteType": "Тип отходов",
+			"status": "Статус",
+			"capacity": "Ёмкость",
+			"capacityValue": "{{capacity}} литров",
+			"containerHeight": "Высота контейнера",
+			"heightValue": "{{height}} см",
+			"lastUpdate": "Последнее обновление",
+			"lastCollection": "Последний сбор"
+		},
+		"sections": {
+			"binState": "Состояние Контейнера",
+			"binInfo": "Информация о контейнере",
+			"sensorData": "Показатели датчиков",
+			"fillHistory": "История Заполнения",
+			"location": "Местоположение"
+		},
+		"status": {
+			"critical": "Критический уровень",
+			"needsAttention": "Требуется внимание"
+		},
+		"metrics": {
+			"currentLevel": "Текущий уровень",
+			"distanceFromSensor": "Расстояние от датчика",
+			"distanceValue": "{{distance}} см из {{height}} см",
+			"warningThreshold": "Порог предупреждения",
+			"criticalThreshold": "Критический порог"
+		},
+		"sensors": {
+			"distance": "Расстояние от датчика",
+			"distanceValue": "{{distance}} см",
+			"calculation": "Расчет заполненности",
+			"temperature": "Температура",
+			"temperatureValue": "{{temp}}°C",
+			"weight": "Вес",
+			"weightValue": "{{weight}} кг",
+			"networkStatus": "Статус сети",
+			"online": "Онлайн",
+			"offline": "Офлайн"
+		},
+		"periods": {
+			"lastHour": "Последний час",
+			"last6Hours": "Последние 6 часов",
+			"last24Hours": "Последние 24 часа",
+			"last7Days": "Последние 7 дней",
+			"last30Days": "Последние 30 дней",
+			"customPeriod": "Пользовательский период"
+		},
+		"messages": {
+			"deleted": "Контейнер успешно удален",
+			"statusUpdated": "Статус контейнера обновлен",
+			"alertSent": "Оповещение отправлено",
+			"dataExported": "Данные экспортированы в формате {{format}}",
+			"binUpdated": "Контейнер успешно обновлен"
+		},
+		"loading": {
+			"history": "Загрузка истории..."
+		},
+		"noData": {
+			"title": "Нет данных для отображения",
+			"suggestion": "Попробуйте выбрать другой период времени"
+		},
+		"map": {
+			"fullness": "Заполненность",
+			"status": "Статус"
+		},
+		"location": {
+			"notSpecified": "Координаты не указаны",
+			"unavailable": "Местоположение контейнера недоступно"
+		},
+		"modals": {
+			"deleteTitle": "Удалить контейнер",
+			"deleteMessage": "Вы уверены, что хотите удалить контейнер {{binId}}? Это действие нельзя отменить."
+		},
+		"alert": {
+			"message": "Ручное оповещение от оператора"
+		},
+		"binVisualization": {
+			"ariaLabel": "Контейнер заполнен на {{fullness}}%",
+			"status": {
+				"needsCleaning": "Требуется очистка",
+				"filling": "Заполняется",
+				"normal": "Нормальный"
+			},
+			"notAvailable": "Не доступно",
+			"currentFullness": "Текущая заполненность",
+			"temperature": "Температура",
+			"batteryLevel": "Заряд батареи",
+			"lastUpdated": "Обновлено"
+		},
+		"debug": {
+			"title": "Отладочная информация",
+			"binId": "ID контейнера",
+			"selectedPeriod": "Выбранный период",
+			"binDataAvailable": "Данные контейнера доступны",
+			"historyItems": "Элементы истории",
+			"distance": "Расстояние",
+			"containerHeight": "Высота контейнера",
+			"calculatedFullness": "Расчетная заполненность",
+			"alertThreshold": "Порог предупреждения",
+			"criticalThreshold": "Критический порог",
+			"needsAttention": "Требует внимания",
+			"isCritical": "Критическое состояние",
+			"isOnline": "В сети",
+			"coordinates": "Координаты",
+			"yes": "Да",
+			"no": "Нет"
+		}
+	},
 	"header": {
 		"notifications": "Уведомления",
 		"logout": "Выйти",

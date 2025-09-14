@@ -1,6 +1,7 @@
 // components/bins/BinVisualization.jsx
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { useTranslation } from 'react-i18next';
 
 const BinVisualization = ({
                               fullness,
@@ -11,6 +12,8 @@ const BinVisualization = ({
                               showLabels = false,
                               alertThreshold = 80
                           }) => {
+    const { t } = useTranslation();
+
     // Add ripple animation state
     const [ripple, setRipple] = useState(0);
 
@@ -53,9 +56,9 @@ const BinVisualization = ({
 
     // Get status text
     const getStatusText = () => {
-        if (fullness > alertThreshold) return 'Требуется очистка';
-        if (fullness > alertThreshold * 0.75) return 'Заполняется';
-        return 'Нормальный';
+        if (fullness > alertThreshold) return t('binVisualization.status.needsCleaning', 'Требуется очистка');
+        if (fullness > alertThreshold * 0.75) return t('binVisualization.status.filling', 'Заполняется');
+        return t('binVisualization.status.normal', 'Нормальный');
     };
 
     // Get status color
@@ -70,7 +73,7 @@ const BinVisualization = ({
 
     // Format the last updated date
     const formatDate = (dateString) => {
-        if (!dateString) return 'Не доступно';
+        if (!dateString) return t('binVisualization.notAvailable', 'Не доступно');
         const date = new Date(dateString);
         return new Intl.DateTimeFormat('ru-RU', {
             day: '2-digit',
@@ -91,7 +94,7 @@ const BinVisualization = ({
     return (
         <div className="flex flex-col items-center">
             <div className={`relative ${sizeClasses[size].container}`}
-                 aria-label={`Контейнер заполнен на ${fullness}%`}>
+                 aria-label={t('binVisualization.ariaLabel', 'Контейнер заполнен на {{fullness}}%', { fullness })}>
                 {/* Improved shadow effects */}
                 <div className="absolute inset-0 -rotate-3 rounded-lg bg-slate-50 shadow-xl"></div>
 
@@ -164,7 +167,9 @@ const BinVisualization = ({
             {/* Fullness percentage and status */}
             <div className="mt-2 text-center">
                 <div className="text-2xl font-bold">{fullness}%</div>
-                <div className="text-sm text-slate-500">Текущая заполненность</div>
+                <div className="text-sm text-slate-500">
+                    {t('binVisualization.currentFullness', 'Текущая заполненность')}
+                </div>
 
                 <div className={`mt-1 font-medium ${getStatusColor()}`}>
                     {getStatusText()}
@@ -173,12 +178,12 @@ const BinVisualization = ({
                 {/* Additional sensor info */}
                 <div className="mt-2 flex justify-center space-x-4 text-xs text-slate-500">
                     {temperature && (
-                        <div title="Температура">
+                        <div title={t('binVisualization.temperature', 'Температура')}>
                             🌡️ {temperature}°C
                         </div>
                     )}
                     {batteryLevel && (
-                        <div title="Заряд батареи">
+                        <div title={t('binVisualization.batteryLevel', 'Заряд батареи')}>
                             {getBatteryIcon()} {batteryLevel}%
                         </div>
                     )}
@@ -186,7 +191,7 @@ const BinVisualization = ({
 
                 {/* Last updated timestamp */}
                 <div className={`mt-1 text-slate-400 ${sizeClasses[size].info}`}>
-                    Обновлено: {formatDate(lastUpdated)}
+                    {t('binVisualization.lastUpdated', 'Обновлено')}: {formatDate(lastUpdated)}
                 </div>
             </div>
 

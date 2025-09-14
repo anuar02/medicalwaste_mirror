@@ -294,8 +294,20 @@
 		"infection": "Infectious Diseases",
 		"laboratory": "Laboratory",
 		"icu": "ICU"
-	}
-	,
+	},
+	"binVisualization": {
+		"ariaLabel": "Container is {{fullness}}% full",
+		"status": {
+			"needsCleaning": "Needs Cleaning",
+			"filling": "Filling Up",
+			"normal": "Normal"
+		},
+		"notAvailable": "Not Available",
+		"currentFullness": "Current Fullness",
+		"temperature": "Temperature",
+		"batteryLevel": "Battery Level",
+		"lastUpdated": "Updated"
+	},
 	"wasteTypes": {
 		"sharps": "Sharps Medical Waste",
 		"infectious": "Infectious Waste",
@@ -311,8 +323,129 @@
 		"maintenance": "Maintenance",
 		"offline": "Offline",
 		"decommissioned": "Decommissioned"
-	}
-	,
+	},
+	"binDetails": {
+		"title": "Container {{binId}}",
+		"actions": {
+			"backToList": "Back to List",
+			"tryAgain": "Try Again",
+			"export": "Export",
+			"alert": "Alert",
+			"edit": "Edit",
+			"maintenance": "Maintenance",
+			"activate": "Activate",
+			"delete": "Delete",
+			"retry": "Retry"
+		},
+		"errors": {
+			"loadingTitle": "Error Loading Data",
+			"loadingMessage": "Failed to load container data",
+			"notFoundTitle": "Container Not Found",
+			"notFoundMessage": "Container with ID \"{{binId}}\" does not exist or has been deleted",
+			"historyLoadError": "Error loading history"
+		},
+		"info": {
+			"unknownDepartment": "Unknown Department",
+			"unknownWasteType": "Waste type not specified",
+			"notSpecified": "Not specified",
+			"unknown": "Unknown",
+			"id": "ID",
+			"department": "Department",
+			"wasteType": "Waste Type",
+			"status": "Status",
+			"capacity": "Capacity",
+			"capacityValue": "{{capacity}} liters",
+			"containerHeight": "Container Height",
+			"heightValue": "{{height}} cm",
+			"lastUpdate": "Last Update",
+			"lastCollection": "Last Collection"
+		},
+		"sections": {
+			"binState": "Container Status",
+			"binInfo": "Container Information",
+			"sensorData": "Sensor Data",
+			"fillHistory": "Fill Level History",
+			"location": "Location"
+		},
+		"status": {
+			"critical": "Critical Level",
+			"needsAttention": "Needs Attention"
+		},
+		"metrics": {
+			"currentLevel": "Current Level",
+			"distanceFromSensor": "Distance from Sensor",
+			"distanceValue": "{{distance}} cm out of {{height}} cm",
+			"warningThreshold": "Warning Threshold",
+			"criticalThreshold": "Critical Threshold"
+		},
+		"sensors": {
+			"distance": "Distance from Sensor",
+			"distanceValue": "{{distance}} cm",
+			"calculation": "Fullness Calculation",
+			"temperature": "Temperature",
+			"temperatureValue": "{{temp}}°C",
+			"weight": "Weight",
+			"weightValue": "{{weight}} kg",
+			"networkStatus": "Network Status",
+			"online": "Online",
+			"offline": "Offline"
+		},
+		"periods": {
+			"lastHour": "Last Hour",
+			"last6Hours": "Last 6 Hours",
+			"last24Hours": "Last 24 Hours",
+			"last7Days": "Last 7 Days",
+			"last30Days": "Last 30 Days",
+			"customPeriod": "Custom Period"
+		},
+		"messages": {
+			"deleted": "Container successfully deleted",
+			"statusUpdated": "Container status updated",
+			"alertSent": "Alert sent",
+			"dataExported": "Data exported in {{format}} format",
+			"binUpdated": "Container successfully updated"
+		},
+		"loading": {
+			"history": "Loading history..."
+		},
+		"noData": {
+			"title": "No data to display",
+			"suggestion": "Try selecting a different time period"
+		},
+		"map": {
+			"fullness": "Fullness",
+			"status": "Status"
+		},
+		"location": {
+			"notSpecified": "Coordinates not specified",
+			"unavailable": "Container location unavailable"
+		},
+		"modals": {
+			"deleteTitle": "Delete Container",
+			"deleteMessage": "Are you sure you want to delete container {{binId}}? This action cannot be undone."
+		},
+		"alert": {
+			"message": "Manual alert from operator"
+		},
+		"debug": {
+			"title": "Debug Information",
+			"binId": "Bin ID",
+			"selectedPeriod": "Selected Period",
+			"binDataAvailable": "Bin Data Available",
+			"historyItems": "History Items",
+			"distance": "Distance",
+			"containerHeight": "Container Height",
+			"calculatedFullness": "Calculated Fullness",
+			"alertThreshold": "Alert Threshold",
+			"criticalThreshold": "Critical Threshold",
+			"needsAttention": "Needs Attention",
+			"isCritical": "Is Critical",
+			"isOnline": "Is Online",
+			"coordinates": "Coordinates",
+			"yes": "Yes",
+			"no": "No"
+		}
+	},
 	"binList": {
 		"loading": "Loading bins...",
 		"errorTitle": "Data load error",

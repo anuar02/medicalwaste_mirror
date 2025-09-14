@@ -3,6 +3,7 @@ import React, {useState, useCallback, useMemo, useEffect} from 'react';
 import {useParams, useNavigate, Link} from 'react-router-dom';
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import {useTranslation} from 'react-i18next';
 import {
     Trash2, Edit, Clock, Thermometer, MapPin, Weight, ArrowLeft, Share2,
     AlertTriangle, AreaChart, Wrench, CheckCircle, RotateCcw, Bell, Download,
@@ -40,6 +41,7 @@ const BinDetails = () => {
     const {isAdmin, isSupervisor} = useAuth();
     const queryClient = useQueryClient();
     const debug = useApiDebug();
+    const {t} = useTranslation();
 
     // State for modals and UI
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -84,7 +86,6 @@ const BinDetails = () => {
         }
     }, [binError]);
 
-// NEW WAY (v5) - Fixed
     const {
         data: historyResponse,
         isLoading: historyLoading,
@@ -129,7 +130,7 @@ const BinDetails = () => {
         enabled: !!binId
     });
 
-// Handle success/error with useEffect (v5 recommended approach)
+    // Handle success/error with useEffect (v5 recommended approach)
     useEffect(() => {
         if (historyResponse) {
             debug.log('History data fetched successfully', {
@@ -182,7 +183,7 @@ const BinDetails = () => {
             },
             {
                 context: 'Delete Bin',
-                successMessage: 'Контейнер успешно удален'
+                successMessage: t('binDetails.messages.deleted', 'Контейнер успешно удален')
             }
         ).mutationFn,
         onSuccess: () => {
@@ -205,12 +206,11 @@ const BinDetails = () => {
             },
             {
                 context: 'Update Bin Status',
-                successMessage: 'Статус контейнера обновлен'
+                successMessage: t('binDetails.messages.statusUpdated', 'Статус контейнера обновлен')
             }
         ).mutationFn,
         onSuccess: () => {
             debug.log('Bin status updated successfully');
-            // Fixed for v5
             queryClient.invalidateQueries({queryKey: ['bin', binId]});
         },
         onError: (error) => {
@@ -225,7 +225,7 @@ const BinDetails = () => {
                 return measureApiCall(
                     () => apiService.wasteBins.sendManualAlert(binId, {
                         alertType: 'manual',
-                        message: 'Ручное оповещение от оператора',
+                        message: t('binDetails.alert.message', 'Ручное оповещение от оператора'),
                         priority: 'medium'
                     }),
                     `Send Alert ${binId}`
@@ -233,7 +233,7 @@ const BinDetails = () => {
             },
             {
                 context: 'Send Manual Alert',
-                successMessage: 'Оповещение отправлено'
+                successMessage: t('binDetails.messages.alertSent', 'Оповещение отправлено')
             }
         ).mutationFn,
         onSuccess: () => {
@@ -290,13 +290,13 @@ const BinDetails = () => {
             link.remove();
             window.URL.revokeObjectURL(url);
 
-            toast.success(`Данные экспортированы в формате ${format.toUpperCase()}`);
+            toast.success(t('binDetails.messages.dataExported', 'Данные экспортированы в формате {{format}}', {format: format.toUpperCase()}));
             debug.log('Data exported successfully', {format});
         } catch (error) {
             debug.error('Export failed', error);
             handleApiError(error, 'Export Data');
         }
-    }, [bin, binId, debug]);
+    }, [bin, binId, debug, t]);
 
     // Computed values with safe property access
     const alertThreshold = useMemo(() => Number(bin?.alertThreshold) || 80, [bin]);
@@ -332,18 +332,20 @@ const BinDetails = () => {
         return (
             <div className="flex flex-col items-center justify-center p-8 text-center">
                 <AlertTriangle className="h-12 w-12 text-red-500"/>
-                <h3 className="mt-2 text-lg font-semibold text-slate-800">Ошибка при загрузке данных</h3>
+                <h3 className="mt-2 text-lg font-semibold text-slate-800">
+                    {t('binDetails.errors.loadingTitle', 'Ошибка при загрузке данных')}
+                </h3>
                 <p className="mt-1 text-sm text-slate-500">
-                    {binError?.response?.data?.message || binError?.message || 'Не удалось загрузить данные о контейнере'}
+                    {binError?.response?.data?.message || binError?.message || t('binDetails.errors.loadingMessage', 'Не удалось загрузить данные о контейнере')}
                 </p>
                 <div className="mt-4 flex space-x-3">
                     <Button onClick={() => navigate('/bins')} variant="outline">
                         <ArrowLeft className="mr-2 h-4 w-4"/>
-                        Вернуться к списку
+                        {t('binDetails.actions.backToList', 'Вернуться к списку')}
                     </Button>
                     <Button onClick={() => refetchBin()}>
                         <RotateCcw className="mr-2 h-4 w-4"/>
-                        Попробовать снова
+                        {t('binDetails.actions.tryAgain', 'Попробовать снова')}
                     </Button>
                 </div>
             </div>
@@ -356,13 +358,15 @@ const BinDetails = () => {
         return (
             <div className="flex flex-col items-center justify-center p-8 text-center">
                 <AlertTriangle className="h-12 w-12 text-amber-500"/>
-                <h3 className="mt-2 text-lg font-semibold text-slate-800">Контейнер не найден</h3>
+                <h3 className="mt-2 text-lg font-semibold text-slate-800">
+                    {t('binDetails.errors.notFoundTitle', 'Контейнер не найден')}
+                </h3>
                 <p className="mt-1 text-sm text-slate-500">
-                    Контейнер с ID "{binId}" не существует или был удален
+                    {t('binDetails.errors.notFoundMessage', 'Контейнер с ID "{{binId}}" не существует или был удален', {binId})}
                 </p>
                 <Button className="mt-4" onClick={() => navigate('/bins')} variant="outline">
                     <ArrowLeft className="mr-2 h-4 w-4"/>
-                    Вернуться к списку
+                    {t('binDetails.actions.backToList', 'Вернуться к списку')}
                 </Button>
             </div>
         );
@@ -388,26 +392,26 @@ const BinDetails = () => {
                     <div>
                         <div className="flex items-center space-x-3">
                             <h1 className="text-2xl font-bold text-slate-800">
-                                {bin.binId || `Контейнер ${binId}`}
+                                {bin.binId || t('binDetails.title', 'Контейнер {{binId}}', {binId})}
                             </h1>
                             <BinStatusBadge status={bin.status}/>
                             {isCritical && (
                                 <span
                                     className="flex items-center rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800 animate-pulse">
                                     <AlertTriangle className="mr-1 h-3 w-3"/>
-                                    Критический уровень
+                                    {t('binDetails.status.critical', 'Критический уровень')}
                                 </span>
                             )}
                             {needsAttention && !isCritical && (
                                 <span
                                     className="flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
                                     <AlertTriangle className="mr-1 h-3 w-3"/>
-                                    Требуется внимание
+                                    {t('binDetails.status.needsAttention', 'Требуется внимание')}
                                 </span>
                             )}
                         </div>
                         <p className="text-sm text-slate-500">
-                            {bin.department || 'Неизвестное отделение'} · {bin.wasteType || 'Тип отходов не указан'}
+                            {bin.department || t('binDetails.info.unknownDepartment', 'Неизвестное отделение')} · {bin.wasteType || t('binDetails.info.unknownWasteType', 'Тип отходов не указан')}
                         </p>
                     </div>
                 </div>
@@ -420,7 +424,7 @@ const BinDetails = () => {
                         onClick={() => handleExportData('csv')}
                     >
                         <Download className="mr-2 h-4 w-4"/>
-                        Экспорт
+                        {t('binDetails.actions.export', 'Экспорт')}
                     </Button>
 
                     <Button
@@ -430,7 +434,7 @@ const BinDetails = () => {
                         disabled={sendAlertMutation.isLoading}
                     >
                         <Bell className="mr-2 h-4 w-4"/>
-                        Оповещение
+                        {t('binDetails.actions.alert', 'Оповещение')}
                     </Button>
 
                     {(isAdmin || isSupervisor) && (
@@ -441,7 +445,7 @@ const BinDetails = () => {
                                 onClick={() => setShowEditModal(true)}
                             >
                                 <Edit className="mr-2 h-4 w-4"/>
-                                Редактировать
+                                {t('binDetails.actions.edit', 'Редактировать')}
                             </Button>
 
                             {bin.status === 'active' ? (
@@ -453,7 +457,7 @@ const BinDetails = () => {
                                     disabled={updateStatusMutation.isLoading}
                                 >
                                     <Wrench className="mr-2 h-4 w-4"/>
-                                    Обслуживание
+                                    {t('binDetails.actions.maintenance', 'Обслуживание')}
                                 </Button>
                             ) : bin.status === 'maintenance' || bin.status === 'offline' ? (
                                 <Button
@@ -464,7 +468,7 @@ const BinDetails = () => {
                                     disabled={updateStatusMutation.isLoading}
                                 >
                                     <CheckCircle className="mr-2 h-4 w-4"/>
-                                    Активировать
+                                    {t('binDetails.actions.activate', 'Активировать')}
                                 </Button>
                             ) : null}
 
@@ -476,7 +480,7 @@ const BinDetails = () => {
                                     onClick={() => setShowDeleteModal(true)}
                                 >
                                     <Trash2 className="mr-2 h-4 w-4"/>
-                                    Удалить
+                                    {t('binDetails.actions.delete', 'Удалить')}
                                 </Button>
                             )}
                         </>
@@ -491,7 +495,9 @@ const BinDetails = () => {
                     {/* Bin visualization */}
                     <div className="overflow-hidden rounded-xl bg-white shadow-sm">
                         <div className="border-b border-slate-100 px-6 py-4">
-                            <h2 className="text-lg font-semibold text-slate-800">Состояние Контейнера</h2>
+                            <h2 className="text-lg font-semibold text-slate-800">
+                                {t('binDetails.sections.binState', 'Состояние Контейнера')}
+                            </h2>
                         </div>
                         <div className="p-6">
                             <div className="flex flex-col items-center">
@@ -519,28 +525,36 @@ const BinDetails = () => {
 
                                 <div className="mt-6 w-full space-y-2">
                                     <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
-                                        <span className="text-sm font-medium text-slate-700">Текущий уровень</span>
+                                        <span className="text-sm font-medium text-slate-700">
+                                            {t('binDetails.metrics.currentLevel', 'Текущий уровень')}
+                                        </span>
                                         <span className="text-sm font-semibold text-slate-800">
-            {fullness.toFixed(1)}%
-        </span>
+                                            {fullness.toFixed(1)}%
+                                        </span>
                                     </div>
                                     <div className="flex items-center justify-between rounded-lg bg-blue-50 px-4 py-3">
-                                        <span className="text-sm font-medium text-blue-700">Расстояние от датчика</span>
+                                        <span className="text-sm font-medium text-blue-700">
+                                            {t('binDetails.metrics.distanceFromSensor', 'Расстояние от датчика')}
+                                        </span>
                                         <span className="text-sm font-semibold text-blue-800">
-            {distance} см из {containerHeight} см
-        </span>
+                                            {t('binDetails.metrics.distanceValue', '{{distance}} см из {{height}} см', {distance, height: containerHeight})}
+                                        </span>
                                     </div>
                                     <div className="flex items-center justify-between rounded-lg bg-amber-50 px-4 py-3">
-                                        <span className="text-sm font-medium text-amber-700">Порог предупреждения</span>
+                                        <span className="text-sm font-medium text-amber-700">
+                                            {t('binDetails.metrics.warningThreshold', 'Порог предупреждения')}
+                                        </span>
                                         <span className="text-sm font-semibold text-amber-800">
-            {alertThreshold}%
-        </span>
+                                            {alertThreshold}%
+                                        </span>
                                     </div>
                                     <div className="flex items-center justify-between rounded-lg bg-red-50 px-4 py-3">
-                                        <span className="text-sm font-medium text-red-700">Критический порог</span>
+                                        <span className="text-sm font-medium text-red-700">
+                                            {t('binDetails.metrics.criticalThreshold', 'Критический порог')}
+                                        </span>
                                         <span className="text-sm font-semibold text-red-800">
-            {criticalThreshold}%
-        </span>
+                                            {criticalThreshold}%
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -550,26 +564,26 @@ const BinDetails = () => {
                     {/* Bin information */}
                     <div className="space-y-6">
                         <InfoCard
-                            title="Информация о контейнере"
+                            title={t('binDetails.sections.binInfo', 'Информация о контейнере')}
                             items={[
-                                {label: 'ID', value: bin.binId || binId},
-                                {label: 'Отделение', value: bin.department || 'Не указано'},
-                                {label: 'Тип отходов', value: bin.wasteType || 'Не указан'},
-                                {label: 'Статус', value: <BinStatusBadge status={bin.status}/>},
-                                {label: 'Ёмкость', value: `${bin.capacity || 50} литров`},
+                                {label: t('binDetails.info.id', 'ID'), value: bin.binId || binId},
+                                {label: t('binDetails.info.department', 'Отделение'), value: bin.department || t('binDetails.info.notSpecified', 'Не указано')},
+                                {label: t('binDetails.info.wasteType', 'Тип отходов'), value: bin.wasteType || t('binDetails.info.notSpecified', 'Не указан')},
+                                {label: t('binDetails.info.status', 'Статус'), value: <BinStatusBadge status={bin.status}/>},
+                                {label: t('binDetails.info.capacity', 'Ёмкость'), value: t('binDetails.info.capacityValue', '{{capacity}} литров', {capacity: bin.capacity || 50})},
                                 {
-                                    label: 'Высота контейнера',
-                                    value: `${containerHeight} см`,
+                                    label: t('binDetails.info.containerHeight', 'Высота контейнера'),
+                                    value: t('binDetails.info.heightValue', '{{height}} см', {height: containerHeight}),
                                     icon: <Share2 className="h-4 w-4 text-slate-400"/>
                                 },
                                 {
-                                    label: 'Последнее обновление',
-                                    value: bin.lastUpdate ? formatDate(bin.lastUpdate) : 'Неизвестно',
+                                    label: t('binDetails.info.lastUpdate', 'Последнее обновление'),
+                                    value: bin.lastUpdate ? formatDate(bin.lastUpdate) : t('binDetails.info.unknown', 'Неизвестно'),
                                     icon: <Clock className="h-4 w-4 text-slate-400"/>
                                 },
                                 {
-                                    label: 'Последний сбор',
-                                    value: bin.lastCollection ? formatDate(bin.lastCollection) : 'Неизвестно',
+                                    label: t('binDetails.info.lastCollection', 'Последний сбор'),
+                                    value: bin.lastCollection ? formatDate(bin.lastCollection) : t('binDetails.info.unknown', 'Неизвестно'),
                                     icon: <Trash2 className="h-4 w-4 text-slate-400"/>
                                 },
                             ]}
@@ -578,40 +592,40 @@ const BinDetails = () => {
                         {/* Sensor data if available */}
                         {(bin.temperature || bin.weight || bin.distance !== undefined) && (
                             <InfoCard
-                                title="Показатели датчиков"
+                                title={t('binDetails.sections.sensorData', 'Показатели датчиков')}
                                 items={[
                                     ...(bin.distance !== undefined ? [{
-                                        label: 'Расстояние от датчика',
-                                        value: `${distance} см`,
+                                        label: t('binDetails.sensors.distance', 'Расстояние от датчика'),
+                                        value: t('binDetails.sensors.distanceValue', '{{distance}} см', {distance}),
                                         icon: <Share2 className="h-4 w-4 text-slate-400"/>
                                     }] : []),
                                     ...(bin.distance !== undefined ? [{
-                                        label: 'Расчет заполненности',
+                                        label: t('binDetails.sensors.calculation', 'Расчет заполненности'),
                                         value: `((${containerHeight} - ${distance}) / ${containerHeight}) × 100 = ${fullness.toFixed(1)}%`,
                                         className: 'text-xs text-slate-500 font-mono'
                                     }] : []),
                                     ...(bin.temperature ? [{
-                                        label: 'Температура',
-                                        value: `${Number(bin.temperature).toFixed(1)}°C`,
+                                        label: t('binDetails.sensors.temperature', 'Температура'),
+                                        value: t('binDetails.sensors.temperatureValue', '{{temp}}°C', {temp: Number(bin.temperature).toFixed(1)}),
                                         icon: <Thermometer className="h-4 w-4 text-slate-400"/>
                                     }] : []),
                                     ...(bin.weight ? [{
-                                        label: 'Вес',
-                                        value: `${Number(bin.weight).toFixed(1)} кг`,
+                                        label: t('binDetails.sensors.weight', 'Вес'),
+                                        value: t('binDetails.sensors.weightValue', '{{weight}} кг', {weight: Number(bin.weight).toFixed(1)}),
                                         icon: <Weight className="h-4 w-4 text-slate-400"/>
                                     }] : []),
                                     {
-                                        label: 'Статус сети',
+                                        label: t('binDetails.sensors.networkStatus', 'Статус сети'),
                                         value: isOnline() ? (
                                             <span className="flex items-center text-emerald-600">
-                        <span className="mr-2 h-2 w-2 rounded-full bg-emerald-500"></span>
-                        Онлайн
-                    </span>
+                                                <span className="mr-2 h-2 w-2 rounded-full bg-emerald-500"></span>
+                                                {t('binDetails.sensors.online', 'Онлайн')}
+                                            </span>
                                         ) : (
                                             <span className="flex items-center text-slate-500">
-                        <span className="mr-2 h-2 w-2 rounded-full bg-slate-400"></span>
-                        Офлайн
-                    </span>
+                                                <span className="mr-2 h-2 w-2 rounded-full bg-slate-400"></span>
+                                                {t('binDetails.sensors.offline', 'Офлайн')}
+                                            </span>
                                         ),
                                     },
                                 ]}
@@ -627,15 +641,17 @@ const BinDetails = () => {
                     <div className="overflow-hidden rounded-xl bg-white shadow-sm">
                         <div className="border-b border-slate-100 px-6 py-4">
                             <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold text-slate-800">История Заполнения</h2>
+                                <h2 className="text-lg font-semibold text-slate-800">
+                                    {t('binDetails.sections.fillHistory', 'История Заполнения')}
+                                </h2>
                                 <div className="flex items-center space-x-2">
                                     <AreaChart className="h-5 w-5 text-slate-400"/>
                                     <span className="text-sm text-slate-500">
-                                        {selectedTimePeriod === '1h' ? 'Последний час' :
-                                            selectedTimePeriod === '6h' ? 'Последние 6 часов' :
-                                                selectedTimePeriod === '24h' ? 'Последние 24 часа' :
-                                                    selectedTimePeriod === '7d' ? 'Последние 7 дней' :
-                                                        selectedTimePeriod === '30d' ? 'Последние 30 дней' : 'Пользовательский период'}
+                                        {selectedTimePeriod === '1h' ? t('binDetails.periods.lastHour', 'Последний час') :
+                                            selectedTimePeriod === '6h' ? t('binDetails.periods.last6Hours', 'Последние 6 часов') :
+                                                selectedTimePeriod === '24h' ? t('binDetails.periods.last24Hours', 'Последние 24 часа') :
+                                                    selectedTimePeriod === '7d' ? t('binDetails.periods.last7Days', 'Последние 7 дней') :
+                                                        selectedTimePeriod === '30d' ? t('binDetails.periods.last30Days', 'Последние 30 дней') : t('binDetails.periods.customPeriod', 'Пользовательский период')}
                                     </span>
                                 </div>
                             </div>
@@ -644,13 +660,15 @@ const BinDetails = () => {
                             {historyLoading ? (
                                 <div className="flex items-center justify-center h-96">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
-                                    <span className="ml-3 text-sm text-slate-500">Загрузка истории...</span>
+                                    <span className="ml-3 text-sm text-slate-500">
+                                        {t('binDetails.loading.history', 'Загрузка истории...')}
+                                    </span>
                                 </div>
                             ) : historyError ? (
                                 <div className="flex flex-col items-center justify-center h-96 text-center">
                                     <AlertTriangle className="h-8 w-8 text-amber-500 mb-2"/>
                                     <p className="text-sm text-slate-500">
-                                        {historyError?.response?.data?.message || 'Ошибка загрузки истории'}
+                                        {historyError?.response?.data?.message || t('binDetails.errors.historyLoadError', 'Ошибка загрузки истории')}
                                     </p>
                                     <Button
                                         variant="outline"
@@ -659,15 +677,17 @@ const BinDetails = () => {
                                         onClick={() => refetchHistory()}
                                     >
                                         <RotateCcw className="mr-2 h-4 w-4"/>
-                                        Повторить
+                                        {t('binDetails.actions.retry', 'Повторить')}
                                     </Button>
                                 </div>
                             ) : processedHistory.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-96 text-center">
                                     <AreaChart className="h-8 w-8 text-slate-400 mb-2"/>
-                                    <p className="text-sm text-slate-500">Нет данных для отображения</p>
+                                    <p className="text-sm text-slate-500">
+                                        {t('binDetails.noData.title', 'Нет данных для отображения')}
+                                    </p>
                                     <p className="text-xs text-slate-400 mt-1">
-                                        Попробуйте выбрать другой период времени
+                                        {t('binDetails.noData.suggestion', 'Попробуйте выбрать другой период времени')}
                                     </p>
                                 </div>
                             ) : (
@@ -690,7 +710,9 @@ const BinDetails = () => {
                     <div style={{zIndex: 0}} className="overflow-hidden rounded-xl bg-white shadow-sm">
                         <div className="border-b border-slate-100 px-6 py-4">
                             <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold text-slate-800">Местоположение</h2>
+                                <h2 className="text-lg font-semibold text-slate-800">
+                                    {t('binDetails.sections.location', 'Местоположение')}
+                                </h2>
                                 <div className="flex items-center space-x-2">
                                     <MapPin className="h-5 w-5 text-slate-400"/>
                                     <span className="text-sm text-slate-500">
@@ -710,9 +732,9 @@ const BinDetails = () => {
                                             position: [coordinates.latitude, coordinates.longitude],
                                             popup: `
                                                 <strong>${bin.binId || binId}</strong><br/>
-                                                ${bin.department || 'Неизвестное отделение'}<br/>
-                                                Заполненность: ${formatPercentage(fullness)}<br/>
-                                                Статус: ${bin.status || 'Неизвестен'}
+                                                ${bin.department || t('binDetails.info.unknownDepartment', 'Неизвестное отделение')}<br/>
+                                                ${t('binDetails.map.fullness', 'Заполненность')}: ${formatPercentage(fullness)}<br/>
+                                                ${t('binDetails.map.status', 'Статус')}: ${bin.status || t('binDetails.info.unknown', 'Неизвестен')}
                                             `
                                         }
                                     ]}
@@ -721,8 +743,12 @@ const BinDetails = () => {
                                 <div className="flex items-center justify-center h-full text-slate-500 bg-slate-50">
                                     <div className="text-center">
                                         <MapPin className="h-8 w-8 mx-auto mb-2"/>
-                                        <p className="font-medium">Координаты не указаны</p>
-                                        <p className="text-sm">Местоположение контейнера недоступно</p>
+                                        <p className="font-medium">
+                                            {t('binDetails.location.notSpecified', 'Координаты не указаны')}
+                                        </p>
+                                        <p className="text-sm">
+                                            {t('binDetails.location.unavailable', 'Местоположение контейнера недоступно')}
+                                        </p>
                                     </div>
                                 </div>
                             )}
@@ -736,8 +762,8 @@ const BinDetails = () => {
                 isOpen={showDeleteModal}
                 onClose={() => setShowDeleteModal(false)}
                 onConfirm={handleDelete}
-                title="Удалить контейнер"
-                message={`Вы уверены, что хотите удалить контейнер ${bin.binId || binId}? Это действие нельзя отменить.`}
+                title={t('binDetails.modals.deleteTitle', 'Удалить контейнер')}
+                message={t('binDetails.modals.deleteMessage', 'Вы уверены, что хотите удалить контейнер {{binId}}? Это действие нельзя отменить.', {binId: bin.binId || binId})}
                 isDeleting={deleteMutation.isLoading}
             />
 
@@ -746,9 +772,9 @@ const BinDetails = () => {
                 onClose={() => setShowEditModal(false)}
                 bin={bin}
                 onSuccess={() => {
-                    queryClient.invalidateQueries({queryKey: ['bin', binId]});  // ✅ New v5 syntax
+                    queryClient.invalidateQueries({queryKey: ['bin', binId]});
                     setShowEditModal(false);
-                    toast.success('Контейнер успешно обновлен');
+                    toast.success(t('binDetails.messages.binUpdated', 'Контейнер успешно обновлен'));
                 }}
             />
 
@@ -757,22 +783,22 @@ const BinDetails = () => {
                 <div className="mt-8 rounded-lg bg-slate-100 p-4">
                     <details>
                         <summary className="cursor-pointer font-medium text-slate-700">
-                            🔧 Debug Information
+                            🔧 {t('binDetails.debug.title', 'Debug Information')}
                         </summary>
                         <div className="mt-4 space-y-2 text-sm">
-                            <div><strong>Bin ID:</strong> {binId}</div>
-                            <div><strong>Selected Period:</strong> {selectedTimePeriod}</div>
-                            <div><strong>Bin Data Available:</strong> {bin ? 'Yes' : 'No'}</div>
-                            <div><strong>History Items:</strong> {processedHistory.length}</div>
-                            <div><strong>Distance:</strong> {distance} cm</div>
-                            <div><strong>Container Height:</strong> {containerHeight} cm</div>
-                            <div><strong>Calculated Fullness:</strong> {fullness}% (({containerHeight} - {distance}) / {containerHeight} × 100)</div>
-                            <div><strong>Alert Threshold:</strong> {alertThreshold}%</div>
-                            <div><strong>Critical Threshold:</strong> {criticalThreshold}%</div>
-                            <div><strong>Needs Attention:</strong> {needsAttention ? 'Yes' : 'No'}</div>
-                            <div><strong>Is Critical:</strong> {isCritical ? 'Yes' : 'No'}</div>
-                            <div><strong>Is Online:</strong> {isOnline() ? 'Yes' : 'No'}</div>
-                            <div><strong>Coordinates:</strong> {coordinates.latitude}, {coordinates.longitude}</div>
+                            <div><strong>{t('binDetails.debug.binId', 'Bin ID')}:</strong> {binId}</div>
+                            <div><strong>{t('binDetails.debug.selectedPeriod', 'Selected Period')}:</strong> {selectedTimePeriod}</div>
+                            <div><strong>{t('binDetails.debug.binDataAvailable', 'Bin Data Available')}:</strong> {bin ? t('binDetails.debug.yes', 'Yes') : t('binDetails.debug.no', 'No')}</div>
+                            <div><strong>{t('binDetails.debug.historyItems', 'History Items')}:</strong> {processedHistory.length}</div>
+                            <div><strong>{t('binDetails.debug.distance', 'Distance')}:</strong> {distance} cm</div>
+                            <div><strong>{t('binDetails.debug.containerHeight', 'Container Height')}:</strong> {containerHeight} cm</div>
+                            <div><strong>{t('binDetails.debug.calculatedFullness', 'Calculated Fullness')}:</strong> {fullness}% (({containerHeight} - {distance}) / {containerHeight} × 100)</div>
+                            <div><strong>{t('binDetails.debug.alertThreshold', 'Alert Threshold')}:</strong> {alertThreshold}%</div>
+                            <div><strong>{t('binDetails.debug.criticalThreshold', 'Critical Threshold')}:</strong> {criticalThreshold}%</div>
+                            <div><strong>{t('binDetails.debug.needsAttention', 'Needs Attention')}:</strong> {needsAttention ? t('binDetails.debug.yes', 'Yes') : t('binDetails.debug.no', 'No')}</div>
+                            <div><strong>{t('binDetails.debug.isCritical', 'Is Critical')}:</strong> {isCritical ? t('binDetails.debug.yes', 'Yes') : t('binDetails.debug.no', 'No')}</div>
+                            <div><strong>{t('binDetails.debug.isOnline', 'Is Online')}:</strong> {isOnline() ? t('binDetails.debug.yes', 'Yes') : t('binDetails.debug.no', 'No')}</div>
+                            <div><strong>{t('binDetails.debug.coordinates', 'Coordinates')}:</strong> {coordinates.latitude}, {coordinates.longitude}</div>
                         </div>
                     </details>
                 </div>
