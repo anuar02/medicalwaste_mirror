@@ -6,6 +6,8 @@ const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { sendAlertNotification } = require('../utils/telegram');
 const { logger } = require('../middleware/loggers');
+const PDFDocument = require('pdfkit');
+const ExcelJS = require('exceljs');
 
 /**
  * Get all waste bins with optional filtering
@@ -100,32 +102,203 @@ const exportBinData = asyncHandler(async (req, res, next) => {
 
     const bins = await WasteBin.find(filter);
 
+    if (bins.length === 0) {
+        return res.status(404).json({
+            status: 'error',
+            message: 'No data found for the specified criteria'
+        });
+    }
+
+    // Prepare data for export
+    const exportData = bins.map(bin => ({
+        BinID: bin.binId,
+        Department: bin.department,
+        WasteType: bin.wasteType,
+        Fullness: `${bin.fullness}%`,
+        Capacity: `${bin.capacity}L`,
+        Weight: `${bin.weight}kg`,
+        Temperature: `${bin.temperature}°C`,
+        Status: bin.status,
+        AlertThreshold: `${bin.alertThreshold}%`,
+        LastCollection: bin.lastCollection ? new Date(bin.lastCollection).toLocaleDateString() : 'Never',
+        LastUpdate: new Date(bin.lastUpdate).toLocaleString()
+    }));
+
     if (format === 'csv') {
-        // Simple CSV export
-        const csvData = bins.map(bin => ({
-            BinID: bin.binId,
-            Department: bin.department,
-            WasteType: bin.wasteType,
-            Fullness: bin.fullness,
-            Status: bin.status,
-            LastUpdate: bin.lastUpdate
-        }));
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=waste_bins_report.csv');
 
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=bins.csv');
-
-        // Simple CSV conversion
-        const csvString = [
-            Object.keys(csvData[0]).join(','),
-            ...csvData.map(row => Object.values(row).join(','))
+        // Add BOM for proper UTF-8 encoding (important for Cyrillic text)
+        const BOM = '\uFEFF';
+        const headers = Object.keys(exportData[0]);
+        const csvString = BOM + [
+            headers.join(','),
+            ...exportData.map(row =>
+                headers.map(header => {
+                    const value = row[header];
+                    // Escape commas and quotes in CSV
+                    return typeof value === 'string' && (value.includes(',') || value.includes('"'))
+                        ? `"${value.replace(/"/g, '""')}"`
+                        : value;
+                }).join(',')
+            )
         ].join('\n');
 
         return res.send(csvString);
     }
 
-    res.status(200).json({
-        status: 'success',
-        data: { bins }
+    if (format === 'xlsx') {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Waste Bins Report');
+
+        // Add headers
+        const headers = Object.keys(exportData[0]);
+        worksheet.addRow(headers);
+
+        // Style headers
+        worksheet.getRow(1).font = { bold: true };
+        worksheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFE0E0E0' }
+        };
+
+        // Add data
+        exportData.forEach(row => {
+            worksheet.addRow(Object.values(row));
+        });
+
+        // Auto-fit columns
+        worksheet.columns.forEach(column => {
+            column.width = Math.max(column.header?.length || 10, 15);
+        });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=waste_bins_report.xlsx');
+
+        return workbook.xlsx.write(res).then(() => {
+            res.end();
+        });
+    }
+
+    if (format === 'pdf') {
+        // Transliteration function for Cyrillic text
+        const transliterate = (text) => {
+            const map = {
+                'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E', 'Ж': 'Zh',
+                'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
+                'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts',
+                'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
+                'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh',
+                'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+                'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
+                'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+            };
+            return text.replace(/[А-Яа-яЁё]/g, char => map[char] || char);
+        };
+
+        // Prepare data with transliterated Cyrillic text
+        const pdfData = exportData.map(row => ({
+            ...row,
+            Department: transliterate(row.Department || ''),
+            WasteType: transliterate(row.WasteType || '')
+        }));
+
+        const doc = new PDFDocument({ margin: 50, size: 'A4', layout: 'landscape' });
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename=waste_bins_report.pdf');
+
+        // Pipe PDF to response
+        doc.pipe(res);
+
+        // Title
+        doc.fontSize(20)
+            .text('Waste Bins Report', 50, 50);
+
+        // Report details
+        doc.fontSize(10)
+            .text(`Generated: ${new Date().toLocaleString()}`, 50, 80)
+            .text(`Total Bins: ${bins.length}`, 50, 95);
+
+        if (startDate && endDate) {
+            doc.text(`Date Range: ${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`, 50, 110);
+        }
+
+        if (departments) {
+            doc.text(`Departments: ${departments}`, 50, 125);
+        }
+
+        // Table setup
+        const tableTop = 150;
+        const tableLeft = 50;
+        let currentY = tableTop;
+
+        // Table headers
+        const headers = ['Bin ID', 'Department', 'Waste Type', 'Fullness', 'Status', 'Last Update'];
+        const columnWidths = [80, 120, 120, 60, 60, 120];
+        let currentX = tableLeft;
+
+        // Draw header row
+        doc.fontSize(9);
+
+        headers.forEach((header, index) => {
+            doc.rect(currentX, currentY, columnWidths[index], 20)
+                .fillAndStroke('#f0f0f0', '#000000')
+                .fillColor('#000000')
+                .text(header, currentX + 5, currentY + 6, {
+                    width: columnWidths[index] - 10,
+                    align: 'center'
+                });
+            currentX += columnWidths[index];
+        });
+
+        currentY += 20;
+
+        // Draw data rows
+        doc.fontSize(8);
+
+        pdfData.forEach((row, rowIndex) => {
+            if (currentY > 500) { // New page if needed
+                doc.addPage({ layout: 'landscape' });
+                currentY = 50;
+            }
+
+            currentX = tableLeft;
+            const rowData = [
+                row.BinID,
+                row.Department,
+                row.WasteType,
+                row.Fullness,
+                row.Status,
+                row.LastUpdate
+            ];
+
+            rowData.forEach((data, colIndex) => {
+                const bgColor = rowIndex % 2 === 0 ? '#ffffff' : '#f9f9f9';
+                doc.rect(currentX, currentY, columnWidths[colIndex], 18)
+                    .fillAndStroke(bgColor, '#cccccc')
+                    .fillColor('#000000')
+                    .text(String(data), currentX + 3, currentY + 4, {
+                        width: columnWidths[colIndex] - 6,
+                        height: 10,
+                        ellipsis: true
+                    });
+                currentX += columnWidths[colIndex];
+            });
+
+            currentY += 18;
+        });
+
+        // Finalize PDF
+        doc.end();
+        return;
+    }
+
+    // If format is not supported
+    res.status(400).json({
+        status: 'error',
+        message: 'Unsupported format. Use csv, xlsx, or pdf.'
     });
 });
 

@@ -25,6 +25,7 @@ import TelegramSettings from "../components/dashboard/TelegramSettings";
 import { useLocalStorage } from "../components/dashboard/useLocalStorage";
 import { useOnlineStatus } from "../components/dashboard/useOnlineStatus";
 import { useAutoRefresh } from "../components/dashboard/useAutoRefresh";
+import ExportButton from "../components/ui/ExportButton";
 
 // ===== HELPER FUNCTIONS (moved to top) =====
 
@@ -588,19 +589,63 @@ const Dashboard = () => {
                 endDate: new Date().toISOString()
             });
 
-            // Handle file download
-            const url = window.URL.createObjectURL(new Blob([response.data]));
+            // Create blob with proper MIME type
+            let blob;
+            let mimeType;
+
+            switch (format) {
+                case 'pdf':
+                    mimeType = 'application/pdf';
+                    break;
+                case 'xlsx':
+                    mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                    break;
+                case 'csv':
+                    mimeType = 'text/csv';
+                    break;
+                default:
+                    mimeType = 'application/octet-stream';
+            }
+
+            // Handle different response types
+            if (response.data instanceof Blob) {
+                // If response is already a blob
+                blob = response.data;
+            } else if (response.data instanceof ArrayBuffer) {
+                // If response is ArrayBuffer
+                blob = new Blob([response.data], { type: mimeType });
+            } else if (typeof response.data === 'string') {
+                // If response is string (like CSV)
+                blob = new Blob([response.data], { type: mimeType });
+            } else {
+                // If response is object (shouldn't happen for file downloads)
+                console.error('Unexpected response format:', response.data);
+                throw new Error('Invalid file format received');
+            }
+
+            // Verify blob has content
+            if (blob.size === 0) {
+                throw new Error('Downloaded file is empty');
+            }
+
+            // Create download
+            const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.setAttribute('download', `dashboard-data-${new Date().toISOString().split('T')[0]}.${format}`);
+
+            // Ensure link is added to DOM for some browsers
             document.body.appendChild(link);
             link.click();
-            link.remove();
+
+            // Cleanup
+            document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
 
             toast.success(`Данные экспортированы в формате ${format.toUpperCase()}`);
         } catch (error) {
-            toast.error('Ошибка экспорта данных');
+            console.error('Export error:', error);
+            toast.error(`Ошибка экспорта данных: ${error.message || 'Неизвестная ошибка'}`);
         }
     }, []);
 
@@ -1004,15 +1049,7 @@ const Dashboard = () => {
                     <DashboardCard
                         title={t('dashboard.byWasteTypes', 'Распределение по Типам Отходов')}
                         icon={<Trash2 />}
-                        action={
-                            <button
-                                onClick={() => handleExportData('pdf')}
-                                className="text-slate-400 hover:text-slate-600 transition-colors"
-                                title={t('dashboard.exportReport', 'Экспорт отчета')}
-                            >
-                                <Download className="h-4 w-4" />
-                            </button>
-                        }
+                        action={<ExportButton t={t} />}
                     >
                         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                             <div className="flex justify-center items-center">

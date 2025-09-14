@@ -1,5 +1,5 @@
 // pages/Reports.jsx
-import React, { useState } from 'react';
+import React, {useCallback, useState} from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
     BarChart3,
@@ -20,8 +20,40 @@ import DepartmentBarChart from '../components/charts/DepartmentBarChart';
 import WasteTypePieChart from '../components/charts/WasteTypePieChart';
 import Loader from '../components/ui/Loader';
 import { formatDate, formatPercentage } from '../utils/formatters';
+import ExportButton from "../components/ui/ExportButton";
+import ExportDropdownButton from "../components/ui/exportButtonHandler";
+import toast from "react-hot-toast";
 
 const Reports = () => {
+
+    const handleExportData = useCallback(async (format = 'csv') => {
+        try {
+            const response = await apiService.wasteBins.exportData(format, {
+                startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+                endDate: new Date().toISOString()
+            });
+
+            const blob = response.data;
+            if (!blob || blob.size === 0) {
+                throw new Error('Downloaded file is empty');
+            }
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `dashboard-data-${new Date().toISOString().split('T')[0]}.${format}`);
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            toast.success(`Данные экспортированы в формате ${format.toUpperCase()}`);
+        } catch (error) {
+            console.error('Export error:', error);
+            toast.error(`Ошибка экспорта данных: ${error.message || 'Неизвестная ошибка'}`);
+        }
+    }, []);
     // Date range state
     const [dateRange, setDateRange] = useState({
         from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days ago
@@ -105,6 +137,8 @@ const Reports = () => {
         );
     }
 
+
+
     // Extract data
     const stats = statsData?.data?.data?.overview || {};
     const departmentStats = statsData?.data?.data?.departmentStats || [];
@@ -145,13 +179,7 @@ const Reports = () => {
                         <Printer className="mr-2 h-4 w-4" />
                         Печать
                     </Button>
-                    <Button
-                        variant="outline"
-                        onClick={exportToCSV}
-                    >
-                        <Download className="mr-2 h-4 w-4" />
-                        Экспорт CSV
-                    </Button>
+                    <ExportDropdownButton handleExportData={handleExportData} />
                     <Button
                         onClick={generateReport}
                     >
