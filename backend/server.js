@@ -23,10 +23,13 @@ const adminRoutes = require('./routes/admin');
 const telegramRoutes = require('./routes/telegram');
 const driverRoutes = require('./routes/drivers');
 const medicalCompanyRoutes = require('./routes/medicalCompanies');
+const gpsRoutes = require('./routes/gps');
 
 // Import middlewares
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
 const { requestLogger } = require('./middleware/loggers');
+const { initializeGpsWebSocket } = require('./utils/gpsWebSocket');
+
 
 const app = express();
 
@@ -128,6 +131,7 @@ mongoose.connection.on('disconnected', () => {
 connectDB();
 
 // Mount routes
+app.use('/api/gps', gpsRoutes);
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api/waste-bins', wasteBinRoutes);
@@ -156,9 +160,17 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
+const cleanupGpsWs = initializeGpsWebSocket(server);
+
 // Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('SIGTERM signal received. Closing server...');
+
+    // Cleanup GPS WebSocket
+    if (cleanupGpsWs) {
+        cleanupGpsWs();
+    }
+
     server.close(() => {
         console.log('Server closed.');
         mongoose.connection.close(false, () => {
@@ -167,5 +179,6 @@ process.on('SIGTERM', () => {
         });
     });
 });
+
 
 module.exports = { app, server };
