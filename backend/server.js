@@ -156,29 +156,56 @@ app.get('/api/health', (req, res) => {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Server startup
 const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 const cleanupGpsWs = initializeGpsWebSocket(server);
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received. Closing server...');
+// Graceful shutdown handler
+const gracefulShutdown = async (signal) => {
+    console.log(`${signal} signal received. Starting graceful shutdown...`);
 
-    // Cleanup GPS WebSocket
-    if (cleanupGpsWs) {
-        cleanupGpsWs();
-    }
+    try {
+        // Cleanup GPS WebSocket
+        if (cleanupGpsWs) {
+            cleanupGpsWs();
+            console.log('✓ GPS WebSocket cleaned up');
+        }
 
-    server.close(() => {
-        console.log('Server closed.');
-        mongoose.connection.close(false, () => {
-            console.log('MongoDB connection closed.');
-            process.exit(0);
+        // Close HTTP server (stop accepting new connections)
+        await new Promise((resolve, reject) => {
+            server.close((err) => {
+                if (err) reject(err);
+                else resolve();
+            });
         });
-    });
+        console.log('✓ HTTP server closed');
+
+        // Close MongoDB connection
+        await mongoose.connection.close();
+        console.log('✓ MongoDB connection closed');
+
+        console.log('Graceful shutdown completed successfully');
+        process.exit(0);
+    } catch (error) {
+        console.error('Error during graceful shutdown:', error);
+        process.exit(1);
+    }
+};
+
+// Handle termination signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught errors
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    gracefulShutdown('UNHANDLED_REJECTION');
 });
 
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
 
 module.exports = { app, server };
