@@ -113,7 +113,6 @@ historySchema.statics.getAggregatedHistory = async function(binId, timeFrame = '
             groupByTimeFormat = { $dateToString: { format: '%Y-%m-%d', date: '$timestamp' } };
             break;
         case 'week':
-            // Group by week (using ISO week date)
             groupByTimeFormat = {
                 $concat: [
                     { $dateToString: { format: '%Y', date: '$timestamp' } },
@@ -128,14 +127,16 @@ historySchema.statics.getAggregatedHistory = async function(binId, timeFrame = '
 
     return this.aggregate([
         { $match: { binId } },
+        { $sort: { timestamp: 1 } }, // Sort by time first
         {
             $group: {
                 _id: groupByTimeFormat,
-                avgFullness: { $avg: '$fullness' },
-                avgDistance: { $avg: '$distance' },
-                avgWeight: { $avg: '$weight' },
-                avgTemperature: { $avg: '$temperature' },
-                avgContainerHeight: { $avg: '$containerHeight' },
+                // Use LAST value instead of average for fill level charts
+                fullness: { $last: '$fullness' },        // ← Changed from $avg to $last
+                distance: { $last: '$distance' },        // ← Changed from $avg to $last
+                weight: { $last: '$weight' },            // ← Changed from $avg to $last
+                temperature: { $last: '$temperature' },  // ← Changed from $avg to $last
+                containerHeight: { $last: '$containerHeight' }, // ← Changed
                 count: { $sum: 1 },
                 firstTimestamp: { $min: '$timestamp' },
                 lastTimestamp: { $max: '$timestamp' }
