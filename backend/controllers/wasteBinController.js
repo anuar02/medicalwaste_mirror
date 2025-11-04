@@ -869,7 +869,7 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
     const {
         period = '24h',
-        interval = '1h',
+        interval = 'auto',
         page = 1,
         limit = 100,
         aggregation = 'avg'
@@ -882,55 +882,206 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
     }
 
     let startDate = new Date();
+    let endDate = new Date();
     let timeFrame = 'hour';
+    let shouldAggregate = true;
+    let groupFormat;
 
-    // Calculate date range based on period
+    // Calculate date range and determine aggregation strategy based on period
     switch (period) {
         case '1h':
             startDate = new Date(Date.now() - 60 * 60 * 1000);
-            timeFrame = 'hour';
+            shouldAggregate = false; // Return raw data for 1h
+            timeFrame = 'raw';
             break;
         case '6h':
             startDate = new Date(Date.now() - 6 * 60 * 60 * 1000);
-            timeFrame = 'hour';
+            timeFrame = '15min'; // 15-minute intervals for 6h
+            groupFormat = "%Y-%m-%d %H:%M";
             break;
         case '24h':
             startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
             timeFrame = 'hour';
+            groupFormat = "%Y-%m-%d %H:00";
             break;
         case '7d':
             startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            timeFrame = 'day';
+            timeFrame = 'hour'; // Still hourly for 7 days
+            groupFormat = "%Y-%m-%d %H:00";
             break;
         case '30d':
             startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
             timeFrame = 'day';
+            groupFormat = "%Y-%m-%d 00:00";
             break;
         default:
             startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
             timeFrame = 'hour';
+            groupFormat = "%Y-%m-%d %H:00";
+    }
+
+    // Override with custom interval if provided
+    if (interval !== 'auto') {
+        switch (interval) {
+            case '5min':
+                timeFrame = '5min';
+                groupFormat = "%Y-%m-%d %H:%M";
+                shouldAggregate = true;
+                break;
+            case '15min':
+                timeFrame = '15min';
+                groupFormat = "%Y-%m-%d %H:%M";
+                shouldAggregate = true;
+                break;
+            case '30min':
+                timeFrame = '30min';
+                groupFormat = "%Y-%m-%d %H:%M";
+                shouldAggregate = true;
+                break;
+            case '1h':
+                timeFrame = 'hour';
+                groupFormat = "%Y-%m-%d %H:00";
+                shouldAggregate = true;
+                break;
+            case '6h':
+                timeFrame = '6hour';
+                groupFormat = "%Y-%m-%d %H:00";
+                shouldAggregate = true;
+                break;
+            case '1d':
+                timeFrame = 'day';
+                groupFormat = "%Y-%m-%d 00:00";
+                shouldAggregate = true;
+                break;
+        }
     }
 
     try {
         let historyData;
 
-        if (aggregation === 'raw') {
-            // Get raw history data
+        if (!shouldAggregate || aggregation === 'raw') {
+            // Get raw history data without aggregation
             historyData = await History.find({
                 binId: id,
-                timestamp: { $gte: startDate }
+                timestamp: {
+                    $gte: startDate,
+                    $lte: endDate
+                }
             })
                 .sort({ timestamp: 1 })
                 .limit(parseInt(limit))
-                .select('distance containerHeight fullness weight temperature timestamp');
-        } else {
-            // Get aggregated data
-            historyData = await History.getAggregatedHistory(id, timeFrame);
+                .select('distance containerHeight fullness weight temperature timestamp')
+                .lean();
 
-            // Filter by date range
-            historyData = historyData.filter(item =>
-                item.firstTimestamp >= startDate
-            );
+            // Format for consistency with aggregated data
+            historyData = historyData.map(item => ({
+                _id: item.timestamp.toISOString(),
+                fullness: item.fullness || calculateFullness(item.distance, item.containerHeight),
+                distance: item.distance,
+                weight: item.weight || 0,
+                temperature: item.temperature,
+                containerHeight: item.containerHeight,
+                count: 1,
+                firstTimestamp: item.timestamp,
+                lastTimestamp: item.timestamp
+            }));
+
+        } else {
+            // Get aggregated data based on interval
+            let pipeline = [
+                {
+                    $match: {
+                        binId: id,
+                        timestamp: {
+                            $gte: startDate,
+                            $lte: endDate
+                        }
+                    }
+                }
+            ];
+
+            // Add grouping based on timeFrame
+            if (timeFrame === '5min' || timeFrame === '15min' || timeFrame === '30min') {
+                const minutes = parseInt(timeFrame);
+
+                pipeline.push({
+                    $group: {
+                        _id: {
+                            $dateToString: {
+                                format: "%Y-%m-%d %H:%M",
+                                date: {
+                                    $dateFromParts: {
+                                        year: { $year: "$timestamp" },
+                                        month: { $month: "$timestamp" },
+                                        day: { $dayOfMonth: "$timestamp" },
+                                        hour: { $hour: "$timestamp" },
+                                        minute: {
+                                            $multiply: [
+                                                { $floor: { $divide: [{ $minute: "$timestamp" }, minutes] } },
+                                                minutes
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        fullness: aggregation === 'max' ? { $max: "$fullness" } :
+                            aggregation === 'min' ? { $min: "$fullness" } :
+                                aggregation === 'last' ? { $last: "$fullness" } :
+                                    aggregation === 'first' ? { $first: "$fullness" } :
+                                        { $avg: "$fullness" },
+                        distance: { $avg: "$distance" },
+                        weight: { $avg: "$weight" },
+                        temperature: { $avg: "$temperature" },
+                        containerHeight: { $avg: "$containerHeight" },
+                        count: { $sum: 1 },
+                        firstTimestamp: { $min: "$timestamp" },
+                        lastTimestamp: { $max: "$timestamp" }
+                    }
+                });
+            } else {
+                // Hour or day based aggregation
+                pipeline.push({
+                    $group: {
+                        _id: {
+                            $dateToString: {
+                                format: groupFormat,
+                                date: "$timestamp"
+                            }
+                        },
+                        fullness: aggregation === 'max' ? { $max: "$fullness" } :
+                            aggregation === 'min' ? { $min: "$fullness" } :
+                                aggregation === 'last' ? { $last: "$fullness" } :
+                                    aggregation === 'first' ? { $first: "$fullness" } :
+                                        { $avg: "$fullness" },
+                        distance: { $avg: "$distance" },
+                        weight: { $avg: "$weight" },
+                        temperature: { $avg: "$temperature" },
+                        containerHeight: { $avg: "$containerHeight" },
+                        count: { $sum: 1 },
+                        firstTimestamp: { $min: "$timestamp" },
+                        lastTimestamp: { $max: "$timestamp" }
+                    }
+                });
+            }
+
+            pipeline.push({ $sort: { _id: 1 } });
+            pipeline.push({ $limit: parseInt(limit) });
+
+            historyData = await History.aggregate(pipeline);
+
+            // Round the values for cleaner output
+            historyData = historyData.map(item => ({
+                _id: item._id,
+                fullness: Math.round(item.fullness || 0),
+                distance: Math.round(item.distance || 0),
+                weight: Math.round(item.weight || 0),
+                temperature: item.temperature ? Math.round(item.temperature * 10) / 10 : null,
+                containerHeight: Math.round(item.containerHeight || 0),
+                count: item.count,
+                firstTimestamp: item.firstTimestamp,
+                lastTimestamp: item.lastTimestamp
+            }));
         }
 
         res.status(200).json({
@@ -939,8 +1090,10 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
             data: {
                 binId: id,
                 period,
+                interval: interval === 'auto' ? timeFrame : interval,
+                aggregation: shouldAggregate ? aggregation : 'raw',
                 startDate,
-                endDate: new Date(),
+                endDate,
                 history: historyData
             }
         });
@@ -950,6 +1103,12 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
         return next(new AppError('Failed to retrieve bin history', 500));
     }
 });
+
+function calculateFullness(distance, containerHeight) {
+    if (!distance || !containerHeight || containerHeight === 0) return 0;
+    const fullness = ((containerHeight - distance) / containerHeight) * 100;
+    return Math.max(0, Math.min(100, Math.round(fullness)));
+}
 
 /**
  * Update waste bin level from sensor data
