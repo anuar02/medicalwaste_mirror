@@ -24,13 +24,34 @@ const CustomTooltip = ({active, payload, label}) => {
         const trend = data.trend || 0;
         const prediction = data.prediction;
 
+        // ✅ Show time range if we have both first and last timestamps
+        const timeDisplay = () => {
+            if (data.firstTimestamp && data.lastTimestamp && data.count > 1) {
+                const first = new Date(data.firstTimestamp).toLocaleTimeString('ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                const last = new Date(data.lastTimestamp).toLocaleTimeString('ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                return `${first} - ${last}`;
+            }
+            return new Date(data.lastTimestamp || data.firstTimestamp).toLocaleString('ru-RU');
+        };
+
         return (
             <div className="rounded-lg border border-slate-200 bg-white/95 backdrop-blur-sm p-4 shadow-lg">
                 <div className="mb-2">
                     <p className="text-sm font-semibold text-slate-800">{label}</p>
                     <p className="text-xs text-slate-500">
-                        {data.firstTimestamp ? new Date(data.firstTimestamp).toLocaleString('ru-RU') : ''}
+                        {timeDisplay()}
                     </p>
+                    {data.count > 1 && (
+                        <p className="text-xs text-slate-400">
+                            Интервал: {data._id}
+                        </p>
+                    )}
                 </div>
 
                 <div className="space-y-1">
@@ -169,18 +190,23 @@ const WasteLevelHistoryChart = ({
         }
 
         const chartData = data.map((item, index) => {
-            // Use lastTimestamp for the primary timestamp, fallback to firstTimestamp
-            let timestamp = item.lastTimestamp || item.firstTimestamp || item.timestamp;
+            // ✅ Use lastTimestamp for the primary timestamp (most recent time in the interval)
+            let timestamp = item.lastTimestamp || item.firstTimestamp;
             if (typeof timestamp === 'string') {
                 timestamp = new Date(timestamp);
             }
 
-            // Parse the _id field for display (format: "2025-11-03 12:00")
-            const timeLabel = item._id || formatTime(timestamp);
+            // ✅ Format time using the actual timestamp, not the _id
+            const formattedTime = timestamp.toLocaleTimeString('ru-RU', {
+                hour: '2-digit',
+                minute: '2-digit',
+                day: '2-digit',
+                month: '2-digit'
+            });
 
             const processed = {
                 ...item,
-                formattedTime: timeLabel,
+                formattedTime: formattedTime, // Use real timestamp
                 timestamp: timestamp,
                 // Ensure fullness is a number and handle null/undefined
                 fullness: item.fullness != null ? Number(item.fullness) : 0,
