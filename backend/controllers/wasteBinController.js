@@ -1118,33 +1118,49 @@ const updateBinLevel = asyncHandler(async (req, res, next) => {
 
     // Validate required fields
     if (!binId || distance === undefined) {
+        logger.warn(`Bin level update failed: Missing required fields. binId: ${binId}, distance: ${distance}`);
         return next(new AppError('binId and distance are required', 400));
     }
+
+    logger.info(`Updating bin level for binId: ${binId}, distance: ${distance}cm`);
 
     // Find the bin
     let bin = await WasteBin.findOne({ binId });
 
     if (!bin) {
+        logger.error(`Bin level update failed: Bin ${binId} not found`);
         return next(new AppError('Waste bin not found', 404));
     }
 
     // Ensure containerHeight exists (fallback to 50cm)
     if (!bin.containerHeight) {
         bin.containerHeight = 50;
+        logger.warn(`Bin ${binId}: containerHeight was missing, set to default 50cm`);
     }
 
     // Clamp distance to valid range
     const clampedDistance = Math.max(0, Math.min(bin.containerHeight, distance));
 
+    if (clampedDistance !== distance) {
+        logger.warn(`Bin ${binId}: Distance clamped from ${distance}cm to ${clampedDistance}cm (containerHeight: ${bin.containerHeight}cm)`);
+    }
+
     // Update sensor data using the model method
-    await bin.updateWithSensorData({
-        distance: clampedDistance,
-        weight,
-        temperature,
-        latitude,
-        longitude,
-        macAddress
-    });
+    try {
+        await bin.updateWithSensorData({
+            distance: clampedDistance,
+            weight,
+            temperature,
+            latitude,
+            longitude,
+            macAddress
+        });
+
+        logger.info(`Bin ${binId}: Sensor data updated successfully. Distance: ${clampedDistance}cm, Weight: ${weight || 'N/A'}kg, Temp: ${temperature || 'N/A'}°C`);
+    } catch (updateError) {
+        logger.error(`Failed to update sensor data for bin ${binId}: ${updateError.message}`);
+        return next(new AppError('Failed to update bin sensor data', 500));
+    }
 
     // Create history record with calculated fullness
     try {
@@ -1155,8 +1171,10 @@ const updateBinLevel = asyncHandler(async (req, res, next) => {
             weight: weight || 0,
             temperature: temperature || 22.0
         });
+
+        logger.info(`Bin ${binId}: History record created successfully`);
     } catch (historyError) {
-        console.error('Failed to create history record:', historyError);
+        logger.error(`Failed to create history record for bin ${binId}: ${historyError.message}`);
         // Don't fail the main operation if history fails
     }
 
@@ -1164,6 +1182,8 @@ const updateBinLevel = asyncHandler(async (req, res, next) => {
     const calculatedFullness = Math.max(0, Math.min(100,
         Math.round(((bin.containerHeight - clampedDistance) / bin.containerHeight) * 100)
     ));
+
+    logger.info(`Bin ${binId}: Level update completed. Fullness: ${calculatedFullness}%, Container: ${bin.containerHeight}cm, Distance: ${clampedDistance}cm`);
 
     res.status(200).json({
         status: 'success',
