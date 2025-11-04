@@ -29,7 +29,7 @@ const CustomTooltip = ({active, payload, label}) => {
                 <div className="mb-2">
                     <p className="text-sm font-semibold text-slate-800">{label}</p>
                     <p className="text-xs text-slate-500">
-                        {new Date(data.timestamp).toLocaleString('ru-RU')}
+                        {data.firstTimestamp ? new Date(data.firstTimestamp).toLocaleString('ru-RU') : ''}
                     </p>
                 </div>
 
@@ -45,17 +45,24 @@ const CustomTooltip = ({active, payload, label}) => {
                         </span>
                     </div>
 
-                    {data.distance && (
+                    {data.distance !== undefined && (
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-slate-600">Расстояние:</span>
                             <span className="text-xs text-slate-600">{data.distance} см</span>
                         </div>
                     )}
 
-                    {data.temperature && (
+                    {data.temperature !== undefined && (
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-slate-600">Температура:</span>
                             <span className="text-xs text-slate-600">{data.temperature.toFixed(1)}°C</span>
+                        </div>
+                    )}
+
+                    {data.weight !== undefined && data.weight > 0 && (
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Вес:</span>
+                            <span className="text-xs text-slate-600">{data.weight} кг</span>
                         </div>
                     )}
 
@@ -66,13 +73,20 @@ const CustomTooltip = ({active, payload, label}) => {
                         </div>
                     )}
 
+                    {data.containerHeight && (
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Высота контейнера:</span>
+                            <span className="text-xs text-slate-600">{data.containerHeight} см</span>
+                        </div>
+                    )}
+
                     {trend !== 0 && (
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-slate-600">Тенденция:</span>
                             <span className={`text-xs flex items-center ${
                                 trend > 0 ? 'text-red-500' : 'text-green-500'
                             }`}>
-                                {trend > 0 ? '↗' : '↘'} {Math.abs(trend).toFixed(1)}%
+                                {trend > 0 ? '↗' : '↘'} {Math.abs(trend).toFixed(1)}%/ч
                             </span>
                         </div>
                     )}
@@ -155,15 +169,18 @@ const WasteLevelHistoryChart = ({
         }
 
         const chartData = data.map((item, index) => {
-            // Ensure we have a proper timestamp
-            let timestamp = item.timestamp;
+            // Use lastTimestamp for the primary timestamp, fallback to firstTimestamp
+            let timestamp = item.lastTimestamp || item.firstTimestamp || item.timestamp;
             if (typeof timestamp === 'string') {
                 timestamp = new Date(timestamp);
             }
 
+            // Parse the _id field for display (format: "2025-11-03 12:00")
+            const timeLabel = item._id || formatTime(timestamp);
+
             const processed = {
                 ...item,
-                formattedTime: formatTime(timestamp),
+                formattedTime: timeLabel,
                 timestamp: timestamp,
                 // Ensure fullness is a number
                 fullness: Number(item.fullness) || 0,
@@ -172,7 +189,7 @@ const WasteLevelHistoryChart = ({
             // Calculate trend (rate of change) between consecutive points
             if (index > 0 && showTrend) {
                 const prevItem = data[index - 1];
-                const prevTimestamp = new Date(prevItem.timestamp);
+                const prevTimestamp = new Date(prevItem.lastTimestamp || prevItem.firstTimestamp || prevItem.timestamp);
                 const timeDiff = (timestamp - prevTimestamp) / (1000 * 60 * 60); // hours
 
                 if (timeDiff > 0) {
@@ -254,12 +271,16 @@ const WasteLevelHistoryChart = ({
         const recentData = processedData.slice(-recentCount);
         const recentAvg = recentData.reduce((sum, d) => sum + d.fullness, 0) / recentData.length;
 
+        // Calculate total measurements
+        const totalMeasurements = processedData.reduce((sum, d) => sum + (d.count || 1), 0);
+
         return {
             max,
             avg,
             recentAvg,
             latestTrend: latest?.trend || 0,
-            recentCount
+            recentCount,
+            totalMeasurements
         };
     }, [processedData]);
 
@@ -475,7 +496,7 @@ const WasteLevelHistoryChart = ({
 
             {/* Statistics summary */}
             {statistics && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                     <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-slate-600 text-xs uppercase tracking-wide">Максимум</div>
                         <div className="text-lg font-semibold text-slate-800">
@@ -490,7 +511,7 @@ const WasteLevelHistoryChart = ({
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-slate-600 text-xs uppercase tracking-wide">
-                            Последние {statistics.recentCount} точек
+                            Последние {statistics.recentCount}ч
                         </div>
                         <div className="text-lg font-semibold text-slate-800">
                             {statistics.recentAvg.toFixed(1)}%
@@ -503,9 +524,15 @@ const WasteLevelHistoryChart = ({
                                 statistics.latestTrend < -0.1 ? 'text-green-600' : 'text-slate-600'
                         }`}>
                             {statistics.latestTrend !== 0 ?
-                                `${statistics.latestTrend > 0 ? '+' : ''}${statistics.latestTrend.toFixed(1)}%` :
+                                `${statistics.latestTrend > 0 ? '+' : ''}${statistics.latestTrend.toFixed(1)}%/ч` :
                                 'Стабильно'
                             }
+                        </div>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-3">
+                        <div className="text-slate-600 text-xs uppercase tracking-wide">Измерений</div>
+                        <div className="text-lg font-semibold text-slate-800">
+                            {statistics.totalMeasurements}
                         </div>
                     </div>
                 </div>
@@ -517,16 +544,15 @@ const WasteLevelHistoryChart = ({
 WasteLevelHistoryChart.propTypes = {
     data: PropTypes.arrayOf(
         PropTypes.shape({
-            time: PropTypes.string,
+            _id: PropTypes.string, // Time grouping from aggregation
             fullness: PropTypes.number.isRequired,
-            timestamp: PropTypes.oneOfType([
-                PropTypes.string,
-                PropTypes.instanceOf(Date)
-            ]).isRequired,
             distance: PropTypes.number,
             temperature: PropTypes.number,
             weight: PropTypes.number,
+            containerHeight: PropTypes.number,
             count: PropTypes.number,
+            firstTimestamp: PropTypes.string,
+            lastTimestamp: PropTypes.string,
         })
     ),
     alertThreshold: PropTypes.number,

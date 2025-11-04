@@ -1,7 +1,6 @@
 // pages/NotFound.jsx
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { Home, ArrowLeft, Search } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Logo from '../components/ui/Logo';
@@ -21,8 +20,8 @@ const NotFound = () => {
 
                 <div className="flex flex-col space-y-3 sm:flex-row sm:space-x-3 sm:space-y-0 justify-center">
                     <Button
-                        as={Link}
-                        to="/"
+                        as="a"
+                        href="https://medicalwaste.kz"
                         color="teal"
                     >
                         <Home className="mr-2 h-4 w-4" />
@@ -30,8 +29,8 @@ const NotFound = () => {
                     </Button>
 
                     <Button
-                        as={Link}
-                        to="/bins"
+                        as="a"
+                        href="https://medicalwaste.kz/bins"
                         variant="outline"
                     >
                         <ArrowLeft className="mr-2 h-4 w-4" />
