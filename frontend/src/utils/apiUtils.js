@@ -96,7 +96,7 @@ export const extractHistoryData = (response) => {
                 if (Array.isArray(value)) {
                     // Check if this array looks like history data
                     if (value.length > 0 && value[0] &&
-                        (value[0]._id || value[0].timestamp || value[0].time || value[0].avgFullness)) {
+                        (value[0]._id || value[0].timestamp || value[0].time || value[0].fullness || value[0].avgFullness)) {
                         console.log('✅ Found history-like array at key:', key, 'with', value.length, 'items');
                         return value;
                     }
@@ -227,9 +227,9 @@ export const validateHistoryData = (history) => {
     // Check first few items for required fields
     const sampleSize = Math.min(3, history.length);
 
-    // Your API returns items with _id, avgFullness, avgDistance, etc.
-    const requiredFields = ['_id', 'avgFullness'];
-    const optionalFields = ['avgDistance', 'avgTemperature', 'avgWeight', 'firstTimestamp', 'lastTimestamp', 'count'];
+    // Your API returns items with _id, fullness (not avgFullness)
+    const requiredFields = ['_id', 'fullness'];
+    const optionalFields = ['distance', 'temperature', 'weight', 'firstTimestamp', 'lastTimestamp', 'count', 'containerHeight'];
 
     for (let i = 0; i < sampleSize; i++) {
         const item = history[i];
@@ -250,9 +250,9 @@ export const validateHistoryData = (history) => {
         }
 
         // Validate fullness
-        if (item.avgFullness !== undefined &&
-            (isNaN(Number(item.avgFullness)) || Number(item.avgFullness) < 0 || Number(item.avgFullness) > 100)) {
-            console.warn(`⚠️ Invalid avgFullness in history item ${i}:`, item.avgFullness);
+        if (item.fullness !== undefined &&
+            (isNaN(Number(item.fullness)) || Number(item.fullness) < 0 || Number(item.fullness) > 100)) {
+            console.warn(`⚠️ Invalid fullness in history item ${i}:`, item.fullness);
         }
     }
 
@@ -272,11 +272,11 @@ export const processHistoryData = (rawHistory) => {
         const processed = rawHistory
             .map((item, index) => {
                 // Handle your API's timestamp format
-                // Your API uses _id as a date-time string like "2025-08-28 11:00"
+                // Your API uses _id as a date-time string like "2025-11-03 12:00"
                 // and also provides firstTimestamp and lastTimestamp
                 let timestamp = item.firstTimestamp || item.lastTimestamp || item._id;
 
-                // If _id is a time string like "2025-08-28 11:00", convert to proper ISO string
+                // If _id is a time string like "2025-11-03 12:00", convert to proper ISO string
                 if (typeof timestamp === 'string' && timestamp.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)) {
                     timestamp = timestamp + ':00.000Z'; // Convert to proper ISO format
                 }
@@ -289,10 +289,10 @@ export const processHistoryData = (rawHistory) => {
                     return null;
                 }
 
-                // Use avgFullness from your API
-                let fullness = Number(item.avgFullness);
-                if (isNaN(fullness)) {
-                    console.warn(`⚠️ Invalid avgFullness in item ${index}, setting to 0:`, item.avgFullness);
+                // Use fullness from your API (not avgFullness)
+                let fullness = Number(item.fullness);
+                if (isNaN(fullness) || fullness == null) {
+                    console.warn(`⚠️ Invalid fullness in item ${index}, setting to 0:`, item.fullness);
                     fullness = 0;
                 }
 
@@ -303,11 +303,14 @@ export const processHistoryData = (rawHistory) => {
                     time: parsedTimestamp.toISOString(), // Standardize time format
                     fullness: fullness,
                     timestamp: parsedTimestamp,
-                    temperature: item.avgTemperature ? Number(item.avgTemperature) : null,
-                    weight: item.avgWeight ? Number(item.avgWeight) : null,
-                    distance: item.avgDistance ? Number(item.avgDistance) : null,
-                    containerHeight: item.avgContainerHeight ? Number(item.avgContainerHeight) : null,
+                    temperature: item.temperature != null ? Number(item.temperature) : null,
+                    weight: item.weight != null ? Number(item.weight) : null,
+                    distance: item.distance != null ? Number(item.distance) : null,
+                    containerHeight: item.containerHeight != null ? Number(item.containerHeight) : null,
                     count: item.count || 1, // Number of readings averaged
+                    firstTimestamp: item.firstTimestamp,
+                    lastTimestamp: item.lastTimestamp,
+                    _id: item._id, // Preserve the original _id
                     trend: 0, // Calculate if needed
                     prediction: null, // Add prediction logic if needed
                     // Preserve original item for debugging
