@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Device Monitor</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #1a1a1a; color: #fff; }
+        .log-entry { padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .info { background: #2c5282; }
+        .debug { background: #2d3748; }
+        .warn { background: #744210; }
+        .error { background: #742a2a; }
+        #logs { max-height: 600px; overflow-y: auto; }
+        .stats { display: flex; gap: 20px; margin-bottom: 20px; }
+        .stat-box { background: #2d3748; padding: 15px; border-radius: 8px; flex: 1; }
+    </style>
+</head>
+<body>
+<h1>ESP32 Device Monitor</h1>
+
+<div>
+    <label>Bin ID: <input type="text" id="binId" placeholder="Enter Bin ID"></label>
+    <button onclick="startMonitoring()">Start Monitoring</button>
+    <button onclick="clearLogs()">Clear</button>
+</div>
+
+<div class="stats" id="stats"></div>
+<div id="logs"></div>
+
+<script>
+    let intervalId;
+
+    async function startMonitoring() {
+        const binId = document.getElementById('binId').value;
+        if (!binId) {
+            alert('Please enter a Bin ID');
+            return;
+        }
+
+        if (intervalId) clearInterval(intervalId);
+
+        fetchLogs(binId);
+        intervalId = setInterval(() => fetchLogs(binId), 3000);
+    }
+
+    async function fetchLogs(binId) {
+        try {
+            const response = await fetch(`/api/device-logs/${binId}?limit=50`);
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                displayLogs(data.data.logs);
+                displayStats(data.data.logs[0]);
+            }
+        } catch (error) {
+            console.error('Error fetching logs:', error);
+        }
+    }
+
+    function displayStats(latest) {
+        if (!latest) return;
+
+        const statsDiv = document.getElementById('stats');
+        statsDiv.innerHTML = `
+                <div class="stat-box">
+                    <h3>Distance</h3>
+                    <p>${latest.distance || 'N/A'} cm</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Temperature</h3>
+                    <p>${latest.temperature || 'N/A'} °C</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Fill Level</h3>
+                    <p>${latest.fillLevel || 'N/A'}%</p>
+                </div>
+                <div class="stat-box">
+                    <h3>WiFi</h3>
+                    <p>${latest.wifiStrength || 'N/A'} dBm</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Last Update</h3>
+                    <p>${new Date(latest.timestamp).toLocaleString()}</p>
+                </div>
+            `;
+    }
+
+    function displayLogs(logs) {
+        const logsDiv = document.getElementById('logs');
+        logsDiv.innerHTML = logs.map(log => `
+                <div class="log-entry ${log.logLevel}">
+                    <strong>[${new Date(log.timestamp).toLocaleTimeString()}]</strong>
+                    ${log.logMessage}
+                    ${log.distance ? ` | Distance: ${log.distance}cm` : ''}
+                    ${log.temperature ? ` | Temp: ${log.temperature}°C` : ''}
+                </div>
+            `).join('');
+    }
+
+    function clearLogs() {
+        document.getElementById('logs').innerHTML = '';
+    }
+</script>
+</body>
+</html>
