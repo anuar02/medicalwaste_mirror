@@ -41,25 +41,25 @@ const CustomTooltip = ({active, payload, label}) => {
                                 currentLevel >= 80 ? 'text-orange-600' :
                                     currentLevel >= 60 ? 'text-yellow-600' : 'text-green-600'
                         }`}>
-                            {currentLevel.toFixed(1)}%
+                            {currentLevel != null ? currentLevel.toFixed(1) : '0.0'}%
                         </span>
                     </div>
 
-                    {data.distance !== undefined && (
+                    {data.distance != null && (
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-slate-600">Расстояние:</span>
                             <span className="text-xs text-slate-600">{data.distance} см</span>
                         </div>
                     )}
 
-                    {data.temperature !== undefined && (
+                    {data.temperature != null && (
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-slate-600">Температура:</span>
                             <span className="text-xs text-slate-600">{data.temperature.toFixed(1)}°C</span>
                         </div>
                     )}
 
-                    {data.weight !== undefined && data.weight > 0 && (
+                    {data.weight != null && data.weight > 0 && (
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-slate-600">Вес:</span>
                             <span className="text-xs text-slate-600">{data.weight} кг</span>
@@ -73,7 +73,7 @@ const CustomTooltip = ({active, payload, label}) => {
                         </div>
                     )}
 
-                    {data.containerHeight && (
+                    {data.containerHeight != null && (
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-slate-600">Высота контейнера:</span>
                             <span className="text-xs text-slate-600">{data.containerHeight} см</span>
@@ -182,8 +182,8 @@ const WasteLevelHistoryChart = ({
                 ...item,
                 formattedTime: timeLabel,
                 timestamp: timestamp,
-                // Ensure fullness is a number
-                fullness: Number(item.fullness) || 0,
+                // Ensure fullness is a number and handle null/undefined
+                fullness: item.fullness != null ? Number(item.fullness) : 0,
             };
 
             // Calculate trend (rate of change) between consecutive points
@@ -192,7 +192,7 @@ const WasteLevelHistoryChart = ({
                 const prevTimestamp = new Date(prevItem.lastTimestamp || prevItem.firstTimestamp || prevItem.timestamp);
                 const timeDiff = (timestamp - prevTimestamp) / (1000 * 60 * 60); // hours
 
-                if (timeDiff > 0) {
+                if (timeDiff > 0 && item.fullness != null && prevItem.fullness != null) {
                     processed.trend = (item.fullness - prevItem.fullness) / timeDiff;
                 } else {
                     processed.trend = 0;
@@ -202,7 +202,7 @@ const WasteLevelHistoryChart = ({
             }
 
             // Simple prediction based on trend
-            if (showPrediction && processed.trend && processed.trend > 0) {
+            if (showPrediction && processed.trend && processed.trend > 0 && item.fullness != null) {
                 const remainingCapacity = 100 - item.fullness;
                 const hoursToFull = remainingCapacity / processed.trend;
 
@@ -224,6 +224,7 @@ const WasteLevelHistoryChart = ({
 
     // Get status color based on fullness level
     const getStatusColor = (fullness) => {
+        if (fullness == null) return '#64748b';
         if (fullness >= criticalThreshold) return '#dc2626';
         if (fullness >= alertThreshold) return '#f59e0b';
         if (fullness >= 60) return '#eab308';
@@ -261,7 +262,12 @@ const WasteLevelHistoryChart = ({
     const statistics = useMemo(() => {
         if (processedData.length === 0) return null;
 
-        const fullnessValues = processedData.map(d => d.fullness);
+        const fullnessValues = processedData
+            .map(d => d.fullness)
+            .filter(f => f != null);
+
+        if (fullnessValues.length === 0) return null;
+
         const max = Math.max(...fullnessValues);
         const avg = fullnessValues.reduce((sum, val) => sum + val, 0) / fullnessValues.length;
         const latest = processedData[processedData.length - 1];
@@ -269,7 +275,12 @@ const WasteLevelHistoryChart = ({
         // Calculate recent average (last 24 hours or half the dataset)
         const recentCount = Math.min(24, Math.floor(processedData.length / 2));
         const recentData = processedData.slice(-recentCount);
-        const recentAvg = recentData.reduce((sum, d) => sum + d.fullness, 0) / recentData.length;
+        const recentValues = recentData
+            .map(d => d.fullness)
+            .filter(f => f != null);
+        const recentAvg = recentValues.length > 0
+            ? recentValues.reduce((sum, d) => sum + d, 0) / recentValues.length
+            : 0;
 
         // Calculate total measurements
         const totalMeasurements = processedData.reduce((sum, d) => sum + (d.count || 1), 0);
@@ -322,7 +333,13 @@ const WasteLevelHistoryChart = ({
                                     className="w-3 h-3 rounded-full"
                                     style={{backgroundColor: getStatusColor(processedData[processedData.length - 1]?.fullness || 0)}}
                                 />
-                                <span>Текущий: {processedData[processedData.length - 1]?.fullness.toFixed(1)}%</span>
+                                <span>
+                                    Текущий: {
+                                    processedData[processedData.length - 1]?.fullness != null
+                                        ? processedData[processedData.length - 1].fullness.toFixed(1)
+                                        : '0.0'
+                                }%
+                                </span>
                             </div>
                         </div>
                     )}
@@ -474,16 +491,16 @@ const WasteLevelHistoryChart = ({
 
                 {/* Status indicators */}
                 <div className="absolute top-6 right-6 flex space-x-2">
-                    {processedData.length > 0 && (
+                    {processedData.length > 0 && processedData[processedData.length - 1]?.fullness != null && (
                         <>
-                            {processedData[processedData.length - 1]?.fullness >= criticalThreshold && (
+                            {processedData[processedData.length - 1].fullness >= criticalThreshold && (
                                 <div
                                     className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium animate-pulse">
                                     Критический уровень
                                 </div>
                             )}
-                            {processedData[processedData.length - 1]?.fullness >= alertThreshold &&
-                                processedData[processedData.length - 1]?.fullness < criticalThreshold && (
+                            {processedData[processedData.length - 1].fullness >= alertThreshold &&
+                                processedData[processedData.length - 1].fullness < criticalThreshold && (
                                     <div
                                         className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full font-medium">
                                         Требует внимания
@@ -500,13 +517,13 @@ const WasteLevelHistoryChart = ({
                     <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-slate-600 text-xs uppercase tracking-wide">Максимум</div>
                         <div className="text-lg font-semibold text-slate-800">
-                            {statistics.max.toFixed(1)}%
+                            {statistics.max != null ? statistics.max.toFixed(1) : '0.0'}%
                         </div>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-slate-600 text-xs uppercase tracking-wide">Среднее</div>
                         <div className="text-lg font-semibold text-slate-800">
-                            {statistics.avg.toFixed(1)}%
+                            {statistics.avg != null ? statistics.avg.toFixed(1) : '0.0'}%
                         </div>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3">
@@ -514,7 +531,7 @@ const WasteLevelHistoryChart = ({
                             Последние {statistics.recentCount}ч
                         </div>
                         <div className="text-lg font-semibold text-slate-800">
-                            {statistics.recentAvg.toFixed(1)}%
+                            {statistics.recentAvg != null ? statistics.recentAvg.toFixed(1) : '0.0'}%
                         </div>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3">
@@ -532,7 +549,7 @@ const WasteLevelHistoryChart = ({
                     <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-slate-600 text-xs uppercase tracking-wide">Измерений</div>
                         <div className="text-lg font-semibold text-slate-800">
-                            {statistics.totalMeasurements}
+                            {statistics.totalMeasurements || 0}
                         </div>
                     </div>
                 </div>
@@ -544,8 +561,8 @@ const WasteLevelHistoryChart = ({
 WasteLevelHistoryChart.propTypes = {
     data: PropTypes.arrayOf(
         PropTypes.shape({
-            _id: PropTypes.string, // Time grouping from aggregation
-            fullness: PropTypes.number.isRequired,
+            _id: PropTypes.string,
+            fullness: PropTypes.number,
             distance: PropTypes.number,
             temperature: PropTypes.number,
             weight: PropTypes.number,
