@@ -15,6 +15,8 @@ const { logger } = require('./middleware/loggers');
 // Import routes
 const authRoutes = require('./routes/auth');
 const wasteBinRoutes = require('./routes/wasteBins');
+const companyRoutes = require('./routes/companies');
+const collectionRoutes = require('./routes/collections');
 const historyRoutes = require('./routes/history');
 const userRoutes = require('./routes/users');
 const deviceRoutes = require('./routes/devices');
@@ -144,6 +146,8 @@ app.use('/api/medical-companies', medicalCompanyRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/companies', companyRoutes);
+app.use('/api/collections', collectionRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
