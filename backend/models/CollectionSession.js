@@ -11,7 +11,6 @@ const collectionSessionSchema = new mongoose.Schema({
     company: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'MedicalCompany',
-        required: [true, 'Company is required'],
         index: true
     },
     sessionId: {
@@ -57,38 +56,22 @@ const collectionSessionSchema = new mongoose.Schema({
     startLocation: {
         type: {
             type: String,
-            enum: ['Point'],
-            default: 'Point'
+            enum: ['Point']
         },
         coordinates: {
-            type: [Number], // [longitude, latitude]
-            validate: {
-                validator: function(v) {
-                    return v.length === 2 &&
-                        v[0] >= -180 && v[0] <= 180 &&
-                        v[1] >= -90 && v[1] <= 90;
-                },
-                message: 'Invalid coordinates'
-            }
+            type: [Number] // [longitude, latitude]
         }
+        // Not required - optional location data
     },
     endLocation: {
         type: {
             type: String,
-            enum: ['Point'],
-            default: 'Point'
+            enum: ['Point']
         },
         coordinates: {
-            type: [Number],
-            validate: {
-                validator: function(v) {
-                    return v.length === 2 &&
-                        v[0] >= -180 && v[0] <= 180 &&
-                        v[1] >= -90 && v[1] <= 90;
-                },
-                message: 'Invalid coordinates'
-            }
+            type: [Number]
         }
+        // Not required - optional location data
     },
     route: [{
         type: mongoose.Schema.Types.ObjectId,
@@ -125,15 +108,18 @@ const collectionSessionSchema = new mongoose.Schema({
 collectionSessionSchema.index({ driver: 1, startTime: -1 });
 collectionSessionSchema.index({ company: 1, startTime: -1 });
 collectionSessionSchema.index({ status: 1, startTime: -1 });
-collectionSessionSchema.index({ startLocation: '2dsphere' });
-collectionSessionSchema.index({ endLocation: '2dsphere' });
+collectionSessionSchema.index({ 'startLocation.coordinates': '2dsphere' });
+collectionSessionSchema.index({ 'endLocation.coordinates': '2dsphere' });
 
 // Method to complete session
 collectionSessionSchema.methods.complete = async function(endLocation) {
     this.status = 'completed';
     this.endTime = new Date();
-    if (endLocation) {
-        this.endLocation = endLocation;
+    if (endLocation && endLocation.coordinates && endLocation.coordinates.length === 2) {
+        this.endLocation = {
+            type: 'Point',
+            coordinates: endLocation.coordinates
+        };
     }
 
     // Calculate duration in minutes

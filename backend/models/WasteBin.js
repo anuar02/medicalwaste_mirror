@@ -156,11 +156,6 @@ wasteBinSchema.virtual('needsCollection').get(function() {
     return this.fullness >= this.alertThreshold;
 });
 
-// Instance method to check if bin needs collection
-wasteBinSchema.methods.needsCollection = function() {
-    return this.fullness >= this.alertThreshold;
-};
-
 // Add new data point and recalculate
 wasteBinSchema.methods.updateWithSensorData = async function(data) {
     // Update basic fields

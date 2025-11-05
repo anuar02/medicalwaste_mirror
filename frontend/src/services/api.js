@@ -474,7 +474,36 @@ const apiService = {
         updateDriverProfile: createCompatibleMethod((data) => api.patch('/drivers/profile', data)),
         getPendingDrivers: createCompatibleMethod(() => api.get('/drivers/pending')),
         verifyDriver: createCompatibleMethod((id, data) => api.patch(`/drivers/verify/${id}`, data)),
-        getAllDrivers: createCompatibleMethod((params) => api.get('/drivers', { params }))
+        getAllDrivers: createCompatibleMethod((params) => api.get('/drivers', { params })),
+
+        getAll: () => api.get('/users/drivers'),
+        getPending: () => api.get('/users/drivers/pending'),
+        getOne: (id) => api.get(`/users/drivers/${id}`),
+        update: (id, data) => api.patch(`/users/drivers/${id}`, data),
+        verify: (data) => api.post('/users/drivers/verify', data)
+    },
+
+
+    companies: {
+        getAll: () => api.get('/companies'),
+        getActive: () => api.get('/companies/active'),
+        getOne: (id) => api.get(`/companies/${id}`),
+        getStats: (id) => api.get(`/companies/${id}/stats`),
+        create: (data) => api.post('/companies', data),
+        update: (id, data) => api.patch(`/companies/${id}`, data),
+        delete: (id) => api.delete(`/companies/${id}`),
+        assignBins: (data) => api.post('/companies/assign-bins', data)
+    },
+
+    collections: {
+        start: (data) => api.post('/collections/start', data),
+        stop: (data) => api.post('/collections/stop', data),
+        recordLocation: (data) => api.post('/collections/location', data),
+        addContainer: (data) => api.post('/collections/add-container', data),
+        getActive: () => api.get('/collections/active'),
+        getActiveDrivers: () => api.get('/collections/active-drivers'),
+        getHistory: (driverId, params) => api.get(`/collections/history/${driverId || ''}`, { params }),
+        getSessionRoute: (sessionId) => api.get(`/collections/session/${sessionId}/route`)
     },
 
     // Structured medical company endpoints (as per your original)

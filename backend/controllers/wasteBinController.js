@@ -44,12 +44,20 @@ const getAllBins = asyncHandler(async (req, res) => {
     let query = { ...filter };  // Merge with existing filter
     query = addCompanyToQuery(query, req.user);
 
-    // Send response
+    // ✅ ADD THIS - Actually query the database
+    const bins = await WasteBin.find(query)
+        .populate('company', 'name')
+        .sort({ lastUpdate: -1 });
+
+    // ✅ IMPORTANT: Only send response ONCE
     res.status(200).json({
         status: 'success',
         results: bins.length,
         data: { bins }
     });
+
+    // ✅ CRITICAL: Add return statement to prevent further execution
+    return;
 });
 
 /**

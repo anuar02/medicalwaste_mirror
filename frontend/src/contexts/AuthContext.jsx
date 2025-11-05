@@ -512,7 +512,10 @@ export const AuthProvider = ({ children }) => {
         googleLogin,
         isAuthenticated: !!user,
         isAdmin: user?.role === 'admin',
-        isSupervisor: user?.role === 'supervisor' || user?.role === 'admin'
+        isSupervisor: user?.role === 'supervisor' || user?.role === 'admin',
+        isDriver: user?.role === 'driver' && user?.verificationStatus === 'approved',
+        isPendingDriver: user?.role === 'driver' && user?.verificationStatus === 'pending',
+        userCompany: user?.company
     };
 
     // Enhanced loading spinner with more info in development

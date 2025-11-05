@@ -25,6 +25,7 @@
     "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.28.0",
     "react-scripts": "^5.0.1",
+    "react-toastify": "^11.0.5",
     "recharts": "^2.14.1",
     "tailwindcss": "^3.4.16",
     "telegraf": "^4.16.3",

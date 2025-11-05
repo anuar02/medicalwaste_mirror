@@ -16,6 +16,8 @@ import DeviceManagement from "./pages/admin/DeviceManagement";
 import DriverRegistration from "./components/DriverRegistration";
 import AdminDriverVerification from "./components/AdminDriverVerification";
 import MedicalCompanyManagement from "./components/MedicalCompanyManagement";
+import DriverDashboard from "./pages/DriverDashboard";
+import DriverCollection from "./pages/DriverCollection";
 import ErrorBoundary from "./utils/errorBoundary";
 
 // Pages - Using lazy loading for improved performance
@@ -112,6 +114,7 @@ const App = () => {
                     <BrowserRouter>
                         <AuthProvider>
                             <Suspense fallback={<LoadingScreen />}>
+
                                 <Routes>
                                     {/* Auth Routes */}
                                     <Route element={<AuthLayout />}>
@@ -154,6 +157,22 @@ const App = () => {
                                             element={
                                                 <ProtectedRoute>
                                                     <MedicalCompanyManagement />
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
+                                            path="/driver/dashboard"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <DriverDashboard />
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
+                                            path="/driver/collection"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <DriverCollection />
                                                 </ProtectedRoute>
                                             }
                                         />
