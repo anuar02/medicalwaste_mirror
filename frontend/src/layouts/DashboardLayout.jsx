@@ -15,6 +15,7 @@ import {
     Bell,
     UserCheck,
     Building2,
+    PackageX,
     Navigation,
     LogOut,
     ChevronDown,
@@ -62,6 +63,12 @@ const Sidebar = ({ isMobile = false, isOpen, onClose }) => {
             icon: <Cpu className="h-5 w-5" />,
             label: t('nav.devices'),
             path: '/admin/devices',
+            adminOnly: true,
+        },
+        {
+            icon: <PackageX className="h-5 w-5" />,
+            label: 'Неназначенные',
+            path: '/admin/unassigned-bins',
             adminOnly: true,
         },
         {

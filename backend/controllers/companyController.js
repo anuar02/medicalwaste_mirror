@@ -1,4 +1,5 @@
 // controllers/companyController.js
+const mongoose = require('mongoose');
 const MedicalCompany = require('../models/MedicalCompany');
 const User = require('../models/User');
 const WasteBin = require('../models/WasteBin');
@@ -116,7 +117,7 @@ const deleteCompany = asyncHandler(async (req, res, next) => {
         return next(new AppError('Cannot delete company with existing bins', 400));
     }
 
-    await company.remove();
+    await company.deleteOne();
 
     res.status(204).json({
         status: 'success',
@@ -144,16 +145,14 @@ const getCompanyStats = asyncHandler(async (req, res, next) => {
 
     // Get bin statistics
     const binStats = await WasteBin.aggregate([
-        { $match: { company: mongoose.Types.ObjectId(companyId) } },
+        { $match: { company: new mongoose.Types.ObjectId(companyId) } },
         {
             $group: {
                 _id: null,
                 totalBins: { $sum: 1 },
                 avgFullness: { $avg: '$fullness' },
                 fullBins: {
-                    $sum: {
-                        $cond: [{ $gte: ['$fullness', '$alertThreshold'] }, 1, 0]
-                    }
+                    $sum: { $cond: [{ $gte: ['$fullness', '$alertThreshold'] }, 1, 0] }
                 }
             }
         }
