@@ -29,6 +29,7 @@
     "recharts": "^2.14.1",
     "tailwindcss": "^3.4.16",
     "telegraf": "^4.16.3",
+    "use-debounce": "^10.0.6",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

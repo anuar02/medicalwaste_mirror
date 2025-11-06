@@ -19,24 +19,31 @@ import {
     LogOut,
     ChevronDown,
     Wifi,
-    Cpu,
-    ChevronLeft,
-    ChevronRight,
+    Heart,
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
+
+import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 import Logo from '../components/ui/Logo';
 
-/** Utils **/
+// ============================================================================
+// UTILITY HOOKS & FUNCTIONS
+// ============================================================================
+
+/**
+ * Hook to detect clicks outside a referenced element
+ */
 const useOnClickOutside = (ref, handler) => {
     useEffect(() => {
         const listener = (event) => {
             if (!ref.current || ref.current.contains(event.target)) return;
             handler(event);
         };
+
         document.addEventListener('mousedown', listener);
         document.addEventListener('touchstart', listener);
+
         return () => {
             document.removeEventListener('mousedown', listener);
             document.removeEventListener('touchstart', listener);
@@ -44,14 +51,25 @@ const useOnClickOutside = (ref, handler) => {
     }, [ref, handler]);
 };
 
+/**
+ * Safely extract count from various API response shapes
+ */
 const safeCount = (data) => {
-    // Accepts several common API shapes
-    const v = data?.data?.results ?? data?.data?.count ?? data?.data?.total ?? data?.data?.length ?? 0;
-    const n = Number(v);
-    return Number.isFinite(n) && n >= 0 ? n : 0;
+    const value =
+        data?.data?.results ??
+        data?.data?.count ??
+        data?.data?.total ??
+        data?.data?.length ??
+        0;
+
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : 0;
 };
 
-/** Sidebar **/
+// ============================================================================
+// SIDEBAR COMPONENT
+// ============================================================================
+
 const Sidebar = React.memo(function Sidebar({
                                                 isMobile = false,
                                                 isOpen = false,
@@ -61,12 +79,13 @@ const Sidebar = React.memo(function Sidebar({
                                             }) {
     const { t } = useTranslation();
     const { user, isAdmin } = useAuth();
-    const [isHovered, setIsHovered] = useState(false);
     const { pathname } = useLocation();
+    const [isHovered, setIsHovered] = useState(false);
 
-    const isDriver = user?.role === 'driver' && user?.verificationStatus === 'approved';
+    const isDriver =
+        user?.role === 'driver' && user?.verificationStatus === 'approved';
 
-    // Only drivers poll for active collection session badge
+    // Poll for active collection session (drivers only)
     const { data: activeSessionData } = useQuery({
         queryKey: ['activeCollectionSession'],
         queryFn: () => apiService.collections.getActive(),
@@ -74,30 +93,92 @@ const Sidebar = React.memo(function Sidebar({
         refetchInterval: 30_000,
         retry: false,
     });
-    const hasActiveSession = activeSessionData?.data?.data?.session?.status === 'active';
 
+    const hasActiveSession =
+        activeSessionData?.data?.data?.session?.status === 'active';
+
+    // Navigation items configuration
     const navItems = useMemo(
         () => [
-            { icon: <LayoutDashboard className="h-5 w-5" />, label: t('nav.dashboard'), path: '/' },
-            { icon: <Trash2 className="h-5 w-5" />, label: t('nav.bins'), path: '/bins' },
-            { icon: <MapPin className="h-5 w-5" />, label: t('nav.map'), path: '/map' },
-            { icon: <BarChart3 className="h-5 w-5" />, label: t('nav.reports'), path: '/reports' },
-            { icon: <Cpu className="h-5 w-5" />, label: t('nav.devices'), path: '/admin/devices', adminOnly: true },
-            { icon: <PackageX className="h-5 w-5" />, label: 'Неназначенные', path: '/admin/unassigned-bins', adminOnly: true },
-            // Visible to authenticated non-admin, non-driver users (invite to become driver)
-            { icon: <User className="h-5 w-5" />, label: t('nav.beDriver'), path: '/driver/register', userOnly: true },
-            // Driver-only collection with live badge
-            { icon: <Truck className="h-5 w-5" />, label: 'Сбор', path: '/driver/collection', driverOnly: true, showBadge: hasActiveSession },
-            { icon: <UserCheck className="h-5 w-5" />, label: t('nav.driverVerification'), path: '/admin/drivers', adminOnly: true },
-            { icon: <Building2 className="h-5 w-5" />, label: t('nav.medicalCompanies'), path: '/admin/companies', adminOnly: true },
-            { icon: <NavigationIcon className="h-5 w-5" />, label: 'История маршрутов', path: '/route-history' },
-            // Driver dashboard strictly for drivers
-            { icon: <Truck className="h-5 w-5" />, label: t('nav.drivers'), path: '/driver/dashboard', driverOnly: true },
-            { icon: <Settings className="h-5 w-5" />, label: t('nav.settings'), path: '/settings', adminOnly: true },
+            {
+                icon: <LayoutDashboard className="h-5 w-5" />,
+                label: t('nav.dashboard'),
+                path: '/',
+            },
+            {
+                icon: <Trash2 className="h-5 w-5" />,
+                label: t('nav.bins'),
+                path: '/bins',
+            },
+            {
+                icon: <MapPin className="h-5 w-5" />,
+                label: t('nav.map'),
+                path: '/map',
+            },
+            {
+                icon: <BarChart3 className="h-5 w-5" />,
+                label: t('nav.reports'),
+                path: '/reports',
+            },
+            {
+                icon: <PackageX className="h-5 w-5" />,
+                label: 'Неназначенные',
+                path: '/admin/unassigned-bins',
+                adminOnly: true,
+            },
+            {
+                icon: <User className="h-5 w-5" />,
+                label: t('nav.beDriver'),
+                path: '/driver/register',
+                userOnly: true,
+            },
+            {
+                icon: <Truck className="h-5 w-5" />,
+                label: 'Сбор',
+                path: '/driver/collection',
+                driverOnly: true,
+                showBadge: hasActiveSession,
+            },
+            {
+                icon: <UserCheck className="h-5 w-5" />,
+                label: t('nav.driverVerification'),
+                path: '/admin/drivers',
+                adminOnly: true,
+            },
+            {
+                icon: <Building2 className="h-5 w-5" />,
+                label: t('nav.medicalCompanies'),
+                path: '/admin/companies',
+                adminOnly: true,
+            },
+            {
+                icon: <NavigationIcon className="h-5 w-5" />,
+                label: 'История маршрутов',
+                path: '/route-history',
+            },
+            {
+                icon: <Truck className="h-5 w-5" />,
+                label: t('nav.drivers'),
+                path: '/driver/dashboard',
+                driverOnly: true,
+            },
+            {
+                icon: <Settings className="h-5 w-5" />,
+                label: t('nav.settings'),
+                path: '/settings',
+                adminOnly: true,
+            },
+            {
+                icon: <Heart className="h-5 w-5" />,
+                label: 'Здоровье Устройств',
+                path: '/device-health',
+                adminOnly: true,
+            },
         ],
         [t, hasActiveSession]
     );
 
+    // Filter navigation items based on user role
     const filteredNavItems = useMemo(() => {
         return navItems.filter((item) => {
             if (item.adminOnly && !isAdmin) return false;
@@ -110,9 +191,11 @@ const Sidebar = React.memo(function Sidebar({
 
     const shouldExpand = !isMobile && (isCollapsed ? isHovered : true);
 
-    // Close mobile sidebar on route change automatically
+    // Auto-close mobile sidebar on route change
     useEffect(() => {
-        if (isMobile && isOpen) onClose();
+        if (isMobile && isOpen) {
+            onClose();
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname]);
 
@@ -121,12 +204,16 @@ const Sidebar = React.memo(function Sidebar({
             onMouseEnter={() => !isMobile && isCollapsed && setIsHovered(true)}
             onMouseLeave={() => !isMobile && isCollapsed && setIsHovered(false)}
             className={`
-                ${isMobile
-                ? 'fixed inset-y-0 left-0 z-50 w-64 shadow-lg'
-                : `sticky top-0 h-screen ${shouldExpand ? 'w-64' : 'w-20'}`}
+                ${
+                isMobile
+                    ? 'fixed inset-y-0 left-0 z-50 w-64 shadow-lg'
+                    : `sticky top-0 h-screen ${shouldExpand ? 'w-64' : 'w-20'}`
+            }
                 ${isMobile && !isOpen ? '-translate-x-full' : 'translate-x-0'}
                 flex flex-col bg-white border-r border-slate-200
                 transition-all duration-300 ease-in-out
+
+            
             `}
             aria-label={t('nav.sidebar')}
             aria-expanded={shouldExpand}
@@ -142,9 +229,13 @@ const Sidebar = React.memo(function Sidebar({
                 </button>
             )}
 
-            {/* Logo */}
+            {/* Logo section */}
             <div className="flex h-16 items-center border-b border-slate-200 px-4">
-                <Link to="/" className="flex items-center space-x-2" aria-label={t('nav.home')}>
+                <Link
+                    to="/"
+                    className="flex items-center space-x-2"
+                    aria-label={t('nav.home')}
+                >
                     <Logo size={32} />
                     <span
                         className={`
@@ -158,7 +249,7 @@ const Sidebar = React.memo(function Sidebar({
                 </Link>
             </div>
 
-            {/* Navigation */}
+            {/* Navigation menu */}
             <nav className="flex-1 overflow-y-auto p-4">
                 <ul className="space-y-1">
                     {filteredNavItems.map((item) => (
@@ -170,7 +261,11 @@ const Sidebar = React.memo(function Sidebar({
                                     `flex items-center rounded-lg py-2.5 text-sm font-medium relative
                                     ${shouldExpand ? 'space-x-3 px-4' : 'px-2'}
                                     ${isMobile ? 'gap-2' : 'px-2'}
-                                    ${isActive ? 'bg-teal-50 text-teal-700' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`
+                                    ${
+                                        isActive
+                                            ? 'bg-teal-50 text-teal-700'
+                                            : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                                    }`
                                 }
                                 end={item.path === '/'}
                                 title={!shouldExpand || isMobile ? item.label : ''}
@@ -178,44 +273,59 @@ const Sidebar = React.memo(function Sidebar({
                                 <div className="relative flex-shrink-0">
                                     {item.icon}
                                     {item.showBadge && (
-                                        <span className="absolute -right-1 -top-1 flex h-2 w-2" aria-hidden="true">
+                                        <span
+                                            className="absolute -right-1 -top-1 flex h-2 w-2"
+                                            aria-hidden="true"
+                                        >
                                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                                             <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
                                         </span>
                                     )}
                                 </div>
-                                {(shouldExpand || isMobile) && <span className="whitespace-nowrap">{item.label}</span>}
+                                {(shouldExpand || isMobile) && (
+                                    <span className="whitespace-nowrap">{item.label}</span>
+                                )}
                             </NavLink>
                         </li>
                     ))}
                 </ul>
             </nav>
 
-            {/* Profile shortcut */}
+            {/* Profile link */}
             <div className="border-t border-slate-200 p-4">
                 <NavLink
                     to="/profile"
                     onClick={isMobile ? onClose : undefined}
                     className={({ isActive }) =>
                         `flex items-center gap-2 rounded-lg py-2.5 text-sm font-medium px-3
-                        ${isActive ? 'bg-teal-50 text-teal-700' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`
+                        ${
+                            isActive
+                                ? 'bg-teal-50 text-teal-700'
+                                : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                        }`
                     }
                     title={!shouldExpand ? 'Мой Профиль' : ''}
                 >
                     <User className="h-5 w-5 flex-shrink-0" />
-                    {(shouldExpand || isMobile) && <span className="whitespace-nowrap">Мой Профиль</span>}
+                    {(shouldExpand || isMobile) && (
+                        <span className="whitespace-nowrap">Мой Профиль</span>
+                    )}
                 </NavLink>
             </div>
 
-            {/* System status */}
+            {/* System status indicator */}
             {shouldExpand && (
                 <div className="border-t border-slate-200 p-4">
                     <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3 text-sm">
                         <div className="flex items-center space-x-2">
                             <Wifi className="h-4 w-4 text-emerald-500" />
-                            <span className="font-medium text-slate-700">{t('app.systemActive')}</span>
+                            <span className="font-medium text-slate-700">
+                                {t('app.systemActive')}
+                            </span>
                         </div>
-                        <span className="text-xs text-slate-500">{t('app.version')}</span>
+                        <span className="text-xs text-slate-500">
+                            {t('app.version')}
+                        </span>
                     </div>
                 </div>
             )}
@@ -223,32 +333,53 @@ const Sidebar = React.memo(function Sidebar({
     );
 });
 
-/** Header **/
+// ============================================================================
+// HEADER COMPONENT
+// ============================================================================
+
 const Header = React.memo(function Header({ onMenuClick }) {
     const { user, logout } = useAuth();
     const { t, i18n } = useTranslation();
     const [showUserMenu, setShowUserMenu] = useState(false);
     const menuRef = useRef(null);
 
-    // Close on outside click / Esc
+    // Close menu on outside click
     useOnClickOutside(menuRef, () => setShowUserMenu(false));
+
+    // Close menu on Escape key
     useEffect(() => {
-        const onKey = (e) => e.key === 'Escape' && setShowUserMenu(false);
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                setShowUserMenu(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    // Overfilled bins / alerts
+    // Fetch overfilled bins count for alerts
     const { data: alertBinsData } = useQuery({
         queryKey: ['alertBinsCount'],
         queryFn: () => apiService.wasteBins.getOverfilled(),
         refetchInterval: 60_000,
         staleTime: 30_000,
     });
+
     const alertCount = safeCount(alertBinsData);
+
+    const handleLogout = () => {
+        setShowUserMenu(false);
+        logout();
+    };
+
+    const handleLanguageChange = (event) => {
+        i18n.changeLanguage(event.target.value);
+    };
 
     return (
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 md:px-6">
+            {/* Mobile menu button */}
             <div className="flex items-center">
                 <button
                     onClick={onMenuClick}
@@ -260,7 +391,9 @@ const Header = React.memo(function Header({ onMenuClick }) {
                 </button>
             </div>
 
+            {/* Right side controls */}
             <div className="flex items-center space-x-4">
+                {/* Alert notifications */}
                 <div className="relative">
                     <Link
                         to="/bins?filter=alert"
@@ -277,9 +410,10 @@ const Header = React.memo(function Header({ onMenuClick }) {
                     </Link>
                 </div>
 
+                {/* User menu dropdown */}
                 <div className="relative" ref={menuRef}>
                     <button
-                        onClick={() => setShowUserMenu((s) => !s)}
+                        onClick={() => setShowUserMenu((prev) => !prev)}
                         className="flex items-center space-x-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
                         aria-haspopup="menu"
                         aria-expanded={showUserMenu}
@@ -287,12 +421,17 @@ const Header = React.memo(function Header({ onMenuClick }) {
                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700">
                             {(user?.username?.substring(0, 1) || 'U').toUpperCase()}
                         </div>
-                        <span className="hidden sm:inline-block">{user?.username || t('header.user')}</span>
+                        <span className="hidden sm:inline-block">
+                            {user?.username || t('header.user')}
+                        </span>
                         <ChevronDown className="h-4 w-4 text-slate-400" />
                     </button>
 
                     {showUserMenu && (
-                        <div role="menu" className="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                        <div
+                            role="menu"
+                            className="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                        >
                             <Link
                                 to="/profile"
                                 className="flex items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
@@ -303,10 +442,7 @@ const Header = React.memo(function Header({ onMenuClick }) {
                                 {t('nav.profile')}
                             </Link>
                             <button
-                                onClick={() => {
-                                    setShowUserMenu(false);
-                                    logout();
-                                }}
+                                onClick={handleLogout}
                                 className="flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-slate-50"
                                 role="menuitem"
                             >
@@ -317,12 +453,13 @@ const Header = React.memo(function Header({ onMenuClick }) {
                     )}
                 </div>
 
+                {/* Language selector */}
                 <div>
                     <select
                         aria-label="Language"
                         className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm"
                         value={i18n.language?.startsWith('ru') ? 'ru' : 'en'}
-                        onChange={(e) => i18n.changeLanguage(e.target.value)}
+                        onChange={handleLanguageChange}
                     >
                         <option value="ru">RU</option>
                         <option value="en">EN</option>
@@ -333,10 +470,17 @@ const Header = React.memo(function Header({ onMenuClick }) {
     );
 });
 
-/** Layout wrapper **/
+// ============================================================================
+// DASHBOARD LAYOUT COMPONENT
+// ============================================================================
+
 const DashboardLayout = () => {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(true);
+
+    const handleSidebarOpen = () => setSidebarOpen(true);
+    const handleSidebarClose = () => setSidebarOpen(false);
+    const handleToggleCollapse = () => setIsCollapsed((prev) => !prev);
 
     return (
         <div className="flex h-screen bg-slate-50">
@@ -344,27 +488,31 @@ const DashboardLayout = () => {
             <div className="hidden md:block">
                 <Sidebar
                     isCollapsed={isCollapsed}
-                    onToggleCollapse={() => setIsCollapsed((s) => !s)}
+                    onToggleCollapse={handleToggleCollapse}
                 />
             </div>
 
             {/* Mobile sidebar */}
             <div id="mobile-sidebar" className="md:hidden">
-                <Sidebar isMobile isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} />
+                <Sidebar
+                    isMobile
+                    isOpen={isSidebarOpen}
+                    onClose={handleSidebarClose}
+                />
             </div>
 
             {/* Mobile overlay */}
             {isSidebarOpen && (
                 <div
                     className="fixed inset-0 z-40 bg-black/50 md:hidden"
-                    onClick={() => setSidebarOpen(false)}
+                    onClick={handleSidebarClose}
                     aria-hidden="true"
                 />
             )}
 
-            {/* Main content */}
+            {/* Main content area */}
             <div className="flex flex-1 flex-col overflow-hidden">
-                <Header onMenuClick={() => setSidebarOpen(true)} />
+                <Header onMenuClick={handleSidebarOpen} />
                 <main className="flex-1 overflow-auto">
                     <Outlet />
                 </main>

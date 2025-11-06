@@ -191,6 +191,10 @@ const apiService = {
 
         delete: createCompatibleMethod((binId) => api.delete(`/waste-bins/${binId}`)),
 
+        getDevicesHealth: () => api.get('/health-check/devices'),
+        getHealthStatistics: () => api.get('/health-check/statistics'),
+        getUnhealthyDevices: () => api.get('/health-check/unhealthy'),
+
         // ===== HISTORY & TIME PERIODS =====
 
         // Quick access methods for frontend time period selector
@@ -484,6 +488,25 @@ const apiService = {
         verify: (data) => api.post('/users/drivers/verify', data)
     },
 
+    healthCheck: {
+        // Get all devices with their health status
+        getDevicesHealth: () => api.get('/health-check/devices'),
+
+        // Get unhealthy devices
+        getUnhealthyDevices: () => api.get('/health-check/unhealthy'),
+
+        // Get health statistics
+        getHealthStatistics: (params) => api.get('/health-check/statistics', { params }),
+
+        // Get latest health check for specific bin
+        getLatestHealthCheck: (binId) => api.get(`/health-check/bin/${binId}/latest`),
+
+        // Get health check history for specific bin
+        getHealthCheckHistory: (binId, params) => api.get(`/health-check/bin/${binId}/history`, { params }),
+
+        // Delete old health check data (admin only)
+        deleteOldHealthChecks: (days) => api.delete(`/health-check/cleanup?days=${days}`)
+    },
 
     companies: {
         getAll: () => api.get('/companies'),

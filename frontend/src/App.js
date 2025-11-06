@@ -1,11 +1,11 @@
-import React, { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React, {Suspense} from 'react';
+import {BrowserRouter, Routes, Route, Navigate} from 'react-router-dom';
+import {Toaster} from 'react-hot-toast';
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 
 // Context Providers
-import { AuthProvider } from './contexts/AuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
+import {AuthProvider} from './contexts/AuthContext';
+import {ThemeProvider} from './contexts/ThemeContext';
 
 // Layouts
 import DashboardLayout from './layouts/DashboardLayout';
@@ -18,6 +18,7 @@ import AdminDriverVerification from "./components/AdminDriverVerification";
 import DriverDashboard from "./pages/DriverDashboard";
 import DriverCollection from "./pages/DriverCollection";
 import ErrorBoundary from "./utils/errorBoundary";
+import DeviceHealth from "./pages/DeviceHealth";
 
 // Pages - Using lazy loading for improved performance
 const MedicalCompanyManagement = React.lazy(() => import('./components/MedicalCompanyManagement'));
@@ -38,6 +39,7 @@ const NotFound = React.lazy(() => import('./pages/NotFound'));
 const DeviceTracking = React.lazy(() => import('./pages/DeviceTracking'));
 const RoutesHistory = React.lazy(() => import('./pages/RouteHistory'));
 
+
 // Enhanced Loading component with better UX
 const LoadingScreen = () => (
     <div className="flex h-screen w-full items-center justify-center bg-slate-50">
@@ -54,19 +56,19 @@ const LoadingScreen = () => (
 
             {/* Loading progress simulation */}
             <div className="w-48 bg-slate-200 rounded-full h-1.5">
-                <div className="bg-teal-500 h-1.5 rounded-full animate-pulse" style={{ width: '70%' }}></div>
+                <div className="bg-teal-500 h-1.5 rounded-full animate-pulse" style={{width: '70%'}}></div>
             </div>
         </div>
     </div>
 );
 
 // Protected Route wrapper
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({children}) => {
     // Get auth status from context
     const token = localStorage.getItem('token');
 
     if (!token) {
-        return <Navigate to="/login" replace />;
+        return <Navigate to="/login" replace/>;
     }
 
     return children;
@@ -115,25 +117,25 @@ const App = () => {
                 <ThemeProvider>
                     <BrowserRouter>
                         <AuthProvider>
-                            <Suspense fallback={<LoadingScreen />}>
+                            <Suspense fallback={<LoadingScreen/>}>
 
                                 <Routes>
                                     {/* Auth Routes */}
-                                    <Route element={<AuthLayout />}>
-                                        <Route path="/login" element={<Login />} />
-                                        <Route path="/register" element={<Register />} />
-                                        <Route path="/forgot-password" element={<ForgotPassword />} />
-                                        <Route path="/reset-password/:token" element={<ResetPassword />} />
+                                    <Route element={<AuthLayout/>}>
+                                        <Route path="/login" element={<Login/>}/>
+                                        <Route path="/register" element={<Register/>}/>
+                                        <Route path="/forgot-password" element={<ForgotPassword/>}/>
+                                        <Route path="/reset-password/:token" element={<ResetPassword/>}/>
                                     </Route>
 
                                     {/* Dashboard Routes - Protected */}
-                                    <Route element={<DashboardLayout />}>
+                                    <Route element={<DashboardLayout/>}>
                                         <Route
                                             path="/"
                                             element={
                                                 <ProtectedRoute>
                                                     <ErrorBoundary>
-                                                        <Dashboard />
+                                                        <Dashboard/>
                                                     </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
@@ -142,15 +144,24 @@ const App = () => {
                                             path="/driver/register"
                                             element={
                                                 <ProtectedRoute>
-                                                    <DriverRegistration />
+                                                    <DriverRegistration/>
                                                 </ProtectedRoute>
                                             }
                                         />
                                         <Route
+                                            path="/device-health"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <DeviceHealth/>
+                                                </ProtectedRoute>
+                                            }
+                                        />
+
+                                        <Route
                                             path="/admin/drivers"
                                             element={
                                                 <ProtectedRoute>
-                                                    <AdminDriverVerification />
+                                                    <AdminDriverVerification/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -158,7 +169,7 @@ const App = () => {
                                             path="/admin/companies"
                                             element={
                                                 <ProtectedRoute>
-                                                    <MedicalCompanyManagement />
+                                                    <MedicalCompanyManagement/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -166,7 +177,7 @@ const App = () => {
                                             path="/driver/dashboard"
                                             element={
                                                 <ProtectedRoute>
-                                                    <DriverDashboard />
+                                                    <DriverDashboard/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -174,7 +185,7 @@ const App = () => {
                                             path="/driver/collection"
                                             element={
                                                 <ProtectedRoute>
-                                                    <DriverCollection />
+                                                    <DriverCollection/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -182,7 +193,7 @@ const App = () => {
                                             path="/bins"
                                             element={
                                                 <ProtectedRoute>
-                                                    <BinList />
+                                                    <BinList/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -190,7 +201,7 @@ const App = () => {
                                             path="/bins/:binId"
                                             element={
                                                 <ProtectedRoute>
-                                                    <BinDetails />
+                                                    <BinDetails/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -198,7 +209,7 @@ const App = () => {
                                             path="/drivers"
                                             element={
                                                 <ProtectedRoute>
-                                                    <DriverTracking />
+                                                    <DriverTracking/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -206,7 +217,7 @@ const App = () => {
                                             path="/map"
                                             element={
                                                 <ProtectedRoute>
-                                                    <BinMap />
+                                                    <BinMap/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -214,7 +225,7 @@ const App = () => {
                                             path="/reports"
                                             element={
                                                 <ProtectedRoute>
-                                                    <Reports />
+                                                    <Reports/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -222,7 +233,7 @@ const App = () => {
                                             path="/settings"
                                             element={
                                                 <ProtectedRoute>
-                                                    <Settings />
+                                                    <Settings/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -230,7 +241,7 @@ const App = () => {
                                             path="/admin/devices"
                                             element={
                                                 <ProtectedRoute>
-                                                    <DeviceManagement />
+                                                    <DeviceManagement/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -238,7 +249,7 @@ const App = () => {
                                             path="/admin/bins"
                                             element={
                                                 <ProtectedRoute>
-                                                    <BinManagement />
+                                                    <BinManagement/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -247,8 +258,8 @@ const App = () => {
                                         <Route
                                             path="/admin/unassigned-bins"
                                             element={
-                                                <Suspense fallback={<LoadingScreen />}>
-                                                    <UnassignedBins />
+                                                <Suspense fallback={<LoadingScreen/>}>
+                                                    <UnassignedBins/>
                                                 </Suspense>
                                             }
                                         />
@@ -256,7 +267,7 @@ const App = () => {
                                             path="/admin/users"
                                             element={
                                                 <ProtectedRoute>
-                                                    <UserManagement />
+                                                    <UserManagement/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -264,7 +275,7 @@ const App = () => {
                                             path="/route-history"
                                             element={
                                                 <ProtectedRoute>
-                                                    <RoutesHistory />
+                                                    <RoutesHistory/>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -272,14 +283,14 @@ const App = () => {
                                             path="/profile"
                                             element={
                                                 <ProtectedRoute>
-                                                    <Profile />
+                                                    <Profile/>
                                                 </ProtectedRoute>
                                             }
                                         />
                                     </Route>
 
                                     {/* 404 Not Found */}
-                                    <Route path="*" element={<NotFound />} />
+                                    <Route path="*" element={<NotFound/>}/>
                                 </Routes>
                             </Suspense>
 

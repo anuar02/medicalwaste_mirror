@@ -27,6 +27,8 @@ const driverRoutes = require('./routes/drivers');
 const medicalCompanyRoutes = require('./routes/medicalCompanies');
 const gpsRoutes = require('./routes/gps');
 const deviceLogsRoutes = require('./routes/deviceLogs');
+const healthCheckRoutes = require('./routes/healthCheck');
+
 
 // Import middlewares
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
@@ -134,6 +136,7 @@ mongoose.connection.on('disconnected', () => {
 connectDB();
 
 // Mount routes
+app.use('/api/health-check', healthCheckRoutes);
 app.use('/api', deviceLogsRoutes);
 app.use('/api/gps', gpsRoutes);
 app.use('/api/auth', authLimiter, authRoutes);
