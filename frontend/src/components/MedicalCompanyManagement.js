@@ -203,7 +203,11 @@ const CompanyCard = ({ company, onEdit, onDelete, onViewDetails }) => {
         queryFn: () => apiService.companies.getStats(company._id),
     });
 
-    const stats = statsData?.data?.data || {};
+    console.log(statsData)
+
+    const stats = statsData?.data.data?.statistics || {};
+
+    console.log(stats)
     const isExpiringSoon = new Date(company.certificationExpiry) - new Date() < 90 * 24 * 60 * 60 * 1000;
 
     return (
@@ -252,7 +256,7 @@ const CompanyCard = ({ company, onEdit, onDelete, onViewDetails }) => {
                             Контейнеры:
                         </span>
                         <span className="font-medium text-slate-700">
-                            {stats.bins?.total || 0}
+                            {stats.bins || 0}
                         </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -261,7 +265,7 @@ const CompanyCard = ({ company, onEdit, onDelete, onViewDetails }) => {
                             Водители:
                         </span>
                         <span className="font-medium text-slate-700">
-                            {stats.drivers?.total || 0}
+                            {stats.drivers || 0}
                         </span>
                     </div>
 

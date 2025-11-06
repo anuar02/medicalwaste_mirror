@@ -1,7 +1,7 @@
 // components/bins/BinCard.jsx
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Thermometer, Weight, Clock, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { Thermometer, Weight, Clock, AlertTriangle, Wifi, WifiOff, Building2 } from 'lucide-react';
 import { formatDate, formatPercentage } from '../../utils/formatters';
 import BinStatusBadge from './BinStatusBadge';
 
@@ -46,6 +46,13 @@ const BinCard = ({ bin, onClick }) => {
                         )}
                     </div>
                 </div>
+                {/* Company name - NEW */}
+                {bin.company && (
+                    <div className="mt-1 flex items-center space-x-1 text-xs text-slate-500">
+                        <Building2 className="h-3 w-3" />
+                        <span className="font-medium">{bin.company.name}</span>
+                    </div>
+                )}
                 <p className="mt-0.5 truncate text-sm text-slate-500">
                     {bin.department}
                 </p>
@@ -123,6 +130,10 @@ BinCard.propTypes = {
         weight: PropTypes.number.isRequired,
         status: PropTypes.string.isRequired,
         lastUpdate: PropTypes.string.isRequired,
+        company: PropTypes.shape({
+            _id: PropTypes.string,
+            name: PropTypes.string,
+        }),
     }).isRequired,
     onClick: PropTypes.func,
 };

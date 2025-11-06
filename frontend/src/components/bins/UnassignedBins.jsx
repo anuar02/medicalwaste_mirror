@@ -43,7 +43,7 @@ const UnassignedBins = () => {
         queryFn: () => apiService.companies.getAll(),
         select: (resp) => {
             const candidates = [
-                resp?.data?.companies,     // ✅ соответствует твоему бэку
+                resp?.data?.companies,
                 resp?.data?.data?.companies,
                 resp?.data?.data,
                 resp?.data?.items,
@@ -92,8 +92,8 @@ const UnassignedBins = () => {
 
     // Assign bin to company mutation
     const assignMutation = useMutation({
-        mutationFn: ({ binId, companyId }) =>
-            apiService.wasteBins.update(binId, { company: companyId }),
+        mutationFn: ({ _id, companyId }) =>
+            apiService.wasteBins.update(_id, { company: companyId }),
         onSuccess: () => {
             toast.success('Контейнер назначен компании');
             queryClient.invalidateQueries(['unassignedBins']);
@@ -340,8 +340,8 @@ const UnassignedBins = () => {
                                     <td className="px-6 py-4">
                                         <input
                                             type="checkbox"
-                                            checked={selectedBins.has(bin.binId)}
-                                            onChange={() => handleSelectBin(bin.binId)}
+                                            checked={selectedBins.has(bin._id)}
+                                            onChange={() => handleSelectBin(bin._id)}
                                             className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                                         />
                                     </td>
@@ -388,8 +388,9 @@ const UnassignedBins = () => {
                                             <select
                                                 onChange={(e) => {
                                                     if (e.target.value) {
+                                                        console.log(bin)
                                                         assignMutation.mutate({
-                                                            binId: bin.binId,
+                                                            _id: bin._id,
                                                             companyId: e.target.value
                                                         });
                                                     }

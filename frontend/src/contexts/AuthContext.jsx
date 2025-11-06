@@ -84,8 +84,42 @@ export const AuthProvider = ({ children }) => {
                         (response?.status === 200);
 
                     if (isValid) {
-                        const userData = extractUserData(response);
-                        if (userData) {
+                        let userData = extractUserData(response);
+
+                        // If userData exists but is missing critical fields (like verificationStatus for drivers),
+                        // fetch the complete profile
+                        if (userData && userData.id) {
+                            const needsFullProfile =
+                                (userData.role === 'driver' && !userData.verificationStatus) ||
+                                !userData.company ||
+                                !userData.createdAt;
+
+                            if (needsFullProfile) {
+                                console.log('Token valid but missing data, fetching full profile...');
+                                try {
+                                    const profileResponse = await apiService.users.getCurrentUser();
+                                    console.log('Full profile response:', profileResponse);
+
+                                    const fullUserData = extractUserData(profileResponse);
+
+                                    if (fullUserData) {
+                                        console.log('Full user data loaded:', fullUserData);
+                                        setUser(fullUserData);
+                                    } else {
+                                        console.log('Could not extract full profile, using partial data:', userData);
+                                        setUser(userData);
+                                    }
+                                } catch (profileErr) {
+                                    console.error('Error fetching full profile:', profileErr);
+                                    // Use the partial user data we have
+                                    console.log('Using partial user data:', userData);
+                                    setUser(userData);
+                                }
+                            } else {
+                                console.log('User authenticated with complete data:', userData);
+                                setUser(userData);
+                            }
+                        } else if (userData) {
                             console.log('User authenticated:', userData);
                             setUser(userData);
                         } else {

@@ -6,28 +6,51 @@ const { asyncHandler } = require('../utils/asyncHandler');
 /**
  * Get current user profile
  */
-const getProfile = asyncHandler(async (req, res, next) => {
-    // Get user from authenticated request
-    const user = await User.findById(req.user._id);
 
-    if (!user) {
-        return next(new AppError('User not found', 404));
-    }
+const getProfile = async (req, res, next) => {
+    try {
+        // req.user is set by the auth middleware
+        const userId = req.user.id || req.user._id;
 
-    // Send user data
-    res.status(200).json({
-        status: 'success',
-        data: {
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                role: user.role,
-                department: user.department
-            }
+        // Fetch the full user document with populated fields
+        const user = await User.findById(userId)
+            .select('-password -passwordResetToken -passwordResetExpires') // Exclude sensitive fields
+            .populate('company', 'name licenseNumber contactInfo address') // Populate company if referenced
+            .lean(); // Convert to plain JavaScript object
+
+        if (!user) {
+            return res.status(404).json({
+                status: 'fail',
+                message: 'User not found'
+            });
         }
-    });
-});
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                user: {
+                    _id: user._id,
+                    id: user._id, // Include both for compatibility
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    department: user.department || '',
+                    company: user.company,
+                    verificationStatus: user.verificationStatus, // IMPORTANT: Include this
+                    vehicleInfo: user.vehicleInfo, // For drivers
+                    active: user.active,
+                    createdAt: user.createdAt,
+                    updatedAt: user.updatedAt,
+                    lastLogin: user.lastLogin,
+                    loginAttempts: user.loginAttempts
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Get profile error:', error);
+        next(error);
+    }
+};
 
 const assignCompany = asyncHandler(async (req, res, next) => {
     const { userId, companyId } = req.body;

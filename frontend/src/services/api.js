@@ -151,6 +151,7 @@ const apiService = {
 
     // User endpoints (unchanged interface)
     users: {
+        getCurrentUser: createCompatibleMethod(() => api.get('/users/profile')),
         getProfile: createCompatibleMethod(() => api.get('/users/profile')),
         updateProfile: createCompatibleMethod((data) => api.patch('/users/profile', data)),
         getDepartments: createCompatibleMethod(() => api.get('/users/departments')),

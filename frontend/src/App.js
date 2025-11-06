@@ -36,6 +36,7 @@ const Settings = React.lazy(() => import('./pages/Settings'));
 const Profile = React.lazy(() => import('./pages/Profile'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
 const DeviceTracking = React.lazy(() => import('./pages/DeviceTracking'));
+const RoutesHistory = React.lazy(() => import('./pages/RouteHistory'));
 
 // Enhanced Loading component with better UX
 const LoadingScreen = () => (
@@ -260,10 +261,10 @@ const App = () => {
                                             }
                                         />
                                         <Route
-                                            path="/tracking"
+                                            path="/route-history"
                                             element={
                                                 <ProtectedRoute>
-                                                    <DeviceTracking />
+                                                    <RoutesHistory />
                                                 </ProtectedRoute>
                                             }
                                         />

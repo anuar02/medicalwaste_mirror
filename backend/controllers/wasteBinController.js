@@ -750,12 +750,15 @@ const createBin = asyncHandler(async (req, res, next) => {
 /**
  * Update a waste bin
  */
+/**
+ * Update a waste bin
+ */
 const updateBin = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    // Find the bin first
-    let query = { binId: id };
+    // Find the bin first using MongoDB _id
+    let query = { _id: id };
     query = addCompanyToQuery(query, req.user);
     let bin = await WasteBin.findOne(query);
 
@@ -774,7 +777,8 @@ const updateBin = asyncHandler(async (req, res, next) => {
         'status',
         'alertThreshold',
         'capacity',
-        'containerHeight'
+        'containerHeight',
+        'company'
     ];
 
     // Filter update data to only include allowed fields
@@ -803,27 +807,26 @@ const updateBin = asyncHandler(async (req, res, next) => {
         filteredData.alertThreshold = threshold;
     }
 
-    // Update the bin
+    // Update the bin using MongoDB _id
     const updatedBin = await WasteBin.findOneAndUpdate(
-        { binId: id },
+        { _id: id },
         {
             ...filteredData,
             lastUpdate: new Date()
         },
         {
-            new: true,           // Return updated document
-            runValidators: true  // Run schema validators
+            new: true,
+            runValidators: true
         }
     );
 
-    // If containerHeight changed, optionally update recent history records
+    // If containerHeight changed, update recent history records
     if (isContainerHeightChanging) {
         try {
-            // Update recent history records (last 24 hours) with new container height
             const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
             const recentHistory = await History.find({
-                binId: id,
+                binId: updatedBin.binId,
                 timestamp: { $gte: oneDayAgo }
             });
 
@@ -845,7 +848,7 @@ const updateBin = asyncHandler(async (req, res, next) => {
                 });
 
                 await History.bulkWrite(bulkUpdates);
-                console.log(`Updated ${bulkUpdates.length} recent history records for bin ${id}`);
+                console.log(`Updated ${bulkUpdates.length} recent history records for bin ${updatedBin.binId}`);
             }
         } catch (historyUpdateError) {
             console.error('Failed to update history records:', historyUpdateError);
