@@ -8,7 +8,7 @@ const { sendAlertNotification } = require('../utils/telegram');
 const { logger } = require('../middleware/loggers');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
-
+const { addCompanyToQuery } = require('../middleware/companyFilter');
 /**
  * Get all waste bins with optional filtering
  */
@@ -41,15 +41,23 @@ const getAllBins = asyncHandler(async (req, res) => {
         }
     }
 
-    // Find bins with filter
-    const bins = await WasteBin.find(filter).sort({ lastUpdate: -1 });
+    let query = { ...filter };  // Merge with existing filter
+    query = addCompanyToQuery(query, req.user);
 
-    // Send response
+    // ✅ ADD THIS - Actually query the database
+    const bins = await WasteBin.find(query)
+        .populate('company', 'name')
+        .sort({ lastUpdate: -1 });
+
+    // ✅ IMPORTANT: Only send response ONCE
     res.status(200).json({
         status: 'success',
         results: bins.length,
         data: { bins }
     });
+
+    // ✅ CRITICAL: Add return statement to prevent further execution
+    return;
 });
 
 /**
@@ -636,7 +644,10 @@ const markCommandExecuted = asyncHandler(async (req, res) => {
  * Get a specific waste bin by ID
  */
 const getBin = asyncHandler(async (req, res, next) => {
-    const bin = await WasteBin.findOne({ binId: req.params.id });
+    let query = { binId: req.params.id };
+    query = addCompanyToQuery(query, req.user);
+
+    const bin = await WasteBin.findOne(query).populate('company', 'name');
 
     if (!bin) {
         return next(new AppError('No waste bin found with that ID', 404));
@@ -678,13 +689,27 @@ const createBin = asyncHandler(async (req, res, next) => {
         latitude,
         longitude,
         floor,
-        room
+        room,
+        company
     } = req.body;
 
     // Check if bin with ID already exists
     const existingBin = await WasteBin.findOne({ binId });
     if (existingBin) {
         return next(new AppError('A waste bin with this ID already exists', 400));
+    }
+
+    // Determine which company to assign the bin to
+    let binCompany = company; // Use company from request if provided
+
+    // If no company provided and user is supervisor, use their company
+    if (!binCompany && req.user.role === 'supervisor') {
+        binCompany = req.user.company;
+    }
+
+    // If still no company and user is driver, use their company
+    if (!binCompany && req.user.role === 'driver') {
+        binCompany = req.user.company;
     }
 
     // Create location object
@@ -698,6 +723,7 @@ const createBin = asyncHandler(async (req, res, next) => {
     // Create bin
     const bin = await WasteBin.create({
         binId,
+        company: binCompany,  // Assign company (can be null for admin)
         department,
         wasteType,
         capacity: capacity || 50,
@@ -724,12 +750,17 @@ const createBin = asyncHandler(async (req, res, next) => {
 /**
  * Update a waste bin
  */
+/**
+ * Update a waste bin
+ */
 const updateBin = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    // Find the bin first
-    let bin = await WasteBin.findOne({ binId: id });
+    // Find the bin first using MongoDB _id
+    let query = { _id: id };
+    query = addCompanyToQuery(query, req.user);
+    let bin = await WasteBin.findOne(query);
 
     if (!bin) {
         return next(new AppError('No waste bin found with that ID', 404));
@@ -746,7 +777,8 @@ const updateBin = asyncHandler(async (req, res, next) => {
         'status',
         'alertThreshold',
         'capacity',
-        'containerHeight'
+        'containerHeight',
+        'company'
     ];
 
     // Filter update data to only include allowed fields
@@ -775,27 +807,26 @@ const updateBin = asyncHandler(async (req, res, next) => {
         filteredData.alertThreshold = threshold;
     }
 
-    // Update the bin
+    // Update the bin using MongoDB _id
     const updatedBin = await WasteBin.findOneAndUpdate(
-        { binId: id },
+        { _id: id },
         {
             ...filteredData,
             lastUpdate: new Date()
         },
         {
-            new: true,           // Return updated document
-            runValidators: true  // Run schema validators
+            new: true,
+            runValidators: true
         }
     );
 
-    // If containerHeight changed, optionally update recent history records
+    // If containerHeight changed, update recent history records
     if (isContainerHeightChanging) {
         try {
-            // Update recent history records (last 24 hours) with new container height
             const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
             const recentHistory = await History.find({
-                binId: id,
+                binId: updatedBin.binId,
                 timestamp: { $gte: oneDayAgo }
             });
 
@@ -817,7 +848,7 @@ const updateBin = asyncHandler(async (req, res, next) => {
                 });
 
                 await History.bulkWrite(bulkUpdates);
-                console.log(`Updated ${bulkUpdates.length} recent history records for bin ${id}`);
+                console.log(`Updated ${bulkUpdates.length} recent history records for bin ${updatedBin.binId}`);
             }
         } catch (historyUpdateError) {
             console.error('Failed to update history records:', historyUpdateError);
@@ -847,7 +878,9 @@ const updateBin = asyncHandler(async (req, res, next) => {
  * Delete a waste bin
  */
 const deleteBin = asyncHandler(async (req, res, next) => {
-    const result = await WasteBin.deleteOne({ binId: req.params.id });
+    let query = { binId: req.params.id };
+    query = addCompanyToQuery(query, req.user);
+    const result = await WasteBin.deleteOne(query);
 
     if (result.deletedCount === 0) {
         return next(new AppError('No waste bin found with that ID', 404));
@@ -1304,8 +1337,12 @@ const sendManualAlert = asyncHandler(async (req, res, next) => {
  * Get waste collection statistics
  */
 const getStatistics = asyncHandler(async (req, res) => {
+    let query = {};
+    query = addCompanyToQuery(query, req.user);
+
     // Get aggregate stats with defaults if empty
     const stats = await WasteBin.aggregate([
+        { $match: query },
         {
             $group: {
                 _id: null,

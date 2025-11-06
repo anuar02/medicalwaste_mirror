@@ -4,9 +4,15 @@ const { body } = require('express-validator');
 const router = express.Router();
 const {
     getProfile,
+    assignCompany,
     updateProfile,
     getDepartments,
     updateUserRole,
+    getPendingDrivers,
+    verifyDriver,
+    getAllDrivers,
+    getDriverDetails,
+    updateDriverDetails,
     getAllUsers,
     deactivateUser,
     activateUser, deleteUser
@@ -47,6 +53,13 @@ const updateProfileValidation = [
         ])
         .withMessage('Invalid department selection')
 ];
+
+router.get('/drivers', restrictTo('admin', 'supervisor'), getAllDrivers);
+router.get('/drivers/pending', restrictTo('admin', 'supervisor'), getPendingDrivers);
+router.get('/drivers/:driverId', getDriverDetails);
+router.patch('/drivers/:driverId', updateDriverDetails);
+router.post('/drivers/verify', restrictTo('admin', 'supervisor'), verifyDriver);
+router.post('/assign-company', restrictTo('admin'), assignCompany);
 
 // Routes for authenticated users
 router.use(auth);

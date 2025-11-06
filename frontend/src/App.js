@@ -15,10 +15,13 @@ import BinManagement from "./pages/admin/BinManagement";
 import DeviceManagement from "./pages/admin/DeviceManagement";
 import DriverRegistration from "./components/DriverRegistration";
 import AdminDriverVerification from "./components/AdminDriverVerification";
-import MedicalCompanyManagement from "./components/MedicalCompanyManagement";
+import DriverDashboard from "./pages/DriverDashboard";
+import DriverCollection from "./pages/DriverCollection";
 import ErrorBoundary from "./utils/errorBoundary";
 
 // Pages - Using lazy loading for improved performance
+const MedicalCompanyManagement = React.lazy(() => import('./components/MedicalCompanyManagement'));
+const UnassignedBins = React.lazy(() => import('./components/bins/UnassignedBins'));
 const Login = React.lazy(() => import('./pages/auth/Login'));
 const Register = React.lazy(() => import('./pages/auth/Register'));
 const ForgotPassword = React.lazy(() => import('./pages/auth/ForgotPassword'));
@@ -33,6 +36,7 @@ const Settings = React.lazy(() => import('./pages/Settings'));
 const Profile = React.lazy(() => import('./pages/Profile'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
 const DeviceTracking = React.lazy(() => import('./pages/DeviceTracking'));
+const RoutesHistory = React.lazy(() => import('./pages/RouteHistory'));
 
 // Enhanced Loading component with better UX
 const LoadingScreen = () => (
@@ -112,6 +116,7 @@ const App = () => {
                     <BrowserRouter>
                         <AuthProvider>
                             <Suspense fallback={<LoadingScreen />}>
+
                                 <Routes>
                                     {/* Auth Routes */}
                                     <Route element={<AuthLayout />}>
@@ -154,6 +159,22 @@ const App = () => {
                                             element={
                                                 <ProtectedRoute>
                                                     <MedicalCompanyManagement />
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
+                                            path="/driver/dashboard"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <DriverDashboard />
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
+                                            path="/driver/collection"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <DriverCollection />
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -221,6 +242,16 @@ const App = () => {
                                                 </ProtectedRoute>
                                             }
                                         />
+
+                                        {/* Unassigned Bins - Admin Only */}
+                                        <Route
+                                            path="/admin/unassigned-bins"
+                                            element={
+                                                <Suspense fallback={<LoadingScreen />}>
+                                                    <UnassignedBins />
+                                                </Suspense>
+                                            }
+                                        />
                                         <Route
                                             path="/admin/users"
                                             element={
@@ -230,10 +261,10 @@ const App = () => {
                                             }
                                         />
                                         <Route
-                                            path="/tracking"
+                                            path="/route-history"
                                             element={
                                                 <ProtectedRoute>
-                                                    <DeviceTracking />
+                                                    <RoutesHistory />
                                                 </ProtectedRoute>
                                             }
                                         />

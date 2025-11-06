@@ -29,13 +29,11 @@ const DriverRegistration = () => {
     const queryClient = useQueryClient();
 
     // Fetch medical companies using @tanstack/react-query v3 syntax
-    const { data: companiesData, isLoading: companiesLoading } = useQuery(
-        'medicalCompanies',
-        () => apiService.medicalCompanies.getMedicalCompanies(),
-        {
-            staleTime: 5 * 60 * 1000 // 5 minutes
-        }
-    );
+    const { data: companiesData, isLoading: companiesLoading } = useQuery({
+        queryKey: ['medicalCompanies'],
+        queryFn: () => apiService.medicalCompanies.getMedicalCompanies(),
+        staleTime: 5 * 60 * 1000
+    });
 
     // Driver registration mutation using @tanstack/react-query v3 syntax
     const registerMutation = useMutation({

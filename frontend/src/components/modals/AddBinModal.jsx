@@ -17,6 +17,8 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
         wasteType: 'Острые Медицинские Отходы',
         alertThreshold: 80,
         capacity: 50,
+        containerHeight: 50,  // ✅ Add this
+        distance: 0,          // ✅ Add this (0 = empty bin)
         latitude: 43.2364,
         longitude: 76.9457,
         floor: 1,
@@ -69,6 +71,8 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
             wasteType: 'Острые Медицинские Отходы',
             alertThreshold: 80,
             capacity: 50,
+            containerHeight: 50,  // ✅ Add this
+            distance: 0,          // ✅ Add this
             latitude: 43.2364,
             longitude: 76.9457,
             floor: 1,
@@ -154,9 +158,29 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                             />
                             <datalist id="departments">
                                 {departmentOptions.map((dept) => (
-                                    <option key={dept} value={dept} />
+                                    <option key={dept} value={dept}/>
                                 ))}
                             </datalist>
+                        </div>
+
+                        <div>
+                            <label className="mb-1 block text-sm font-medium text-slate-700">
+                                Высота контейнера (см)
+                            </label>
+                            <input
+                                type="number"
+                                name="containerHeight"
+                                min="10"
+                                max="200"
+                                value={formData.containerHeight}
+                                onChange={handleChange}
+                                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
+                                placeholder="50"
+                                required
+                            />
+                            <p className="mt-1 text-xs text-slate-500">
+                                Обычно: 30-60 см для мед. отходов
+                            </p>
                         </div>
 
                         {/* Waste Type */}
@@ -221,7 +245,7 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                         {/* Location */}
                         <div className="md:col-span-2">
                             <div className="flex items-center space-x-2">
-                                <MapPin className="h-4 w-4 text-slate-400" />
+                                <MapPin className="h-4 w-4 text-slate-400"/>
                                 <h3 className="text-sm font-medium text-slate-700">{t('binModals.location', 'Местоположение')}</h3>
                             </div>
                             <div className="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -307,7 +331,7 @@ const AddBinModal = ({ isOpen, onClose, onSuccess }) => {
                             type="submit"
                             isLoading={createMutation.isLoading}
                         >
-                            <Plus className="mr-2 h-4 w-4" />
+                            <Plus className="mr-2 h-4 w-4"/>
                             {t('binModals.addButton', 'Добавить контейнер')}
                         </Button>
                     </div>

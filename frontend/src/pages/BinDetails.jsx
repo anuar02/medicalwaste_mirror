@@ -33,6 +33,7 @@ import {useAuth} from '../contexts/AuthContext';
 import DeleteConfirmationModal from '../components/modals/DeleteConfirmationModal';
 import BinStatusBadge from '../components/bins/BinStatusBadge';
 import EditBinModal from '../components/modals/EditBinModal';
+import { Building2 } from 'lucide-react'; // Добавьте к существующим импортам из lucide-react
 
 const BinDetails = () => {
     const {binId} = useParams();
@@ -622,6 +623,68 @@ const BinDetails = () => {
                                 },
                             ]}
                         />
+
+                        <InfoCard
+                            title="Информация о компании"
+                            items={[
+                                {
+                                    label: 'Компания',
+                                    value: bin.company ? (
+                                        <div className="flex items-center space-x-2">
+                                            <Building2 className="h-4 w-4 text-teal-600" />
+                                            <span className="font-medium text-slate-800">
+                        {bin.company.name}
+                    </span>
+                                        </div>
+                                    ) : (
+                                        <span className="flex items-center text-amber-600">
+                    <AlertTriangle className="mr-2 h-4 w-4" />
+                    Не назначена
+                </span>
+                                    ),
+                                },
+                                ...(bin.company ? [
+                                    {
+                                        label: 'Лицензия',
+                                        value: bin.company.licenseNumber,
+                                    },
+                                    {
+                                        label: 'Email',
+                                        value: bin.company.contactInfo?.email || 'Не указан',
+                                    },
+                                    {
+                                        label: 'Телефон',
+                                        value: bin.company.contactInfo?.phone || 'Не указан',
+                                    },
+                                ] : []),
+                            ]}
+                        />
+
+                        {/* Company Assignment Warning for Admin */}
+                        {isAdmin && !bin.company && (
+                            <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+                                <div className="flex items-start space-x-3">
+                                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                                    <div className="flex-1">
+                                        <h4 className="text-sm font-medium text-amber-900">
+                                            Контейнер не назначен компании
+                                        </h4>
+                                        <p className="mt-1 text-sm text-amber-700">
+                                            Водители и супервизоры не видят этот контейнер.
+                                            Назначьте компанию через кнопку "Редактировать" или на странице{' '}
+                                            <Link
+                                                to="/admin/unassigned-bins"
+                                                className="font-medium underline hover:text-amber-800"
+                                            >
+                                                неназначенных контейнеров
+                                            </Link>
+                                            .
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
 
                         {/* Sensor data if available */}
                         {(bin.temperature || bin.weight || bin.distance !== undefined) && (

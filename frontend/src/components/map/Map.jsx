@@ -1,4 +1,4 @@
-// components/map/Map.jsx - With properly scoped hooks
+// components/map/Map.jsx - With start/end marker support
 import React, { useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle, Polyline } from 'react-leaflet';
@@ -132,6 +132,111 @@ const createCheckpointIcon = (checkpointType = 'waste_collection') => {
     });
 };
 
+// Icon for start marker
+const createStartIcon = () => {
+    const size = 36;
+    return L.divIcon({
+        className: 'start-icon',
+        html: `
+      <div style="
+        background-color: #10b981;
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+      ">
+        🚀
+      </div>
+    `,
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2],
+        popupAnchor: [0, -size/2],
+    });
+};
+
+// Icon for end marker
+const createEndIcon = () => {
+    const size = 36;
+    return L.divIcon({
+        className: 'end-icon',
+        html: `
+      <div style="
+        background-color: #ef4444;
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+      ">
+        🏁
+      </div>
+    `,
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2],
+        popupAnchor: [0, -size/2],
+    });
+};
+
+// Icon for visited containers
+const createVisitedIcon = () => {
+    const size = 32;
+    return L.divIcon({
+        className: 'visited-icon',
+        html: `
+      <div style="
+        background-color: #10b981;
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 18px;
+        font-weight: bold;
+      ">
+        ✓
+      </div>
+    `,
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2],
+        popupAnchor: [0, -size/2],
+    });
+};
+
+// Icon for unvisited containers
+const createUnvisitedIcon = () => {
+    const size = 28;
+    return L.divIcon({
+        className: 'unvisited-icon',
+        html: `
+      <div style="
+        background-color: #64748b;
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      ">
+      </div>
+    `,
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2],
+        popupAnchor: [0, -size/2],
+    });
+};
+
 const Map = ({
                  center = [43.2364, 76.9457],
                  zoom = 13,
@@ -168,7 +273,16 @@ const Map = ({
             {markers.map((marker) => {
                 // Determine which icon to use based on marker type
                 let icon;
-                if (marker.type === 'checkpoint' || marker.isCheckpoint) {
+
+                if (marker.type === 'start') {
+                    icon = createStartIcon();
+                } else if (marker.type === 'end') {
+                    icon = createEndIcon();
+                } else if (marker.type === 'visited') {
+                    icon = createVisitedIcon();
+                } else if (marker.type === 'unvisited') {
+                    icon = createUnvisitedIcon();
+                } else if (marker.type === 'checkpoint' || marker.isCheckpoint) {
                     icon = createCheckpointIcon(marker.checkpointType);
                 } else if (marker.binId) {
                     icon = createBinIcon(marker.fullness || 0, marker.isSelected);

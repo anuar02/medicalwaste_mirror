@@ -50,20 +50,57 @@ const userSchema = new mongoose.Schema({
         minlength: [8, 'Password must be at least 8 characters long'],
         select: false // Don't return password in queries by default
     },
-    // Add this new field for Google OAuth
-    googleId: {
-        type: String,
-        sparse: true,
-        unique: true
-    },
-    googleProfile: {
-        type: Object,
-        default: null
-    },
     role: {
         type: String,
-        enum: ['user', 'admin', 'supervisor', 'driver'],
+        enum: {
+            values: ['user', 'admin', 'supervisor', 'driver'],
+            message: 'Role must be either: user, admin, supervisor, or driver'
+        },
         default: 'user'
+    },
+    company: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'MedicalCompany',
+        default: null
+    },
+    // Driver-specific fields
+    vehicleInfo: {
+        plateNumber: {
+            type: String,
+            trim: true,
+            uppercase: true
+        },
+        vehicleType: {
+            type: String,
+            trim: true
+        },
+        model: {
+            type: String,
+            trim: true
+        },
+        year: {
+            type: Number
+        }
+    },
+    driverLicense: {
+        number: {
+            type: String,
+            trim: true
+        },
+        expiryDate: {
+            type: Date
+        }
+    },
+    phoneNumber: {
+        type: String,
+        trim: true
+    },
+    verificationStatus: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: function() {
+            return this.role === 'driver' ? 'pending' : 'approved';
+        }
     },
     department: {
         type: String,
@@ -82,27 +119,6 @@ const userSchema = new mongoose.Schema({
             message: 'Invalid department selection'
         },
         default: ''
-    },
-
-    telegram: {
-        chatId: {
-            type: String,
-            default: null
-        },
-        username: {
-            type: String,
-            default: null
-        },
-        active: {
-            type: Boolean,
-            default: false
-        }
-    },
-    notificationPreferences: {
-        receiveAlerts: {
-            type: Boolean,
-            default: true
-        }
     },
     active: {
         type: Boolean,
@@ -126,7 +142,9 @@ const userSchema = new mongoose.Schema({
 // Index for efficient queries
 userSchema.index({ username: 1 });
 userSchema.index({ email: 1 });
-userSchema.index({ googleId: 1 });
+userSchema.index({ role: 1 });
+userSchema.index({ company: 1 });
+userSchema.index({ verificationStatus: 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
@@ -196,6 +214,12 @@ userSchema.methods.generatePasswordResetToken = function() {
 
     return resetToken;
 };
+
+// Virtual for driver approval check
+userSchema.virtual('isApproved').get(function() {
+    if (this.role !== 'driver') return true;
+    return this.verificationStatus === 'approved';
+});
 
 const User = mongoose.model('User', userSchema);
 

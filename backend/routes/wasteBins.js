@@ -604,11 +604,15 @@ router.post('/',
 );
 
 router.patch('/:id',
-    param('id').trim().notEmpty(),
+    param('id').isMongoId(),
     ...updateBinValidation,
     validateRequest,
     sanitizeInput,
-    checkBinOwnership,
+    restrictTo('admin', 'supervisor'),
+    (req, res, next) => {
+        if (req.user?.role === 'admin') return next();
+        return checkBinOwnership(req, res, next);
+    },
     logActivity('bin_update'),
     updateBin
 );

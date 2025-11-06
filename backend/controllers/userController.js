@@ -6,25 +6,72 @@ const { asyncHandler } = require('../utils/asyncHandler');
 /**
  * Get current user profile
  */
-const getProfile = asyncHandler(async (req, res, next) => {
-    // Get user from authenticated request
-    const user = await User.findById(req.user._id);
 
+const getProfile = async (req, res, next) => {
+    try {
+        // req.user is set by the auth middleware
+        const userId = req.user.id || req.user._id;
+
+        // Fetch the full user document with populated fields
+        const user = await User.findById(userId)
+            .select('-password -passwordResetToken -passwordResetExpires') // Exclude sensitive fields
+            .populate('company', 'name licenseNumber contactInfo address') // Populate company if referenced
+            .lean(); // Convert to plain JavaScript object
+
+        if (!user) {
+            return res.status(404).json({
+                status: 'fail',
+                message: 'User not found'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                user: {
+                    _id: user._id,
+                    id: user._id, // Include both for compatibility
+                    username: user.username,
+                    email: user.email,
+                    role: user.role,
+                    department: user.department || '',
+                    company: user.company,
+                    verificationStatus: user.verificationStatus, // IMPORTANT: Include this
+                    vehicleInfo: user.vehicleInfo, // For drivers
+                    active: user.active,
+                    createdAt: user.createdAt,
+                    updatedAt: user.updatedAt,
+                    lastLogin: user.lastLogin,
+                    loginAttempts: user.loginAttempts
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Get profile error:', error);
+        next(error);
+    }
+};
+
+const assignCompany = asyncHandler(async (req, res, next) => {
+    const { userId, companyId } = req.body;
+
+    const user = await User.findById(userId);
     if (!user) {
         return next(new AppError('User not found', 404));
     }
 
-    // Send user data
+    const company = await MedicalCompany.findById(companyId);
+    if (!company) {
+        return next(new AppError('Company not found', 404));
+    }
+
+    user.company = companyId;
+    await user.save();
+
     res.status(200).json({
         status: 'success',
         data: {
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                role: user.role,
-                department: user.department
-            }
+            user
         }
     });
 });
@@ -89,6 +136,75 @@ const updateProfile = asyncHandler(async (req, res, next) => {
                 role: user.role,
                 department: user.department
             }
+        }
+    });
+});
+
+const updateDriverDetails = asyncHandler(async (req, res, next) => {
+    const { driverId } = req.params;
+    const { vehicleInfo, driverLicense, phoneNumber } = req.body;
+
+    const driver = await User.findById(driverId);
+
+    if (!driver) {
+        return next(new AppError('Driver not found', 404));
+    }
+
+    if (driver.role !== 'driver') {
+        return next(new AppError('User is not a driver', 400));
+    }
+
+    // Check permissions
+    if (req.user.role === 'driver' && driver._id.toString() !== req.user.id) {
+        return next(new AppError('You can only update your own details', 403));
+    }
+
+    if (req.user.role === 'supervisor' && driver.company.toString() !== req.user.company.toString()) {
+        return next(new AppError('You can only update drivers from your company', 403));
+    }
+
+    // Update fields
+    if (vehicleInfo) driver.vehicleInfo = { ...driver.vehicleInfo, ...vehicleInfo };
+    if (driverLicense) driver.driverLicense = { ...driver.driverLicense, ...driverLicense };
+    if (phoneNumber) driver.phoneNumber = phoneNumber;
+
+    await driver.save();
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            driver
+        }
+    });
+});
+
+const getDriverDetails = asyncHandler(async (req, res, next) => {
+    const { driverId } = req.params;
+
+    const driver = await User.findById(driverId)
+        .populate('company', 'name licenseNumber address contactInfo');
+
+    if (!driver) {
+        return next(new AppError('Driver not found', 404));
+    }
+
+    if (driver.role !== 'driver') {
+        return next(new AppError('User is not a driver', 400));
+    }
+
+    // Check permissions
+    if (req.user.role === 'driver' && driver._id.toString() !== req.user.id) {
+        return next(new AppError('You can only view your own details', 403));
+    }
+
+    if (req.user.role === 'supervisor' && driver.company.toString() !== req.user.company.toString()) {
+        return next(new AppError('You can only view drivers from your company', 403));
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            driver
         }
     });
 });
@@ -166,6 +282,92 @@ const getAllUsers = asyncHandler(async (req, res) => {
         results: users.length,
         data: {
             users
+        }
+    });
+});
+
+const getAllDrivers = asyncHandler(async (req, res) => {
+    const query = { role: 'driver' };
+
+    // If supervisor, filter by company
+    if (req.user.role === 'supervisor') {
+        query.company = req.user.company;
+    }
+
+    const drivers = await User.find(query)
+        .populate('company', 'name licenseNumber')
+        .select('username email phoneNumber vehicleInfo driverLicense verificationStatus active lastLogin')
+        .sort({ createdAt: -1 });
+
+    res.status(200).json({
+        status: 'success',
+        results: drivers.length,
+        data: {
+            drivers
+        }
+    });
+});
+
+
+const verifyDriver = asyncHandler(async (req, res, next) => {
+    const { driverId, status, notes } = req.body;
+
+    if (!['approved', 'rejected'].includes(status)) {
+        return next(new AppError('Status must be either approved or rejected', 400));
+    }
+
+    const driver = await User.findById(driverId);
+
+    if (!driver) {
+        return next(new AppError('Driver not found', 404));
+    }
+
+    if (driver.role !== 'driver') {
+        return next(new AppError('User is not a driver', 400));
+    }
+
+    // Supervisors can only verify drivers from their company
+    if (req.user.role === 'supervisor') {
+        if (!driver.company || driver.company.toString() !== req.user.company.toString()) {
+            return next(new AppError('You can only verify drivers from your company', 403));
+        }
+    }
+
+    driver.verificationStatus = status;
+    if (notes) {
+        driver.notes = notes;
+    }
+    await driver.save();
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            driver
+        }
+    });
+});
+
+const getPendingDrivers = asyncHandler(async (req, res) => {
+    const query = {
+        role: 'driver',
+        verificationStatus: 'pending'
+    };
+
+    // If supervisor, filter by company
+    if (req.user.role === 'supervisor') {
+        query.company = req.user.company;
+    }
+
+    const drivers = await User.find(query)
+        .populate('company', 'name licenseNumber')
+        .select('username email phoneNumber vehicleInfo driverLicense verificationStatus createdAt')
+        .sort({ createdAt: -1 });
+
+    res.status(200).json({
+        status: 'success',
+        results: drivers.length,
+        data: {
+            drivers
         }
     });
 });
@@ -261,5 +463,11 @@ module.exports = {
     getAllUsers,
     deactivateUser,
     deleteUser,
+    getPendingDrivers,
+    verifyDriver,
+    getAllDrivers,
+    getDriverDetails,
+    updateDriverDetails,
+    assignCompany,
     activateUser
 };

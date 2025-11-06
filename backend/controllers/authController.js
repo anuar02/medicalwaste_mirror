@@ -87,33 +87,84 @@ const createAndSendTokens = (user, statusCode, res) => {
  * Register a new user
  */
 const register = asyncHandler(async (req, res, next) => {
-    const { username, email, password, passwordConfirm, role } = req.body;
-
-    // Check if email already exists
-    const existingUser = await User.findOne({
-        $or: [{ email }, { username }]
-    });
-
-    if (existingUser) {
-        if (existingUser.email === email) {
-            return next(new AppError('Email already in use', 400));
-        } else {
-            return next(new AppError('Username already in use', 400));
-        }
-    }
-
-    // Create new user - role will be set to 'user' by default unless explicitly set
-    // and the request is from an admin
-    const user = await User.create({
+    const {
         username,
         email,
         password,
-        role: req.user && req.user.role === 'admin' ? role : 'user'
-    });
+        passwordConfirm,
+        role,
+        company,
+        // Driver-specific fields
+        vehicleInfo,
+        driverLicense,
+        phoneNumber
+    } = req.body;
 
-    // Generate and send tokens
-    createAndSendTokens(user, 201, res);
+    // Validate password confirmation
+    if (password !== passwordConfirm) {
+        return next(new AppError('Passwords do not match', 400));
+    }
+
+    // Validate company if provided
+    if (company) {
+        const companyExists = await MedicalCompany.findById(company);
+        if (!companyExists) {
+            return next(new AppError('Company not found', 404));
+        }
+        if (!companyExists.isActive) {
+            return next(new AppError('Company is not active', 400));
+        }
+    }
+
+    // Build user data
+    const userData = {
+        username,
+        email,
+        password,
+        role: role || 'user'
+    };
+
+    // Add company if provided
+    if (company) {
+        userData.company = company;
+    }
+
+    // Add driver-specific fields if role is driver
+    if (role === 'driver') {
+        if (!company) {
+            return next(new AppError('Company is required for drivers', 400));
+        }
+        if (!vehicleInfo || !vehicleInfo.plateNumber) {
+            return next(new AppError('Vehicle plate number is required for drivers', 400));
+        }
+        if (!phoneNumber) {
+            return next(new AppError('Phone number is required for drivers', 400));
+        }
+
+        userData.vehicleInfo = vehicleInfo;
+        userData.driverLicense = driverLicense;
+        userData.phoneNumber = phoneNumber;
+        userData.verificationStatus = 'pending'; // Drivers need approval
+    }
+
+    // Create user
+    const user = await User.create(userData);
+
+    // Generate token
+    const token = signToken(user._id);
+
+    // Remove password from output
+    user.password = undefined;
+
+    res.status(201).json({
+        status: 'success',
+        token,
+        data: {
+            user
+        }
+    });
 });
+
 /**
  * Generate Google OAuth authorization URL
  */
@@ -229,6 +280,12 @@ const googleCallback = asyncHandler(async (req, res, next) => {
     }
 });
 
+const signToken = (id) => {
+    return jwt.sign({ id }, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+    });
+};
+
 /**
  * Login with Google ID token (for client-side Google Sign-In)
  */
@@ -326,40 +383,64 @@ const googleLogin = asyncHandler(async (req, res, next) => {
 const login = asyncHandler(async (req, res, next) => {
     const { email, password } = req.body;
 
-    // Find user by email with password included
-    const user = await User.findOne({ email }).select('+password');
+    // Check if email and password exist
+    if (!email || !password) {
+        return next(new AppError('Please provide email and password', 400));
+    }
+
+    // Get user with password
+    const user = await User.findOne({ email }).select('+password').populate('company');
 
     // Check if user exists and password is correct
     if (!user || !(await user.comparePassword(password))) {
-        // If user exists, increment login attempts
+        // Increment login attempts
         if (user) {
             await user.incrementLoginAttempts();
-
-            // Check if account is now locked
-            if (user.lockedUntil && user.lockedUntil > Date.now()) {
-                const minutesLeft = Math.ceil((user.lockedUntil - Date.now()) / (60 * 1000));
-                return next(
-                    new AppError(
-                        `Too many failed login attempts. Account is locked for ${minutesLeft} minutes.`,
-                        403
-                    )
-                );
-            }
         }
-
         return next(new AppError('Incorrect email or password', 401));
     }
 
-    // Check if account is active
+    // Check if user is active
     if (!user.active) {
-        return next(new AppError('Your account has been deactivated. Please contact an administrator.', 401));
+        return next(new AppError('Your account has been deactivated', 401));
     }
 
-    // Reset login attempts and update last login
+    // Check if account is locked
+    if (user.lockedUntil && user.lockedUntil > Date.now()) {
+        const minutesLeft = Math.ceil((user.lockedUntil - Date.now()) / 60000);
+        return next(
+            new AppError(
+                `Account is locked due to too many failed login attempts. Please try again in ${minutesLeft} minutes.`,
+                403
+            )
+        );
+    }
+
+    // Check driver verification status
+    if (user.role === 'driver' && user.verificationStatus !== 'approved') {
+        let message = 'Your driver account is pending approval';
+        if (user.verificationStatus === 'rejected') {
+            message = 'Your driver account has been rejected. Please contact administrator.';
+        }
+        return next(new AppError(message, 403));
+    }
+
+    // Reset login attempts on successful login
     await user.resetLoginAttempts();
 
-    // Generate and send tokens
-    createAndSendTokens(user, 200, res);
+    // Generate token
+    const token = signToken(user._id);
+
+    // Remove password from output
+    user.password = undefined;
+
+    res.status(200).json({
+        status: 'success',
+        token,
+        data: {
+            user
+        }
+    });
 });
 
 /**

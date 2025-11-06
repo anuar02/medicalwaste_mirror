@@ -2,23 +2,36 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
-import { useMutation } from '@tanstack/react-query';
-import { X, Save, Ruler } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { X, Save, Ruler, Building2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../ui/Button';
 import apiService from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
-    // Form state
     const { t } = useTranslation();
+    const { isAdmin } = useAuth();
+
+    // Form state
     const [formData, setFormData] = useState({
         department: '',
         wasteType: '',
         alertThreshold: 80,
         status: 'active',
         capacity: 50,
-        containerHeight: 50, // New field for container height
+        containerHeight: 50,
+        company: null, // Company ID
     });
+
+    // Fetch companies list (only for admin)
+    const { data: companiesData, isLoading: companiesLoading } = useQuery({
+        queryKey: ['companies'],
+        queryFn: () => apiService.companies.getAll(),
+        enabled: isAdmin && isOpen,
+    });
+
+    const companies = companiesData?.data?.data || [];
 
     // Initialize form data when bin changes
     useEffect(() => {
@@ -29,7 +42,8 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                 alertThreshold: bin.alertThreshold || 80,
                 status: bin.status || 'active',
                 capacity: bin.capacity || 50,
-                containerHeight: bin.containerHeight || 50, // Default to 50cm
+                containerHeight: bin.containerHeight || 50,
+                company: bin.company?._id || bin.company || null,
             });
         }
     }, [bin]);
@@ -56,12 +70,12 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
     const updateMutation = useMutation({
         mutationFn: (data) => apiService.wasteBins.update(bin.binId, data),
         onSuccess: () => {
-            toast.success(t('binModals.updated'));
+            toast.success(t('binModals.updated', 'Контейнер обновлен'));
             onSuccess?.();
             onClose();
         },
         onError: (error) => {
-            toast.error(t('binModals.updateError', { message: error.message }));
+            toast.error(t('binModals.updateError', { message: error.message }) || 'Ошибка обновления');
         },
     });
 
@@ -94,12 +108,12 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
     ];
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-xl font-semibold text-slate-800">
-                        {t('binModals.editTitle', { id: bin.binId, defaultValue: `Редактирование контейнера ${bin.binId}` })}
+                        {t('binModals.editTitle', `Редактирование контейнера ${bin.binId}`)}
                     </h2>
                     <button
                         onClick={onClose}
@@ -111,63 +125,113 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Department */}
-                    <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">
-                            {t('binModals.department', 'Отделение')}
-                        </label>
-                        <input
-                            type="text"
-                            name="department"
-                            value={formData.department}
-                            onChange={handleChange}
-                            className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
-                            required
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Department */}
+                        <div>
+                            <label className="mb-1 block text-sm font-medium text-slate-700">
+                                {t('binModals.department', 'Отделение')}
+                            </label>
+                            <input
+                                type="text"
+                                name="department"
+                                value={formData.department}
+                                onChange={handleChange}
+                                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
+                                required
+                            />
+                        </div>
+
+                        {/* Waste Type */}
+                        <div>
+                            <label className="mb-1 block text-sm font-medium text-slate-700">
+                                {t('binModals.wasteType', 'Тип отходов')}
+                            </label>
+                            <select
+                                name="wasteType"
+                                value={formData.wasteType}
+                                onChange={handleChange}
+                                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
+                                required
+                            >
+                                <option value="" disabled>{t('binModals.chooseWasteType', 'Выберите тип отходов')}</option>
+                                {wasteTypeOptions.map((type) => (
+                                    <option key={type} value={type}>
+                                        {type}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Status */}
+                        <div>
+                            <label className="mb-1 block text-sm font-medium text-slate-700">
+                                {t('binModals.status', 'Статус')}
+                            </label>
+                            <select
+                                name="status"
+                                value={formData.status}
+                                onChange={handleChange}
+                                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
+                                required
+                            >
+                                {statusOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Company Selection - ADMIN ONLY */}
+                        {isAdmin && (
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-slate-700">
+                                    <div className="flex items-center">
+                                        <Building2 className="mr-2 h-4 w-4" />
+                                        {t('binModals.company', 'Компания')}
+                                    </div>
+                                </label>
+                                <select
+                                    name="company"
+                                    value={formData.company || ''}
+                                    onChange={handleChange}
+                                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
+                                    disabled={companiesLoading}
+                                >
+                                    <option value="">
+                                        {companiesLoading ? 'Загрузка...' : 'Не назначено'}
+                                    </option>
+                                    {companies.map((company) => (
+                                        <option key={company._id} value={company._id}>
+                                            {company.name} ({company.licenseNumber})
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="mt-1 text-xs text-slate-500">
+                                    {t('binModals.companyHelp', 'Контейнеры без компании не видны водителям')}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Capacity */}
+                        <div>
+                            <label className="mb-1 block text-sm font-medium text-slate-700">
+                                {t('binModals.capacity', 'Емкость (литры)')}
+                            </label>
+                            <input
+                                type="number"
+                                name="capacity"
+                                min="1"
+                                max="1000"
+                                value={formData.capacity}
+                                onChange={handleChange}
+                                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
+                                required
+                            />
+                        </div>
                     </div>
 
-                    {/* Waste Type */}
-                    <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">
-                            {t('binModals.wasteType', 'Тип отходов')}
-                        </label>
-                        <select
-                            name="wasteType"
-                            value={formData.wasteType}
-                            onChange={handleChange}
-                            className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
-                            required
-                        >
-                            <option value="" disabled>{t('binModals.chooseWasteType', 'Выберите тип отходов')}</option>
-                            {wasteTypeOptions.map((type) => (
-                                <option key={type} value={type}>
-                                    {type}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Status */}
-                    <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">
-                            {t('binModals.status', 'Статус')}
-                        </label>
-                        <select
-                            name="status"
-                            value={formData.status}
-                            onChange={handleChange}
-                            className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
-                            required
-                        >
-                            {statusOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Container Height - New Field */}
+                    {/* Container Height */}
                     <div>
                         <label className="mb-1 block text-sm font-medium text-slate-700">
                             <div className="flex items-center">
@@ -191,7 +255,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                             </span>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">
-                            {t('binModals.containerHeightHelp', 'Высота контейнера влияет на расчет заполненности по данным датчика расстояния')}
+                            {t('binModals.containerHeightHelp', 'Высота контейнера влияет на расчет заполненности')}
                         </p>
                     </div>
 
@@ -215,23 +279,6 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                                 {formData.alertThreshold}%
                             </span>
                         </div>
-                    </div>
-
-                    {/* Capacity */}
-                    <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">
-                            {t('binModals.capacity', 'Емкость (литры)')}
-                        </label>
-                        <input
-                            type="number"
-                            name="capacity"
-                            min="1"
-                            max="1000"
-                            value={formData.capacity}
-                            onChange={handleChange}
-                            className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
-                            required
-                        />
                     </div>
 
                     {/* Current Sensor Reading Display */}
