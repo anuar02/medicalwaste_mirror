@@ -14,30 +14,56 @@ const { asyncHandler } = require('../utils/asyncHandler');
  */
 const generateToken = (userId) => {
     return jwt.sign(
-        { userId },
+        { id: userId },  // Changed
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
 };
+
+const generateRefreshToken = (userId) => {
+    return jwt.sign(
+        { id: userId },  // Changed
+        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+    );
+};
+
+// Also update the refreshToken function (around line 348)
+const refreshToken = asyncHandler(async (req, res, next) => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        return next(new AppError('Please provide refresh token', 400));
+    }
+
+    try {
+        const decoded = jwt.verify(
+            refreshToken,
+            process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
+        );
+
+        // Change from decoded.userId to decoded.id
+        const user = await User.findById(decoded.id);  // Changed
+        if (!user) {
+            return next(new AppError('The user belonging to this token no longer exists', 401));
+        }
+
+        const newToken = generateToken(user._id);
+
+        res.status(200).json({
+            status: 'success',
+            token: newToken
+        });
+    } catch (error) {
+        return next(new AppError('Invalid or expired refresh token', 401));
+    }
+});
 
 const googleClient = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.GOOGLE_REDIRECT_URI
 );
-
-/**
- * Generate refresh token
- * @param {string} userId - User ID to encode in the token
- * @returns {string} Refresh token
- */
-const generateRefreshToken = (userId) => {
-    return jwt.sign(
-        { userId },
-        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
-    );
-};
 
 /**
  * Set tokens in cookies and return them in response
@@ -461,41 +487,6 @@ const logout = asyncHandler(async (req, res) => {
     res.status(200).json({ status: 'success' });
 });
 
-/**
- * Refresh access token using refresh token
- */
-const refreshToken = asyncHandler(async (req, res, next) => {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-        return next(new AppError('Please provide refresh token', 400));
-    }
-
-    try {
-        // Verify refresh token
-        const decoded = jwt.verify(
-            refreshToken,
-            process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
-        );
-
-        // Check if user still exists
-        const user = await User.findById(decoded.userId);
-        if (!user) {
-            return next(new AppError('The user belonging to this token no longer exists', 401));
-        }
-
-        // Generate new access token
-        const newToken = generateToken(user._id);
-
-        // Send new access token
-        res.status(200).json({
-            status: 'success',
-            token: newToken
-        });
-    } catch (error) {
-        return next(new AppError('Invalid or expired refresh token', 401));
-    }
-});
 
 /**
  * Send password reset email
