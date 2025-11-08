@@ -1,4 +1,6 @@
+// server.js
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -8,11 +10,14 @@ const compression = require('compression');
 const morgan = require('morgan');
 const fs = require('fs');
 const path = require('path');
+
 const { initializeBot } = require('./utils/telegram');
 const { logger } = require('./middleware/loggers');
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
+const { requestLogger } = require('./middleware/loggers');
+const { initializeGpsWebSocket } = require('./utils/gpsWebSocket');
 
-
-// Import routes
+// Routes
 const authRoutes = require('./routes/auth');
 const wasteBinRoutes = require('./routes/wasteBins');
 const companyRoutes = require('./routes/companies');
@@ -29,17 +34,14 @@ const gpsRoutes = require('./routes/gps');
 const deviceLogsRoutes = require('./routes/deviceLogs');
 const healthCheckRoutes = require('./routes/healthCheck');
 
-
-// Import middlewares
-const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
-const { requestLogger } = require('./middleware/loggers');
-const { initializeGpsWebSocket } = require('./utils/gpsWebSocket');
-
-
 const app = express();
 
+// If behind proxy/ingress
 app.set('trust proxy', 'loopback');
 
+// ------------------------------------
+// Telegram bot (optional)
+// ------------------------------------
 if (process.env.TELEGRAM_BOT_TOKEN) {
     initializeBot()
         .then(() => logger.info('Telegram bot initialized successfully'))
@@ -48,94 +50,116 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
     logger.warn('TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.');
 }
 
-// Create a write stream for access logs
-const accessLogStream = fs.createWriteStream(
-    path.join(__dirname, 'logs', 'access.log'),
-    { flags: 'a' }
-);
+// ------------------------------------
+// Logging
+// ------------------------------------
+const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+const accessLogStream = fs.createWriteStream(path.join(logsDir, 'access.log'), { flags: 'a' });
 
-// Security Headers
-app.use(helmet());
-
-// Request logging
 app.use(morgan('combined', { stream: accessLogStream }));
 app.use(requestLogger);
 
-// CORS Configuration
-app.use(cors({
-    origin: ['https://medicalwaste.kz', 'http://localhost:4000'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-    maxAge: 86400 // 24 hours
+// ------------------------------------
+// Security headers
+// NOTE: allow cross-origin resources for WebView use cases
+// ------------------------------------
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 
-// Rate limiting
+// ------------------------------------
+// CORS (MUST come before any rate limiters/auth/routes)
+// Allows Capacitor (iOS/Android WebView), localhost, and your production domain.
+// ------------------------------------
+const ALLOWED_ORIGINS = [
+    'https://medicalwaste.kz',
+    'http://localhost',
+    'https://localhost',
+    'http://localhost:3000',
+    'http://localhost:4000',
+    'capacitor://localhost' // Capacitor WebView origin
+];
+
+app.use(cors({
+    origin: (origin, cb) => {
+        // Mobile WebView often sends no Origin; allow such requests
+        if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+        return cb(null, false);
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+    exposedHeaders: ['Authorization'],
+    credentials: false, // Using Bearer tokens, not cookies
+    maxAge: 86400
+}));
+
+// Fast-track all preflight requests (critical for mobile/webviews)
+app.options('*', cors());
+
+// ------------------------------------
+// Rate limiting (after OPTIONS so preflights aren’t blocked)
+// ------------------------------------
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5000, // limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 5000,
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true,
     legacyHeaders: false
 });
-
-// Apply rate limiter to all routes
 app.use(apiLimiter);
 
-// More strict rate limiting for authentication endpoints
 const authLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    max: 100, // limit each IP to 10 login attempts per hour
+    windowMs: 60 * 60 * 1000,
+    max: 100,
     message: 'Too many login attempts, please try again later.',
     standardHeaders: true,
     legacyHeaders: false
 });
 
-// Body parsing
+// ------------------------------------
+// Parsers & performance
+// ------------------------------------
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
-
-// Compression
 app.use(compression());
 
-// Cache control
+// No-store for API responses
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();
 });
 
-// MongoDB Connection
-const connectDB = async () => {
+// ------------------------------------
+// MongoDB
+// ------------------------------------
+async function connectDB() {
     try {
         await mongoose.connect(process.env.MONGODB_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
             serverSelectionTimeoutMS: 15000,
             socketTimeoutMS: 45000,
             connectTimeoutMS: 15000,
-            writeConcern: { w: 1, j: true },
+            // Mongoose v6+ uses these by default, leaving explicit for clarity:
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            writeConcern: { w: 1, j: true }
         });
         console.log('Connected to MongoDB successfully');
     } catch (error) {
         console.error('MongoDB connection error:', error);
-        process.exit(1); // Exit process if DB connection fails
+        process.exit(1);
     }
-};
-
-// Handle MongoDB connection events
-mongoose.connection.on('error', (err) => {
-    console.error('MongoDB connection error:', err);
-});
-
+}
+mongoose.connection.on('error', err => console.error('MongoDB connection error:', err));
 mongoose.connection.on('disconnected', () => {
     console.log('MongoDB disconnected, attempting to reconnect...');
     setTimeout(connectDB, 5000);
 });
-
-// Connect to MongoDB
 connectDB();
 
-// Mount routes
+// ------------------------------------
+// Routes
+// ------------------------------------
 app.use('/api/health-check', healthCheckRoutes);
 app.use('/api', deviceLogsRoutes);
 app.use('/api/gps', gpsRoutes);
@@ -152,7 +176,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/collections', collectionRoutes);
 
-// Health check endpoint
+// Lightweight health endpoint
 app.get('/api/health', (req, res) => {
     res.status(200).json({
         status: 'ok',
@@ -161,36 +185,35 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Error handling - must be after routes
+// ------------------------------------
+// Errors (must be after routes)
+// ------------------------------------
 app.use(notFoundHandler);
 app.use(errorHandler);
 
+// ------------------------------------
+// Server & GPS WebSocket
+// ------------------------------------
 const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 const cleanupGpsWs = initializeGpsWebSocket(server);
 
-// Graceful shutdown handler
-const gracefulShutdown = async (signal) => {
+// ------------------------------------
+// Graceful shutdown
+// ------------------------------------
+async function gracefulShutdown(signal) {
     console.log(`${signal} signal received. Starting graceful shutdown...`);
-
     try {
-        // Cleanup GPS WebSocket
         if (cleanupGpsWs) {
             cleanupGpsWs();
             console.log('✓ GPS WebSocket cleaned up');
         }
-
-        // Close HTTP server (stop accepting new connections)
         await new Promise((resolve, reject) => {
-            server.close((err) => {
-                if (err) reject(err);
-                else resolve();
-            });
+            server.close(err => (err ? reject(err) : resolve()));
         });
         console.log('✓ HTTP server closed');
 
-        // Close MongoDB connection
         await mongoose.connection.close();
         console.log('✓ MongoDB connection closed');
 
@@ -200,13 +223,11 @@ const gracefulShutdown = async (signal) => {
         console.error('Error during graceful shutdown:', error);
         process.exit(1);
     }
-};
+}
 
-// Handle termination signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle uncaught errors
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
     gracefulShutdown('UNHANDLED_REJECTION');
