@@ -22,8 +22,9 @@ router.use(auth);
 router.post('/start',
     restrictTo('driver'),
     [
-        body('containerIds').optional().isArray().withMessage('Container IDs must be an array'),
-        body('startLocation.coordinates').optional().isArray({ min: 2, max: 2 }).withMessage('Invalid coordinates')
+        body('containerIds').optional().isArray({ min: 1 }).withMessage('containerIds must be a non-empty array'),
+        body('containerIds.*').customSanitizer(v => (v == null ? v : String(v).trim())),
+        body('startLocation.coordinates').optional().isArray({ min: 2, max: 2 }).withMessage('Invalid coordinates'),
     ],
     validateRequest,
     startCollection

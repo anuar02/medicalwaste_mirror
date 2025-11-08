@@ -10,62 +10,57 @@ const mongoose = require('mongoose');
 /**
  * Start a new collection session
  */
-const startCollection = asyncHandler(async (req, res, next) => {
-    const { containerIds, startLocation } = req.body;
+exports.startCollection = asyncHandler(async (req, res, next) => {
+    const { containerIds = [], startLocation } = req.body;
     const driverId = req.user.id;
 
-    // Check if user is a driver
+    // 1️⃣ Validate driver role and status
     if (req.user.role !== 'driver') {
         return next(new AppError('Only drivers can start collection sessions', 403));
     }
 
-    // Check if driver is approved
     if (req.user.verificationStatus !== 'approved') {
         return next(new AppError('Driver must be approved to start collections', 403));
     }
 
-    // Check if driver already has an active session
-    const activeSession = await CollectionSession.findOne({
-        driver: driverId,
-        status: 'active'
-    });
-
+    // 2️⃣ Check for existing active session
+    const activeSession = await CollectionSession.findOne({ driver: driverId, status: 'active' });
     if (activeSession) {
         return next(new AppError('You already have an active collection session', 400));
     }
 
-    // Validate containers exist and belong to driver's company
-    if (containerIds && containerIds.length > 0) {
-        const containers = await WasteBin.find({
-            _id: { $in: containerIds },
-            company: req.user.company
-        });
+    // 3️⃣ Find containers by _id (no company restriction)
+    let selected = [];
+    let skippedNotFound = [];
 
-        if (containers.length !== containerIds.length) {
-            return next(new AppError('Some containers not found or not accessible', 404));
-        }
-    }
+    if (Array.isArray(containerIds) && containerIds.length > 0) {
+        const containers = await WasteBin.find({ _id: { $in: containerIds } }).select('_id binId');
+        const foundIds = new Set(containers.map(c => String(c._id)));
 
-    // Generate session ID
-    const sessionId = `SESSION-${driverId}-${Date.now()}`;
+        skippedNotFound = containerIds.filter(id => !foundIds.has(String(id)));
 
-    // Create session
-    const session = await CollectionSession.create({
-        driver: driverId,
-        company: req.user.company,
-        sessionId,
-        status: 'active',
-        selectedContainers: containerIds ? containerIds.map(id => ({
-            container: id,
+        selected = containers.map(c => ({
+            container: c._id,
             selected: true,
             visited: false
-        })) : [],
+        }));
+    }
+
+    // 4️⃣ Create session
+    const sessionId = `SESSION-${driverId}-${Date.now()}`;
+
+    const session = await CollectionSession.create({
+        driver: driverId,
+        company: req.user.company || null,
+        sessionId,
+        status: 'active',
+        selectedContainers: selected,
         startTime: new Date(),
         startLocation: startLocation || null
     });
 
-    // Record initial location if provided
-    if (startLocation && startLocation.coordinates) {
+    // 5️⃣ Log start location if provided
+    if (startLocation?.coordinates) {
         await DriverLocation.create({
             driver: driverId,
             session: session._id,
@@ -74,13 +69,15 @@ const startCollection = asyncHandler(async (req, res, next) => {
         });
     }
 
-    // Populate containers
+    // 6️⃣ Populate session containers
     await session.populate('selectedContainers.container');
 
+    // 7️⃣ Return response
     res.status(201).json({
         status: 'success',
-        data: {
-            session
+        data: { session },
+        meta: {
+            skippedNotFound
         }
     });
 });
@@ -236,36 +233,47 @@ function toRadians(degrees) {
  * Add container to active session
  */
 const addContainerToSession = asyncHandler(async (req, res, next) => {
-    const { containerId } = req.body;
+    const { sessionId, containerId } = req.body;
     const driverId = req.user.id;
 
+    // 1️⃣ Find active session for driver
     const session = await CollectionSession.findOne({
         driver: driverId,
+        sessionId,
         status: 'active'
     });
 
     if (!session) {
-        return next(new AppError('No active collection session', 404));
+        return next(new AppError('No active session found', 404));
     }
 
-    // Verify container belongs to driver's company
-    const container = await WasteBin.findOne({
-        _id: containerId,
-        company: req.user.company
-    });
-
+    // 2️⃣ Find container (no company restriction)
+    const container = await WasteBin.findById(containerId).select('_id binId');
     if (!container) {
-        return next(new AppError('Container not found or not accessible', 404));
+        return next(new AppError('Container not found', 404));
     }
 
-    await session.addContainer(containerId);
-    await session.populate('selectedContainers.container');
+    // 3️⃣ Add container to session
+    await CollectionSession.updateOne(
+        { _id: session._id },
+        {
+            $addToSet: {
+                selectedContainers: {
+                    container: container._id,
+                    selected: true,
+                    visited: false
+                }
+            }
+        }
+    );
+
+    // 4️⃣ Reload session with populated containers
+    const updatedSession = await CollectionSession.findById(session._id)
+        .populate('selectedContainers.container');
 
     res.status(200).json({
         status: 'success',
-        data: {
-            session
-        }
+        data: { session: updatedSession }
     });
 });
 
@@ -374,28 +382,35 @@ const getActiveDrivers = asyncHandler(async (req, res) => {
 const getSessionRoute = asyncHandler(async (req, res, next) => {
     const { sessionId } = req.params;
 
-    const session = await CollectionSession.findOne({ sessionId });
+    // Определяем, что передали: ObjectId или строковый sessionId
+    const isObjectId = mongoose.isValidObjectId(sessionId);
+
+    const session = isObjectId
+        ? await CollectionSession.findById(sessionId)
+        : await CollectionSession.findOne({ sessionId });
 
     if (!session) {
         return next(new AppError('Session not found', 404));
     }
 
-    // Check permissions
-    if (session.driver.toString() !== req.user.id &&
-        !['admin', 'supervisor'].includes(req.user.role)) {
+    // ACL: владелец сессии или админ/супервизор
+    if (
+        session.driver.toString() !== req.user.id &&
+        !['admin', 'supervisor'].includes(req.user.role)
+    ) {
         return next(new AppError('You do not have permission to view this session', 403));
     }
 
     const locations = await DriverLocation.find({ session: session._id })
         .sort({ timestamp: 1 });
 
-    res.status(200).json({
+    return res.status(200).json({
         status: 'success',
         results: locations.length,
         data: {
             session,
-            route: locations
-        }
+            route: locations,
+        },
     });
 });
 

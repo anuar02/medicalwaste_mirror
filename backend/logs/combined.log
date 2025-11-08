@@ -5372,3 +5372,9 @@
 {"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-11-08 20:15:41"}
 {"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-11-08 20:17:00"}
 {"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-11-08 20:17:01"}
+{"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-11-08 20:28:30"}
+{"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-11-08 20:28:31"}
+{"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-11-08 20:29:43"}
+{"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-11-08 20:29:44"}
+{"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-11-08 20:30:11"}
+{"level":"warn","message":"TELEGRAM_BOT_TOKEN not set. Telegram notifications will not work.","service":"medical-waste-api","timestamp":"2025-11-08 20:30:12"}
