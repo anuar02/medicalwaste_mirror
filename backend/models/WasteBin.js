@@ -226,4 +226,5 @@ wasteBinSchema.methods.updateWithSensorData = async function (data) {
 
 // Экспорт и вспомогательную функцию тоже экспортнём
 const WasteBin = mongoose.model('WasteBin', wasteBinSchema);
-module.exports = { WasteBin, computeFullness };
+
+module.exports = WasteBin;
