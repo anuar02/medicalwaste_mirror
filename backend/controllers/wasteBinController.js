@@ -765,55 +765,57 @@ const markCommandExecuted = asyncHandler(async (req, res) => {
  * Get a specific waste bin by ID
  */
 const getBin = asyncHandler(async (req, res, next) => {
-    const withLast = req.query.withLast === 'true';
-
-    // company-scoped фильтр
+    // учёт компании
     let match = addCompanyToQuery({ binId: req.params.id }, req.user);
 
-    if (!withLast) {
-        const bin = await WasteBin.findOne(match).populate('company', 'name');
-        if (!bin) return next(new AppError('No waste bin found with that ID', 404));
+    // сам бак
+    const binDoc = await WasteBin.findOne(match).populate('company', 'name');
+    if (!binDoc) return next(new AppError('No waste bin found with that ID', 404));
 
-        // бэкап на случай старых данных
-        if (!bin.containerHeight) {
-            bin.containerHeight = 50;
-            await bin.save();
-        }
+    // дефолтная высота для совместимости
+    if (!binDoc.containerHeight) {
+        binDoc.containerHeight = 50;
+        await binDoc.save();
+    }
 
+    // последний замер из истории
+    const last = await History
+        .findOne({ binId: binDoc.binId })
+        .sort({ timestamp: -1 })
+        .lean();
+
+    // если истории нет — вернём как есть
+    if (!last) {
         return res.status(200).json({
             status: 'success',
-            data: { bin: bin.toJSON() }
+            data: { bin: binDoc.toJSON() }
         });
     }
 
-    // withLast=true → тот же трюк, что в списке, но для одного бака
-    const pipeline = buildBinsWithLastPipeline(match);
-    // популяция компании через lookup (так как aggregate)
-    pipeline.push({
-        $lookup: {
-            from: 'medicalcompanies',
-            localField: 'company',
-            foreignField: '_id',
-            as: 'company'
-        }
-    });
-    pipeline.push({ $addFields: { company: { $arrayElemAt: ['$company', 0] } } });
-    pipeline.push({
-        $project: {
-            'company._id': 1,
-            'company.name': 1,
-            deviceInfo: 1, location: 1, binId: 1, department: 1, wasteType: 1,
-            fullness: 1, distance: 1, weight: 1, temperature: 1,
-            capacity: 1, alertThreshold: 1, status: 1,
-            containerHeight: 1, lastUpdate: 1, lastCollection: 1,
-            collectionHistory: 1, createdAt: 1, updatedAt: 1
-        }
-    });
+    // взять containerHeight из last (если писали его в историю), иначе из бака
+    const height = Number.isFinite(last.containerHeight) && last.containerHeight > 0
+        ? last.containerHeight
+        : binDoc.containerHeight;
 
-    const [bin] = await WasteBin.aggregate(pipeline).exec();
-    if (!bin) return next(new AppError('No waste bin found with that ID', 404));
+    // если fullness в истории нет — пересчитать из distance/height
+    const distance = Number.isFinite(last.distance) ? last.distance : binDoc.distance ?? 0;
+    const dClamped = Math.max(0, Math.min(distance, height || 0));
+    const computedFullness = (!height || height <= 0) ? 0
+        : Math.max(0, Math.min(100, Math.round(((height - dClamped) / height) * 100)));
 
-    res.status(200).json({
+    const effectiveFullness = Number.isFinite(last.fullness) ? last.fullness : computedFullness;
+
+    // собираем итоговый ответ на базе бака + переопределяем полями из истории
+    const bin = binDoc.toJSON();
+    bin.distance = Number.isFinite(last.distance) ? last.distance : bin.distance;
+    bin.temperature = Number.isFinite(last.temperature) ? last.temperature : bin.temperature;
+    bin.weight = Number.isFinite(last.weight) ? last.weight : bin.weight;
+    bin.containerHeight = height;
+    bin.fullness = effectiveFullness;
+    bin.lastUpdate = last.timestamp || bin.lastUpdate;
+    bin.needsCollection = bin.fullness >= bin.alertThreshold;
+
+    return res.status(200).json({
         status: 'success',
         data: { bin }
     });
