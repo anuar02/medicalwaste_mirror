@@ -1,5 +1,5 @@
 // components/modals/EditBinModal.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -21,29 +21,51 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
         status: 'active',
         capacity: 50,
         containerHeight: 50,
-        company: null, // Company ID
+        company: null, // stores company id or null
     });
 
     // Fetch companies list (only for admin)
     const { data: companiesData, isLoading: companiesLoading } = useQuery({
         queryKey: ['companies'],
         queryFn: () => apiService.companies.getAll(),
-        enabled: isAdmin && isOpen,
+        enabled: Boolean(isAdmin && isOpen),
     });
 
-    const companies = companiesData?.data?.data || [];
+    // Robust normalization of companies payload into an array
+    const companies = useMemo(() => {
+        const raw =
+            companiesData?.data?.data ??
+            companiesData?.data ??
+            companiesData ??
+            [];
+        if (Array.isArray(raw)) return raw;
+        if (Array.isArray(raw.items)) return raw.items;
+        if (Array.isArray(raw.results)) return raw.results;
+        // Some APIs nest under `content` or `records`
+        if (Array.isArray(raw.content)) return raw.content;
+        if (Array.isArray(raw.records)) return raw.records;
+        return [];
+    }, [companiesData]);
 
     // Initialize form data when bin changes
     useEffect(() => {
         if (bin) {
             setFormData({
-                department: bin.department || '',
-                wasteType: bin.wasteType || '',
-                alertThreshold: bin.alertThreshold || 80,
-                status: bin.status || 'active',
-                capacity: bin.capacity || 50,
-                containerHeight: bin.containerHeight || 50,
-                company: bin.company?._id || bin.company || null,
+                department: bin.department ?? '',
+                wasteType: bin.wasteType ?? '',
+                alertThreshold: Number.isFinite(bin.alertThreshold)
+                    ? bin.alertThreshold
+                    : 80,
+                status: bin.status ?? 'active',
+                capacity: Number.isFinite(bin.capacity) ? bin.capacity : 50,
+                containerHeight: Number.isFinite(bin.containerHeight)
+                    ? bin.containerHeight
+                    : 50,
+                // Accept either populated object or id
+                company:
+                    (bin.company && typeof bin.company === 'object'
+                        ? bin.company?._id
+                        : bin.company) ?? null,
             });
         }
     }, [bin]);
@@ -52,30 +74,34 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
     const handleChange = (e) => {
         const { name, value } = e.target;
 
-        // Handle numeric inputs
         if (name === 'alertThreshold' || name === 'capacity' || name === 'containerHeight') {
-            setFormData({
-                ...formData,
-                [name]: parseInt(value, 10) || 0,
-            });
-        } else {
-            setFormData({
-                ...formData,
-                [name]: value,
-            });
+            const num = Number(value);
+            setFormData((prev) => ({ ...prev, [name]: Number.isFinite(num) ? num : 0 }));
+            return;
         }
+
+        if (name === 'company') {
+            // Keep '' in the select, but store null in state
+            setFormData((prev) => ({ ...prev, company: value || null }));
+            return;
+        }
+
+        setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
     // Update bin mutation
     const updateMutation = useMutation({
-        mutationFn: (data) => apiService.wasteBins.update(bin.binId, data),
+        mutationFn: (data) => apiService.wasteBins.update(bin._id, formData),
         onSuccess: () => {
             toast.success(t('binModals.updated', 'Контейнер обновлен'));
             onSuccess?.();
             onClose();
         },
         onError: (error) => {
-            toast.error(t('binModals.updateError', { message: error.message }) || 'Ошибка обновления');
+            toast.error(
+                t('binModals.updateError', { message: error?.message || 'Ошибка' }) ||
+                'Ошибка обновления'
+            );
         },
     });
 
@@ -153,7 +179,9 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                                 className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                 required
                             >
-                                <option value="" disabled>{t('binModals.chooseWasteType', 'Выберите тип отходов')}</option>
+                                <option value="" disabled>
+                                    {t('binModals.chooseWasteType', 'Выберите тип отходов')}
+                                </option>
                                 {wasteTypeOptions.map((type) => (
                                     <option key={type} value={type}>
                                         {type}
@@ -193,7 +221,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                                 </label>
                                 <select
                                     name="company"
-                                    value={formData.company || ''}
+                                    value={formData.company ?? ''} // keep select controlled
                                     onChange={handleChange}
                                     className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
                                     disabled={companiesLoading}
@@ -201,14 +229,19 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                                     <option value="">
                                         {companiesLoading ? 'Загрузка...' : 'Не назначено'}
                                     </option>
-                                    {companies.map((company) => (
-                                        <option key={company._id} value={company._id}>
-                                            {company.name} ({company.licenseNumber})
-                                        </option>
-                                    ))}
+                                    {Array.isArray(companies) &&
+                                        companies.map((company) => (
+                                            <option key={company._id} value={company._id}>
+                                                {company.name}
+                                                {company.licenseNumber ? ` (${company.licenseNumber})` : ''}
+                                            </option>
+                                        ))}
                                 </select>
                                 <p className="mt-1 text-xs text-slate-500">
-                                    {t('binModals.companyHelp', 'Контейнеры без компании не видны водителям')}
+                                    {t(
+                                        'binModals.companyHelp',
+                                        'Контейнеры без компании не видны водителям'
+                                    )}
                                 </p>
                             </div>
                         )}
@@ -251,11 +284,14 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                                 className="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-500"
                             />
                             <span className="min-w-[50px] text-center text-sm font-medium text-slate-700">
-                                {formData.containerHeight}см
-                            </span>
+                {formData.containerHeight}см
+              </span>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">
-                            {t('binModals.containerHeightHelp', 'Высота контейнера влияет на расчет заполненности')}
+                            {t(
+                                'binModals.containerHeightHelp',
+                                'Высота контейнера влияет на расчет заполненности'
+                            )}
                         </p>
                     </div>
 
@@ -276,8 +312,8 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                                 className="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-teal-500"
                             />
                             <span className="min-w-[40px] text-center text-sm font-medium text-slate-700">
-                                {formData.alertThreshold}%
-                            </span>
+                {formData.alertThreshold}%
+              </span>
                         </div>
                     </div>
 
@@ -295,10 +331,19 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                                 <div>
                                     <span className="text-slate-500">Заполненность:</span>
                                     <span className="ml-2 font-medium">
-                                        {Math.max(0, Math.min(100,
-                                            Math.round(((formData.containerHeight - bin.distance) / formData.containerHeight) * 100)
-                                        ))}%
-                                    </span>
+                    {Math.max(
+                        0,
+                        Math.min(
+                            100,
+                            Math.round(
+                                ((formData.containerHeight - bin.distance) /
+                                    formData.containerHeight) *
+                                100
+                            )
+                        )
+                    )}
+                                        %
+                  </span>
                                 </div>
                             </div>
                         </div>
@@ -306,17 +351,10 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
 
                     {/* Form actions */}
                     <div className="flex justify-end space-x-3 pt-4">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={onClose}
-                        >
+                        <Button type="button" variant="outline" onClick={onClose}>
                             {t('common.cancel', 'Отмена')}
                         </Button>
-                        <Button
-                            type="submit"
-                            isLoading={updateMutation.isLoading}
-                        >
+                        <Button type="submit" isLoading={updateMutation.isLoading}>
                             <Save className="mr-2 h-4 w-4" />
                             {t('common.save', 'Сохранить')}
                         </Button>
