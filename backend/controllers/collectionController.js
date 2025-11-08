@@ -10,7 +10,7 @@ const mongoose = require('mongoose');
 /**
  * Start a new collection session
  */
-exports.startCollection = asyncHandler(async (req, res, next) => {
+const startCollection = asyncHandler(async (req, res, next) => {
     const { containerIds = [], startLocation } = req.body;
     const driverId = req.user.id;
 
