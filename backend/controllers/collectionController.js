@@ -299,20 +299,23 @@ const getActiveSession = asyncHandler(async (req, res) => {
 /**
  * Get collection history for driver
  */
-const getCollectionHistory = asyncHandler(async (req, res) => {
-    const driverId = req.params.driverId || req.user.id;
+const getCollectionHistory = asyncHandler(async (req, res, next) => {
     const { from, to, limit = 50, page = 1 } = req.query;
+    let driverId = req.params.driverId || req.user.id;
 
-    // Check permissions
-    if (driverId !== req.user.id && !['admin', 'supervisor'].includes(req.user.role)) {
-        return next(new AppError('You can only view your own history', 403));
+    // Build base query
+    const query = { status: { $in: ['completed', 'cancelled'] } };
+
+    // If the user is admin → see all sessions
+    if (req.user.role === 'admin') {
+        // no driver filter
+    } else if (req.user.role === 'supervisor') {
+        // supervisors can see sessions only from their company
+        query.company = req.user.company;
+    } else {
+        // driver sees only their own sessions
+        query.driver = driverId;
     }
-
-    // Build query
-    const query = {
-        driver: driverId,
-        status: { $in: ['completed', 'cancelled'] }
-    };
 
     if (from || to) {
         query.startTime = {};
@@ -322,6 +325,7 @@ const getCollectionHistory = asyncHandler(async (req, res) => {
 
     const sessions = await CollectionSession.find(query)
         .populate('selectedContainers.container')
+        .populate('driver', 'username email phoneNumber') // Optional: show driver info
         .sort({ startTime: -1 })
         .limit(parseInt(limit))
         .skip((parseInt(page) - 1) * parseInt(limit));
@@ -334,9 +338,7 @@ const getCollectionHistory = asyncHandler(async (req, res) => {
         total,
         page: parseInt(page),
         pages: Math.ceil(total / parseInt(limit)),
-        data: {
-            sessions
-        }
+        data: { sessions }
     });
 });
 
