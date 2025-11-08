@@ -13,51 +13,41 @@ const { addCompanyToQuery } = require('../middleware/companyFilter');
  * Get all waste bins with optional filtering
  */
 const getAllBins = asyncHandler(async (req, res) => {
-    // Build filter object from query params
     const filter = {};
 
-    if (req.query.department) {
-        filter.department = req.query.department;
+    if (req.query.department) filter.department = req.query.department;
+    if (req.query.wasteType) filter.wasteType = req.query.wasteType;
+    if (req.query.status) filter.status = req.query.status;
+
+    // старые фильтры fullnessMin/Max применять НЕ к «сырым» полям,
+    // а к уже подмешанным значениям — значит оставим их на уровне pipeline ниже
+    const fullnessMin = req.query.fullnessMin ? parseInt(req.query.fullnessMin) : null;
+    const fullnessMax = req.query.fullnessMax ? parseInt(req.query.fullnessMax) : null;
+
+    // учёт компании
+    let match = addCompanyToQuery({ ...filter }, req.user);
+
+    // строим pipeline
+    const pipeline = buildBinsWithLastPipeline(match);
+
+    // после подмены полноценных значений можно фильтровать по fullness
+    if (Number.isFinite(fullnessMin) || Number.isFinite(fullnessMax)) {
+        const bounds = {};
+        if (Number.isFinite(fullnessMin)) bounds.$gte = fullnessMin;
+        if (Number.isFinite(fullnessMax)) bounds.$lte = fullnessMax;
+        pipeline.push({ $match: { fullness: bounds } });
     }
 
-    if (req.query.wasteType) {
-        filter.wasteType = req.query.wasteType;
-    }
+    // сортировка по последнему апдейту (уже учтёт историю)
+    pipeline.push({ $sort: { lastUpdate: -1 } });
 
-    if (req.query.status) {
-        filter.status = req.query.status;
-    }
+    const bins = await WasteBin.aggregate(pipeline).exec();
 
-    // Additional filtering options
-    if (req.query.fullnessMin) {
-        filter.fullness = { $gte: parseInt(req.query.fullnessMin) };
-    }
-
-    if (req.query.fullnessMax) {
-        if (filter.fullness) {
-            filter.fullness.$lte = parseInt(req.query.fullnessMax);
-        } else {
-            filter.fullness = { $lte: parseInt(req.query.fullnessMax) };
-        }
-    }
-
-    let query = { ...filter };  // Merge with existing filter
-    query = addCompanyToQuery(query, req.user);
-
-    // ✅ ADD THIS - Actually query the database
-    const bins = await WasteBin.find(query)
-        .populate('company', 'name')
-        .sort({ lastUpdate: -1 });
-
-    // ✅ IMPORTANT: Only send response ONCE
     res.status(200).json({
         status: 'success',
         results: bins.length,
         data: { bins }
     });
-
-    // ✅ CRITICAL: Add return statement to prevent further execution
-    return;
 });
 
 /**
@@ -88,6 +78,137 @@ const bulkUpdateBins = asyncHandler(async (req, res, next) => {
         return next(new AppError('Failed to update bins', 500));
     }
 });
+
+function buildBinsWithLastPipeline(matchQuery = {}, opts = {}) {
+    const { threshold } = opts; // если нужна фильтрация по переполненным
+
+    return [
+        { $match: matchQuery },
+
+        {
+            $lookup: {
+                from: 'histories', // коллекция для модели History по умолчанию
+                let: { bid: '$binId' },
+                pipeline: [
+                    { $match: { $expr: { $eq: ['$binId', '$$bid'] } } },
+                    { $sort: { timestamp: -1 } },
+                    { $limit: 1 },
+                    {
+                        $project: {
+                            _id: 0,
+                            timestamp: 1,
+                            distance: 1,
+                            fullness: 1,
+                            temperature: 1,
+                            weight: 1,
+                            containerHeight: 1
+                        }
+                    }
+                ],
+                as: 'lastReading'
+            }
+        },
+        { $addFields: { lastReading: { $arrayElemAt: ['$lastReading', 0] } } },
+
+        // подготовка значений для пересчёта fullness при отсутствии в History
+        {
+            $addFields: {
+                _heightForCalc: {
+                    $ifNull: ['$lastReading.containerHeight', '$containerHeight']
+                },
+                _distanceForCalc: {
+                    $ifNull: ['$lastReading.distance', '$distance']
+                }
+            }
+        },
+
+        // вычисляем fullness по формуле, если его нет в lastReading
+        {
+            $addFields: {
+                _computedFullness: {
+                    $let: {
+                        vars: {
+                            height: '$_heightForCalc',
+                            distance: '$_distanceForCalc'
+                        },
+                        in: {
+                            $cond: [
+                                { $or: [{ $lte: ['$$height', 0] }, { $eq: ['$$height', null] }] },
+                                0,
+                                {
+                                    $let: {
+                                        vars: {
+                                            dClamped: {
+                                                $cond: [
+                                                    { $lt: ['$$distance', 0] },
+                                                    0,
+                                                    { $cond: [{ $gt: ['$$distance', '$$height'] }, '$$height', '$$distance'] }
+                                                ]
+                                            }
+                                        },
+                                        in: {
+                                            $let: {
+                                                vars: {
+                                                    pct: {
+                                                        $round: [
+                                                            {
+                                                                $multiply: [
+                                                                    {
+                                                                        $divide: [
+                                                                            { $subtract: ['$$height', '$$dClamped'] },
+                                                                            '$$height'
+                                                                        ]
+                                                                    },
+                                                                    100
+                                                                ]
+                                                            },
+                                                            0
+                                                        ]
+                                                    }
+                                                },
+                                                in: {
+                                                    $cond: [
+                                                        { $lt: ['$$pct', 0] }, 0,
+                                                        { $cond: [{ $gt: ['$$pct', 100] }, 100, '$$pct'] }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+
+        // подмена полей бака значениями из последнего показания (или пересчётом)
+        {
+            $addFields: {
+                fullness: { $ifNull: ['$lastReading.fullness', '$_computedFullness'] },
+                distance: { $ifNull: ['$lastReading.distance', '$distance'] },
+                temperature: { $ifNull: ['$lastReading.temperature', '$temperature'] },
+                weight: { $ifNull: ['$lastReading.weight', '$weight'] },
+                containerHeight: { $ifNull: ['$lastReading.containerHeight', '$containerHeight'] },
+                lastUpdate: { $ifNull: ['$lastReading.timestamp', '$lastUpdate'] }
+            }
+        },
+
+        // needsCollection уже на обновлённых значениях
+        {
+            $addFields: {
+                needsCollection: { $gte: ['$fullness', '$alertThreshold'] }
+            }
+        },
+
+        // опциональный фильтр по переполненности
+        ...(Number.isFinite(threshold) ? [{ $match: { fullness: { $gte: threshold } } }] : []),
+
+        // подчистим служебные временные поля
+        { $project: { lastReading: 0, _heightForCalc: 0, _distanceForCalc: 0, _computedFullness: 0 } }
+    ];
+}
 
 /**
  * Export bin data in various formats
@@ -644,35 +765,57 @@ const markCommandExecuted = asyncHandler(async (req, res) => {
  * Get a specific waste bin by ID
  */
 const getBin = asyncHandler(async (req, res, next) => {
-    let query = { binId: req.params.id };
-    query = addCompanyToQuery(query, req.user);
+    const withLast = req.query.withLast === 'true';
 
-    const bin = await WasteBin.findOne(query).populate('company', 'name');
+    // company-scoped фильтр
+    let match = addCompanyToQuery({ binId: req.params.id }, req.user);
 
-    if (!bin) {
-        return next(new AppError('No waste bin found with that ID', 404));
+    if (!withLast) {
+        const bin = await WasteBin.findOne(match).populate('company', 'name');
+        if (!bin) return next(new AppError('No waste bin found with that ID', 404));
+
+        // бэкап на случай старых данных
+        if (!bin.containerHeight) {
+            bin.containerHeight = 50;
+            await bin.save();
+        }
+
+        return res.status(200).json({
+            status: 'success',
+            data: { bin: bin.toJSON() }
+        });
     }
 
-    // Ensure containerHeight exists (for backward compatibility)
-    if (!bin.containerHeight) {
-        bin.containerHeight = 50; // Default value
-        await bin.save();
-    }
-
-    // Convert to JSON to include virtual fields (like calculated fullness)
-    const binData = bin.toJSON();
-
-    // Log for debugging
-    console.log('Bin data:', {
-        binId: binData.binId,
-        distance: binData.distance,
-        containerHeight: binData.containerHeight,
-        calculatedFullness: binData.fullness
+    // withLast=true → тот же трюк, что в списке, но для одного бака
+    const pipeline = buildBinsWithLastPipeline(match);
+    // популяция компании через lookup (так как aggregate)
+    pipeline.push({
+        $lookup: {
+            from: 'medicalcompanies',
+            localField: 'company',
+            foreignField: '_id',
+            as: 'company'
+        }
     });
+    pipeline.push({ $addFields: { company: { $arrayElemAt: ['$company', 0] } } });
+    pipeline.push({
+        $project: {
+            'company._id': 1,
+            'company.name': 1,
+            deviceInfo: 1, location: 1, binId: 1, department: 1, wasteType: 1,
+            fullness: 1, distance: 1, weight: 1, temperature: 1,
+            capacity: 1, alertThreshold: 1, status: 1,
+            containerHeight: 1, lastUpdate: 1, lastCollection: 1,
+            collectionHistory: 1, createdAt: 1, updatedAt: 1
+        }
+    });
+
+    const [bin] = await WasteBin.aggregate(pipeline).exec();
+    if (!bin) return next(new AppError('No waste bin found with that ID', 404));
 
     res.status(200).json({
         status: 'success',
-        data: { bin: binData }
+        data: { bin }
     });
 });
 
@@ -1268,9 +1411,16 @@ const getNearbyBins = asyncHandler(async (req, res) => {
  * Get bins that exceed alert threshold
  */
 const getOverfilledBins = asyncHandler(async (req, res) => {
-    const bins = await WasteBin.find({
-        $expr: { $gte: ['$fullness', '$alertThreshold'] }
-    }).sort({ fullness: -1 });
+    // можно дать кастомный threshold из query, иначе проверим против alertThreshold
+    // но если хотим просто ">= alertThreshold", достаточно посчитать needsCollection в pipeline
+    let match = addCompanyToQuery({}, req.user);
+    const pipeline = buildBinsWithLastPipeline(match);
+
+    // оставить только нуждающиеся в вывозе
+    pipeline.push({ $match: { needsCollection: true } });
+    pipeline.push({ $sort: { fullness: -1 } });
+
+    const bins = await WasteBin.aggregate(pipeline).exec();
 
     res.status(200).json({
         status: 'success',
