@@ -108,22 +108,14 @@ const DriverCollection = () => {
         }
 
         setIsTracking(true);
+        const POLL_INTERVAL = 10000; // every 10 seconds
 
-        // Add retry logic
-        let retryCount = 0;
-        const maxRetries = 3;
-
-        const startWatch = () => {
-            watchIdRef.current = navigator.geolocation.watchPosition(
+        const pollLocation = () => {
+            navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    retryCount = 0; // Reset on success
                     const { latitude, longitude, accuracy, altitude, altitudeAccuracy, heading, speed } = position.coords;
 
-                    setCurrentLocation({
-                        latitude,
-                        longitude,
-                        accuracy
-                    });
+                    setCurrentLocation({ latitude, longitude, accuracy });
 
                     sendLocation({
                         latitude,
@@ -138,63 +130,35 @@ const DriverCollection = () => {
                 },
                 (error) => {
                     console.error('Geolocation error:', error);
-
-                    if (error.code === 2 && retryCount < maxRetries) {
-                        // Position unavailable - retry
-                        retryCount++;
-                        toast.error(`Попытка получить локацию (${retryCount}/${maxRetries})...`);
-
-                        // Stop current watch and restart after delay
-                        if (watchIdRef.current) {
-                            navigator.geolocation.clearWatch(watchIdRef.current);
-                        }
-
-                        setTimeout(() => {
-                            startWatch();
-                        }, 2000);
-                    } else {
-                        // Show specific error messages
-                        switch(error.code) {
-                            case 1:
-                                toast.error('Доступ к геолокации запрещен');
-                                break;
-                            case 2:
-                                toast.error('Местоположение недоступно. Проверьте настройки.');
-                                break;
-                            case 3:
-                                toast.error('Превышено время ожидания геолокации');
-                                break;
-                            default:
-                                toast.error('Ошибка получения геолокации');
-                        }
-                        setIsTracking(false);
+                    switch (error.code) {
+                        case 1:
+                            toast.error('Доступ к геолокации запрещен');
+                            break;
+                        case 2:
+                            toast.error('Местоположение недоступно');
+                            break;
+                        case 3:
+                            toast.error('Превышено время ожидания геолокации');
+                            break;
+                        default:
+                            toast.error('Ошибка получения геолокации');
                     }
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 15000, // Increased timeout
-                    maximumAge: 5000 // Allow slightly cached positions
+                    timeout: 10000,
+                    maximumAge: 5000
                 }
             );
         };
 
-        startWatch();
-
-        locationIntervalRef.current = setInterval(() => {
-            if (currentLocation) {
-                sendLocation(currentLocation);
-            }
-        }, 30000);
+        // Call immediately, then repeat
+        pollLocation();
+        locationIntervalRef.current = setInterval(pollLocation, POLL_INTERVAL);
     };
 
     const stopLocationTracking = () => {
         setIsTracking(false);
-
-        if (watchIdRef.current) {
-            navigator.geolocation.clearWatch(watchIdRef.current);
-            watchIdRef.current = null;
-        }
-
         if (locationIntervalRef.current) {
             clearInterval(locationIntervalRef.current);
             locationIntervalRef.current = null;
