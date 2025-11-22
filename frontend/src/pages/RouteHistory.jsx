@@ -44,20 +44,69 @@ const RouteHistory = () => {
 
             // Add date filtering
             if (dateFilter === 'today') {
-                params.from = new Date().setHours(0, 0, 0, 0);
+                params.from = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
             } else if (dateFilter === 'week') {
                 params.from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
             } else if (dateFilter === 'month') {
                 params.from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
             }
 
-            // Add status filtering
-            if (statusFilter !== 'all') {
-                params.status = statusFilter;
-            }
+            try {
+                if (statusFilter === 'active') {
+                    // Только активные сессии
+                    const activeResponse = await apiService.collections.getActiveDrivers();
+                    const activeSessions = activeResponse.data.data.activeDrivers?.map(ad => ad.session) || [];
 
-            // Get history for all drivers (empty driverId gets all)
-            return apiService.collections.getHistory('', params);
+                    return {
+                        data: {
+                            data: {
+                                sessions: activeSessions
+                            }
+                        }
+                    };
+                } else if (statusFilter === 'completed') {
+                    // Только завершенные сессии
+                    return apiService.collections.getHistory('', params);
+                } else {
+                    // ВСЕ сессии (и активные, и завершенные)
+                    const [activeResponse, historyResponse] = await Promise.all([
+                        apiService.collections.getActiveDrivers().catch(err => {
+                            console.warn('Error fetching active drivers:', err);
+                            return { data: { data: { activeDrivers: [] } } };
+                        }),
+                        apiService.collections.getHistory('', params).catch(err => {
+                            console.warn('Error fetching history:', err);
+                            return { data: { data: { sessions: [] } } };
+                        })
+                    ]);
+
+                    const activeSessions = activeResponse.data.data.activeDrivers?.map(ad => ad.session) || [];
+                    const historySessions = historyResponse.data.data.sessions || [];
+
+                    // Объединяем активные и исторические сессии
+                    const allSessions = [...activeSessions, ...historySessions];
+
+                    // Сортируем по времени начала (новые первыми)
+                    allSessions.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+                    return {
+                        data: {
+                            data: {
+                                sessions: allSessions
+                            }
+                        }
+                    };
+                }
+            } catch (error) {
+                console.error('Error fetching routes:', error);
+                return {
+                    data: {
+                        data: {
+                            sessions: []
+                        }
+                    }
+                };
+            }
         },
         refetchInterval: 30000, // 30 seconds
     });

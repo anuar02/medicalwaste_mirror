@@ -3,6 +3,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import { Geolocation } from '@capacitor/geolocation';
+import { KeepAwake } from '@capacitor-community/keep-awake';
+import { Capacitor } from '@capacitor/core';
 import {
     Play,
     Square,
@@ -30,13 +33,11 @@ const DriverCollection = () => {
     const [currentLocation, setCurrentLocation] = useState(null);
     const [sessionTime, setSessionTime] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
-    const [locationMode, setLocationMode] = useState('high');
-    const locationIntervalRef = useRef(null);
     const sessionTimerRef = useRef(null);
-    const watchIdRef = useRef(null);
+    const watcherId = useRef(null);
+    const locationIntervalRef = useRef(null);
 
     useEffect(() => {
-        // Check if user is approved driver
         if (user?.role !== 'driver' || user?.verificationStatus !== 'approved') {
             toast.error('Доступ запрещен. Требуется верификация водителя.');
             navigate('/driver/dashboard');
@@ -81,7 +82,7 @@ const DriverCollection = () => {
             if (session) {
                 setSelectedContainers(session.selectedContainers.map(c => c.container._id));
                 if (session.status === 'active') {
-                    startLocationTracking();
+                    await startLocationTracking();
                 }
             }
         } catch (error) {
@@ -101,14 +102,78 @@ const DriverCollection = () => {
         }
     };
 
-    const startLocationTracking = () => {
+    const startLocationTracking = async () => {
+        try {
+            console.log('🚀 Starting location tracking...');
+
+            // Keep screen awake on native platforms
+            if (Capacitor.isNativePlatform()) {
+                await KeepAwake.keepAwake();
+            }
+
+            // Request permissions
+            const permission = await Geolocation.requestPermissions();
+
+            if (permission.location !== 'granted') {
+                toast.error('Доступ к геолокации запрещен');
+                return;
+            }
+
+            setIsTracking(true);
+            const POLL_INTERVAL = 10000; // 10 seconds
+
+            const pollLocation = async () => {
+                try {
+                    const position = await Geolocation.getCurrentPosition({
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 5000
+                    });
+
+                    const { latitude, longitude, accuracy, altitude, altitudeAccuracy, heading, speed } = position.coords;
+
+                    setCurrentLocation({ latitude, longitude, accuracy });
+
+                    await sendLocation({
+                        latitude,
+                        longitude,
+                        accuracy: accuracy || 0,
+                        altitude: altitude || null,
+                        altitudeAccuracy: altitudeAccuracy || null,
+                        heading: heading || null,
+                        speed: speed || 0,
+                        timestamp: new Date(position.timestamp).toISOString()
+                    });
+
+                    console.log('✅ Location sent:', { latitude, longitude, accuracy });
+                } catch (error) {
+                    console.error('Geolocation error:', error);
+                }
+            };
+
+            // Call immediately
+            await pollLocation();
+
+            // Then repeat every 10 seconds
+            locationIntervalRef.current = setInterval(pollLocation, POLL_INTERVAL);
+
+        } catch (error) {
+            console.error('Error starting location tracking:', error);
+            toast.error('Ошибка запуска отслеживания');
+        }
+    };
+
+    // Fallback for web or if background geolocation fails
+    const startWebLocationTracking = () => {
+        console.log('Using web-based location tracking (fallback)');
+
         if (!navigator.geolocation) {
             toast.error('Геолокация не поддерживается');
             return;
         }
 
         setIsTracking(true);
-        const POLL_INTERVAL = 10000; // every 10 seconds
+        const POLL_INTERVAL = 10000; // 10 seconds
 
         const pollLocation = () => {
             navigator.geolocation.getCurrentPosition(
@@ -130,19 +195,6 @@ const DriverCollection = () => {
                 },
                 (error) => {
                     console.error('Geolocation error:', error);
-                    switch (error.code) {
-                        case 1:
-                            toast.error('Доступ к геолокации запрещен');
-                            break;
-                        case 2:
-                            toast.error('Местоположение недоступно');
-                            break;
-                        case 3:
-                            toast.error('Превышено время ожидания геолокации');
-                            break;
-                        default:
-                            toast.error('Ошибка получения геолокации');
-                    }
                 },
                 {
                     enableHighAccuracy: true,
@@ -152,26 +204,36 @@ const DriverCollection = () => {
             );
         };
 
-        // Call immediately, then repeat
         pollLocation();
-        locationIntervalRef.current = setInterval(pollLocation, POLL_INTERVAL);
+        watcherId.current = setInterval(pollLocation, POLL_INTERVAL);
     };
 
-    const stopLocationTracking = () => {
+    const stopLocationTracking = async () => {
         setIsTracking(false);
+
         if (locationIntervalRef.current) {
             clearInterval(locationIntervalRef.current);
             locationIntervalRef.current = null;
         }
+
+        // Allow screen to sleep
+        if (Capacitor.isNativePlatform()) {
+            await KeepAwake.allowSleep();
+        }
     };
 
     const sendLocation = async (location) => {
-        if (!activeSession) return;
+        if (!activeSession) {
+            console.warn('⚠️ No active session, skipping location send');
+            return;
+        }
 
         try {
-            await apiService.collections.recordLocation(location);
+            console.log('📤 Sending location to backend:', location);
+            const response = await apiService.collections.recordLocation(location);
+            console.log('✅ Location recorded:', response.data);
         } catch (error) {
-            console.error('Error sending location:', error);
+            console.error('❌ Error sending location:', error.response?.data || error.message);
         }
     };
 
@@ -184,45 +246,39 @@ const DriverCollection = () => {
         const loadingToast = toast.loading('Начинаем сбор...');
 
         try {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const { latitude, longitude } = position.coords;
+            let startLocation = null;
 
-                    const response = await apiService.collections.start({
-                        containerIds: selectedContainers,
-                        startLocation: {
-                            type: 'Point',
-                            coordinates: [longitude, latitude]
-                        }
+            // Try to get current position
+            try {
+                const permission = await Geolocation.requestPermissions();
+
+                if (permission.location === 'granted') {
+                    const position = await Geolocation.getCurrentPosition({
+                        enableHighAccuracy: true,
+                        timeout: 10000
                     });
 
-                    setActiveSession(response.data.data.session);
-                    startLocationTracking();
-                    toast.success('Сбор начат!', { id: loadingToast });
-                },
-                (error) => {
-                    console.error('Geolocation error:', error);
-                    handleStartWithoutLocation(loadingToast);
+                    startLocation = {
+                        type: 'Point',
+                        coordinates: [position.coords.longitude, position.coords.latitude]
+                    };
                 }
-            );
-        } catch (error) {
-            console.error('Error starting collection:', error);
-            toast.error('Ошибка начала сбора', { id: loadingToast });
-        }
-    };
+            } catch (geoError) {
+                console.warn('Could not get initial location:', geoError);
+            }
 
-    const handleStartWithoutLocation = async (toastId) => {
-        try {
             const response = await apiService.collections.start({
-                containerIds: selectedContainers
+                containerIds: selectedContainers,
+                ...(startLocation && { startLocation })
             });
 
             setActiveSession(response.data.data.session);
-            startLocationTracking();
-            toast.success('Сбор начат!', { id: toastId });
+            await startLocationTracking();
+            toast.success('Сбор начат!', { id: loadingToast });
+
         } catch (error) {
             console.error('Error starting collection:', error);
-            toast.error('Ошибка начала сбора', { id: toastId });
+            toast.error('Ошибка начала сбора', { id: loadingToast });
         }
     };
 
@@ -232,33 +288,32 @@ const DriverCollection = () => {
         const loadingToast = toast.loading('Завершаем сбор...');
 
         try {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const { latitude, longitude } = position.coords;
+            await stopLocationTracking();
 
-                    await apiService.collections.stop({
-                        sessionId: activeSession.sessionId,
-                        endLocation: {
-                            type: 'Point',
-                            coordinates: [longitude, latitude]
-                        }
-                    });
+            let endLocation = null;
 
-                    stopLocationTracking();
-                    toast.success('Сбор завершен!', { id: loadingToast });
-                    navigate('/driver/dashboard');
-                },
-                async (error) => {
-                    console.error('Geolocation error:', error);
-                    await apiService.collections.stop({
-                        sessionId: activeSession.sessionId
-                    });
+            try {
+                const position = await Geolocation.getCurrentPosition({
+                    enableHighAccuracy: true,
+                    timeout: 5000
+                });
 
-                    stopLocationTracking();
-                    toast.success('Сбор завершен!', { id: loadingToast });
-                    navigate('/driver/dashboard');
-                }
-            );
+                endLocation = {
+                    type: 'Point',
+                    coordinates: [position.coords.longitude, position.coords.latitude]
+                };
+            } catch (geoError) {
+                console.warn('Could not get final location:', geoError);
+            }
+
+            await apiService.collections.stop({
+                sessionId: activeSession.sessionId,
+                ...(endLocation && { endLocation })
+            });
+
+            toast.success('Сбор завершен!', { id: loadingToast });
+            navigate('/driver/dashboard');
+
         } catch (error) {
             console.error('Error stopping collection:', error);
             toast.error('Ошибка завершения сбора', { id: loadingToast });
@@ -266,8 +321,7 @@ const DriverCollection = () => {
     };
 
     const toggleContainerSelection = (containerId) => {
-        if (activeSession) return; // Can't change selection during active session
-
+        if (activeSession) return;
         setSelectedContainers(prev => {
             if (prev.includes(containerId)) {
                 return prev.filter(id => id !== containerId);
@@ -294,7 +348,6 @@ const DriverCollection = () => {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // Filter containers by search query
     const filteredContainers = containers.filter(container =>
         container.binId.toLowerCase().includes(searchQuery.toLowerCase()) ||
         container.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
