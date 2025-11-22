@@ -125,15 +125,16 @@ const RouteHistory = () => {
     // When a route is selected, center map on it
     useEffect(() => {
         if (routeDetailData) {
-            const route = routeDetailData.data.data.session;
+            const session = routeDetailData.data.data.session;
+            const routePoints = routeDetailData.data.data.route;
 
-            if (route.startLocation?.coordinates) {
-                const [longitude, latitude] = route.startLocation.coordinates;
+            if (session.startLocation?.coordinates) {
+                const [longitude, latitude] = session.startLocation.coordinates;
                 setMapCenter([latitude, longitude]);
                 setZoom(14);
-            } else if (route.route?.length > 0) {
+            } else if (routePoints?.length > 0) {
                 // Find first route point with valid coordinates
-                const firstValidPoint = route.route.find(point =>
+                const firstValidPoint = routePoints.find(point =>
                     point?.location?.coordinates?.length === 2
                 );
                 if (firstValidPoint) {
@@ -141,9 +142,9 @@ const RouteHistory = () => {
                     setMapCenter([latitude, longitude]);
                     setZoom(14);
                 }
-            } else if (route.selectedContainers?.length > 0) {
+            } else if (session.selectedContainers?.length > 0) {
                 // Find first container with valid coordinates
-                const firstValidContainer = route.selectedContainers.find(containerData =>
+                const firstValidContainer = session.selectedContainers.find(containerData =>
                     containerData?.container?.location?.coordinates?.length === 2
                 );
                 if (firstValidContainer) {
@@ -191,19 +192,19 @@ const RouteHistory = () => {
     const getMapMarkers = () => {
         if (!routeDetailData) return [];
 
-        const route = routeDetailData.data.data.session;
+        const session = routeDetailData.data.data.session;
         const markers = [];
 
         // Add start location marker
-        if (route.startLocation?.coordinates?.length === 2) {
-            const [longitude, latitude] = route.startLocation.coordinates;
+        if (session.startLocation?.coordinates?.length === 2) {
+            const [longitude, latitude] = session.startLocation.coordinates;
             markers.push({
                 id: 'start',
                 position: [latitude, longitude],
                 popup: `
                     <div style="padding: 8px;">
                         <div style="font-weight: bold; color: #059669;">🚀 Точка Старта</div>
-                        <div style="font-size: 12px; margin-top: 4px;">${formatDate(route.startTime)}</div>
+                        <div style="font-size: 12px; margin-top: 4px;">${formatDate(session.startTime)}</div>
                     </div>
                 `,
                 type: 'start',
@@ -212,15 +213,15 @@ const RouteHistory = () => {
         }
 
         // Add end location marker
-        if (route.endLocation?.coordinates?.length === 2) {
-            const [longitude, latitude] = route.endLocation.coordinates;
+        if (session.endLocation?.coordinates?.length === 2) {
+            const [longitude, latitude] = session.endLocation.coordinates;
             markers.push({
                 id: 'end',
                 position: [latitude, longitude],
                 popup: `
                     <div style="padding: 8px;">
                         <div style="font-weight: bold; color: #ef4444;">🏁 Точка Завершения</div>
-                        <div style="font-size: 12px; margin-top: 4px;">${formatDate(route.endTime)}</div>
+                        <div style="font-size: 12px; margin-top: 4px;">${formatDate(session.endTime)}</div>
                     </div>
                 `,
                 type: 'end',
@@ -229,8 +230,8 @@ const RouteHistory = () => {
         }
 
         // Add container markers
-        if (route.selectedContainers) {
-            route.selectedContainers.forEach((containerData) => {
+        if (session.selectedContainers) {
+            session.selectedContainers.forEach((containerData) => {
                 const container = containerData?.container;
                 if (container?.location?.coordinates?.length === 2) {
                     const [longitude, latitude] = container.location.coordinates;
@@ -262,21 +263,40 @@ const RouteHistory = () => {
         return markers;
     };
 
-    // Get route path for map - FIXED with proper null checks
+    // Get route path for map - FIXED: Use the route array from response, not session.route
     const getHistoryPath = () => {
-        if (!routeDetailData) return null;
+        if (!routeDetailData) {
+            console.log('No routeDetailData');
+            return null;
+        }
 
-        const route = routeDetailData.data.data.session;
+        // CRITICAL FIX: The API returns route points in data.data.route, NOT session.route!
+        const routePoints = routeDetailData.data.data.route;
 
-        if (!route.route || route.route.length === 0) return null;
+        console.log('Route points from API:', routePoints?.length || 0);
+
+        if (!routePoints || routePoints.length === 0) {
+            console.log('No route points in response');
+            return null;
+        }
 
         // Filter out invalid points and map to coordinates
-        const path = route.route
-            .filter(point => point?.location?.coordinates?.length === 2)
+        const path = routePoints
+            .filter(point => {
+                const isValid = point?.location?.coordinates?.length === 2;
+                if (!isValid) {
+                    console.log('Invalid point:', point);
+                }
+                return isValid;
+            })
             .map(point => {
                 const [longitude, latitude] = point.location.coordinates;
                 return [latitude, longitude];
             });
+
+        console.log('Generated path with', path.length, 'points');
+        console.log('First point:', path[0]);
+        console.log('Last point:', path[path.length - 1]);
 
         return path.length > 1 ? path : null;
     };
@@ -683,7 +703,7 @@ const RouteHistory = () => {
                                         <div className="flex items-center justify-between text-sm">
                                             <span className="text-slate-500">Точек маршрута:</span>
                                             <span className="font-medium text-slate-800">
-                                                {selectedRouteDetail.route?.length || 0}
+                                                {routeDetailData?.data?.data?.route?.length || 0}
                                             </span>
                                         </div>
 
