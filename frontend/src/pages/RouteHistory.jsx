@@ -127,20 +127,27 @@ const RouteHistory = () => {
         if (routeDetailData) {
             const route = routeDetailData.data.data.session;
 
-            if (route.startLocation && route.startLocation.coordinates) {
+            if (route.startLocation?.coordinates) {
                 const [longitude, latitude] = route.startLocation.coordinates;
                 setMapCenter([latitude, longitude]);
                 setZoom(14);
-            } else if (route.route && route.route.length > 0) {
-                // Center on first route point
-                const [longitude, latitude] = route.route[0].location.coordinates;
-                setMapCenter([latitude, longitude]);
-                setZoom(14);
-            } else if (route.selectedContainers && route.selectedContainers.length > 0) {
-                // Center on first container
-                const container = route.selectedContainers[0].container;
-                if (container.location && container.location.coordinates) {
-                    const [longitude, latitude] = container.location.coordinates;
+            } else if (route.route?.length > 0) {
+                // Find first route point with valid coordinates
+                const firstValidPoint = route.route.find(point =>
+                    point?.location?.coordinates?.length === 2
+                );
+                if (firstValidPoint) {
+                    const [longitude, latitude] = firstValidPoint.location.coordinates;
+                    setMapCenter([latitude, longitude]);
+                    setZoom(14);
+                }
+            } else if (route.selectedContainers?.length > 0) {
+                // Find first container with valid coordinates
+                const firstValidContainer = route.selectedContainers.find(containerData =>
+                    containerData?.container?.location?.coordinates?.length === 2
+                );
+                if (firstValidContainer) {
+                    const [longitude, latitude] = firstValidContainer.container.location.coordinates;
                     setMapCenter([latitude, longitude]);
                     setZoom(14);
                 }
@@ -188,7 +195,7 @@ const RouteHistory = () => {
         const markers = [];
 
         // Add start location marker
-        if (route.startLocation && route.startLocation.coordinates) {
+        if (route.startLocation?.coordinates?.length === 2) {
             const [longitude, latitude] = route.startLocation.coordinates;
             markers.push({
                 id: 'start',
@@ -205,7 +212,7 @@ const RouteHistory = () => {
         }
 
         // Add end location marker
-        if (route.endLocation && route.endLocation.coordinates) {
+        if (route.endLocation?.coordinates?.length === 2) {
             const [longitude, latitude] = route.endLocation.coordinates;
             markers.push({
                 id: 'end',
@@ -223,9 +230,9 @@ const RouteHistory = () => {
 
         // Add container markers
         if (route.selectedContainers) {
-            route.selectedContainers.forEach((containerData, index) => {
-                const container = containerData.container;
-                if (container.location && container.location.coordinates) {
+            route.selectedContainers.forEach((containerData) => {
+                const container = containerData?.container;
+                if (container?.location?.coordinates?.length === 2) {
                     const [longitude, latitude] = container.location.coordinates;
 
                     markers.push({
@@ -255,7 +262,7 @@ const RouteHistory = () => {
         return markers;
     };
 
-    // Get route path for map
+    // Get route path for map - FIXED with proper null checks
     const getHistoryPath = () => {
         if (!routeDetailData) return null;
 
@@ -263,10 +270,13 @@ const RouteHistory = () => {
 
         if (!route.route || route.route.length === 0) return null;
 
-        const path = route.route.map(point => {
-            const [longitude, latitude] = point.location.coordinates;
-            return [latitude, longitude];
-        });
+        // Filter out invalid points and map to coordinates
+        const path = route.route
+            .filter(point => point?.location?.coordinates?.length === 2)
+            .map(point => {
+                const [longitude, latitude] = point.location.coordinates;
+                return [latitude, longitude];
+            });
 
         return path.length > 1 ? path : null;
     };
@@ -274,9 +284,6 @@ const RouteHistory = () => {
     // Handle manual refresh
     const handleRefresh = () => {
         refetchRoutes();
-        if (selectedRoute) {
-            refetchRoutes();
-        }
     };
 
     // Loading state

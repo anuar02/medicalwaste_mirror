@@ -13,12 +13,16 @@ import {
     CheckCircle,
     Plus,
     Navigation,
-    Clock,
     Package,
     ArrowLeft,
     X,
     AlertCircle,
-    Trash2
+    Trash2,
+    Search,
+    Filter,
+    TrendingUp,
+    Clock,
+    Map as MapIcon
 } from 'lucide-react';
 import apiService from "../services/api";
 
@@ -33,9 +37,19 @@ const DriverCollection = () => {
     const [currentLocation, setCurrentLocation] = useState(null);
     const [sessionTime, setSessionTime] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
+    const [locationUpdateCount, setLocationUpdateCount] = useState(0);
+    const [showDebug, setShowDebug] = useState(false);
+
+    // Refs to avoid closure issues
+    const activeSessionRef = useRef(null);
     const sessionTimerRef = useRef(null);
-    const watcherId = useRef(null);
-    const locationIntervalRef = useRef(null);
+    const watchIdRef = useRef(null);
+    const lastSentTimeRef = useRef(0);
+
+    // Sync activeSession state with ref
+    useEffect(() => {
+        activeSessionRef.current = activeSession;
+    }, [activeSession]);
 
     useEffect(() => {
         if (user?.role !== 'driver' || user?.verificationStatus !== 'approved') {
@@ -82,6 +96,7 @@ const DriverCollection = () => {
             if (session) {
                 setSelectedContainers(session.selectedContainers.map(c => c.container._id));
                 if (session.status === 'active') {
+                    console.log('🔄 Active session found, starting location tracking...');
                     await startLocationTracking();
                 }
             }
@@ -102,16 +117,58 @@ const DriverCollection = () => {
         }
     };
 
-    const startLocationTracking = async () => {
-        try {
-            console.log('🚀 Starting location tracking...');
+    const handleLocationUpdate = async (position) => {
+        const now = Date.now();
+        const SEND_INTERVAL = 10000; // 10 seconds
 
-            // Keep screen awake on native platforms
+        console.log('📍 Got position update');
+
+        if (!activeSessionRef.current) {
+            console.warn('⚠️ No active session in ref, skipping location send');
+            return;
+        }
+
+        if (now - lastSentTimeRef.current < SEND_INTERVAL) {
+            return;
+        }
+
+        console.log('✅ Sending location update...');
+        lastSentTimeRef.current = now;
+
+        const { latitude, longitude, accuracy, altitude, altitudeAccuracy, heading, speed } = position.coords;
+
+        setCurrentLocation({ latitude, longitude, accuracy });
+
+        const locationPayload = {
+            latitude,
+            longitude,
+            accuracy: accuracy || 0,
+            speed: speed || 0,
+            timestamp: new Date(position.timestamp).toISOString()
+        };
+
+        if (altitude != null && !isNaN(altitude)) {
+            locationPayload.altitude = altitude;
+        }
+        if (altitudeAccuracy != null && !isNaN(altitudeAccuracy)) {
+            locationPayload.altitudeAccuracy = altitudeAccuracy;
+        }
+        if (heading != null && !isNaN(heading)) {
+            locationPayload.heading = heading;
+        }
+
+        await sendLocation(locationPayload);
+        setLocationUpdateCount(prev => prev + 1);
+    };
+
+    const startLocationTracking = async () => {
+        console.log('🚀 Starting location tracking...');
+
+        try {
             if (Capacitor.isNativePlatform()) {
                 await KeepAwake.keepAwake();
             }
 
-            // Request permissions
             const permission = await Geolocation.requestPermissions();
 
             if (permission.location !== 'granted') {
@@ -120,120 +177,78 @@ const DriverCollection = () => {
             }
 
             setIsTracking(true);
-            const POLL_INTERVAL = 10000; // 10 seconds
+            setLocationUpdateCount(0);
+            lastSentTimeRef.current = 0;
 
-            const pollLocation = async () => {
-                try {
-                    const position = await Geolocation.getCurrentPosition({
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 5000
-                    });
-
-                    const { latitude, longitude, accuracy, altitude, altitudeAccuracy, heading, speed } = position.coords;
-
-                    setCurrentLocation({ latitude, longitude, accuracy });
-
-                    await sendLocation({
-                        latitude,
-                        longitude,
-                        accuracy: accuracy || 0,
-                        altitude: altitude || null,
-                        altitudeAccuracy: altitudeAccuracy || null,
-                        heading: heading || null,
-                        speed: speed || 0,
-                        timestamp: new Date(position.timestamp).toISOString()
-                    });
-
-                    console.log('✅ Location sent:', { latitude, longitude, accuracy });
-                } catch (error) {
-                    console.error('Geolocation error:', error);
+            watchIdRef.current = await Geolocation.watchPosition(
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                },
+                (position, err) => {
+                    if (err) {
+                        console.error('❌ Watch position error:', err);
+                        return;
+                    }
+                    if (position) {
+                        handleLocationUpdate(position);
+                    }
                 }
-            };
+            );
 
-            // Call immediately
-            await pollLocation();
-
-            // Then repeat every 10 seconds
-            locationIntervalRef.current = setInterval(pollLocation, POLL_INTERVAL);
+            console.log('✅ Location tracking started');
 
         } catch (error) {
-            console.error('Error starting location tracking:', error);
+            console.error('❌ Error starting location tracking:', error);
             toast.error('Ошибка запуска отслеживания');
         }
     };
 
-    // Fallback for web or if background geolocation fails
-    const startWebLocationTracking = () => {
-        console.log('Using web-based location tracking (fallback)');
-
-        if (!navigator.geolocation) {
-            toast.error('Геолокация не поддерживается');
-            return;
-        }
-
-        setIsTracking(true);
-        const POLL_INTERVAL = 10000; // 10 seconds
-
-        const pollLocation = () => {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const { latitude, longitude, accuracy, altitude, altitudeAccuracy, heading, speed } = position.coords;
-
-                    setCurrentLocation({ latitude, longitude, accuracy });
-
-                    sendLocation({
-                        latitude,
-                        longitude,
-                        accuracy,
-                        altitude,
-                        altitudeAccuracy,
-                        heading,
-                        speed: speed || 0,
-                        timestamp: new Date(position.timestamp).toISOString()
-                    });
-                },
-                (error) => {
-                    console.error('Geolocation error:', error);
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 5000
-                }
-            );
-        };
-
-        pollLocation();
-        watcherId.current = setInterval(pollLocation, POLL_INTERVAL);
-    };
-
     const stopLocationTracking = async () => {
+        console.log('🛑 Stopping location tracking...');
+
         setIsTracking(false);
 
-        if (locationIntervalRef.current) {
-            clearInterval(locationIntervalRef.current);
-            locationIntervalRef.current = null;
+        if (watchIdRef.current) {
+            try {
+                await Geolocation.clearWatch({ id: watchIdRef.current });
+                watchIdRef.current = null;
+            } catch (error) {
+                console.error('Error clearing watch:', error);
+            }
         }
 
-        // Allow screen to sleep
         if (Capacitor.isNativePlatform()) {
             await KeepAwake.allowSleep();
         }
     };
 
     const sendLocation = async (location) => {
-        if (!activeSession) {
-            console.warn('⚠️ No active session, skipping location send');
+        const session = activeSessionRef.current;
+
+        if (!session) {
+            console.error('❌ No active session when sending location!');
             return;
         }
 
         try {
-            console.log('📤 Sending location to backend:', location);
             const response = await apiService.collections.recordLocation(location);
-            console.log('✅ Location recorded:', response.data);
+
+            if (response.data?.data?.routePointsCount) {
+                console.log('✅ Location recorded. Total points:', response.data.data.routePointsCount);
+            }
+
+            return response;
         } catch (error) {
-            console.error('❌ Error sending location:', error.response?.data || error.message);
+            console.error('❌ Error sending location:', error);
+
+            if (error.response?.status === 404) {
+                toast.error('Активная сессия не найдена', { duration: 3000 });
+                await stopLocationTracking();
+            }
+
+            return null;
         }
     };
 
@@ -248,7 +263,6 @@ const DriverCollection = () => {
         try {
             let startLocation = null;
 
-            // Try to get current position
             try {
                 const permission = await Geolocation.requestPermissions();
 
@@ -272,12 +286,17 @@ const DriverCollection = () => {
                 ...(startLocation && { startLocation })
             });
 
-            setActiveSession(response.data.data.session);
-            await startLocationTracking();
+            const newSession = response.data.data.session;
+            setActiveSession(newSession);
+
             toast.success('Сбор начат!', { id: loadingToast });
 
+            setTimeout(async () => {
+                await startLocationTracking();
+            }, 200);
+
         } catch (error) {
-            console.error('Error starting collection:', error);
+            console.error('❌ Error starting collection:', error);
             toast.error('Ошибка начала сбора', { id: loadingToast });
         }
     };
@@ -315,7 +334,7 @@ const DriverCollection = () => {
             navigate('/driver/dashboard');
 
         } catch (error) {
-            console.error('Error stopping collection:', error);
+            console.error('❌ Error stopping collection:', error);
             toast.error('Ошибка завершения сбора', { id: loadingToast });
         }
     };
@@ -360,76 +379,98 @@ const DriverCollection = () => {
     const progress = totalCount > 0 ? Math.round((visitedCount / totalCount) * 100) : 0;
 
     return (
-        <div className="min-h-screen bg-slate-50 p-4 pb-24">
-            <div className="mx-auto max-w-4xl">
-                {/* Header */}
-                <div className="mb-6 flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+            {/* Mobile-optimized container */}
+            <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 pb-28">
+
+                {/* Header - Compact on mobile */}
+                <div className="mb-4 sm:mb-6">
+                    <div className="flex items-center gap-3">
                         <button
                             onClick={() => navigate('/driver/dashboard')}
-                            className="rounded-lg p-2 hover:bg-slate-100 transition-colors"
+                            className="flex-shrink-0 p-2 rounded-xl bg-white shadow-sm hover:shadow-md transition-all active:scale-95"
                         >
-                            <ArrowLeft className="h-5 w-5 text-slate-600" />
+                            <ArrowLeft className="h-5 w-5 text-slate-700" />
                         </button>
-                        <div>
-                            <h1 className="text-3xl font-bold text-slate-800">
-                                {activeSession ? 'Сбор в процессе' : 'Новый Сбор'}
+                        <div className="flex-1 min-w-0">
+                            <h1 className="text-xl sm:text-3xl font-bold text-slate-800 truncate">
+                                {activeSession ? '🚛 Сбор в процессе' : '📋 Новый Сбор'}
                             </h1>
                             {activeSession && (
-                                <p className="text-sm text-slate-500 mt-1">
-                                    Прогресс: {visitedCount} из {totalCount} контейнеров ({progress}%)
+                                <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
+                                    {visitedCount} из {totalCount} • {progress}%
                                 </p>
                             )}
                         </div>
                     </div>
                 </div>
 
-                {/* Status Card */}
+                {/* Active Session Status Card */}
                 {activeSession && (
-                    <div className="mb-6 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 p-6 shadow-sm">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center space-x-4">
-                                <div className="rounded-full bg-green-500 p-3">
-                                    <Navigation className="h-6 w-6 text-white" />
+                    <div className="mb-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-4 sm:p-6 shadow-xl text-white">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                            {/* Timer */}
+                            <div className="flex items-center gap-3">
+                                <div className="rounded-full bg-white/20 p-3 backdrop-blur-sm">
+                                    <Clock className="h-6 w-6" />
                                 </div>
                                 <div>
-                                    <p className="text-sm text-green-700 font-medium">Время сбора</p>
-                                    <p className="text-3xl font-bold text-green-900">
+                                    <p className="text-xs font-medium opacity-90">Время сбора</p>
+                                    <p className="text-2xl sm:text-3xl font-bold tracking-tight">
                                         {formatTime(sessionTime)}
                                     </p>
                                 </div>
                             </div>
 
-                            {isTracking && (
-                                <div className="flex items-center space-x-2 text-green-700">
-                                    <div className="relative flex h-3 w-3">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                            {/* Tracking Status */}
+                            <div className="flex flex-wrap items-center gap-3">
+                                {isTracking ? (
+                                    <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-2 rounded-full">
+                                        <div className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                                        </div>
+                                        <span className="text-xs font-semibold">GPS Активен</span>
                                     </div>
-                                    <span className="text-sm font-medium">Отслеживание</span>
+                                ) : (
+                                    <div className="flex items-center gap-2 bg-red-500/30 backdrop-blur-sm px-3 py-2 rounded-full">
+                                        <AlertCircle className="h-4 w-4" />
+                                        <span className="text-xs font-semibold">GPS Выключен</span>
+                                    </div>
+                                )}
+
+                                <div className="bg-white/20 backdrop-blur-sm px-3 py-2 rounded-full">
+                                    <span className="text-xs font-semibold">{locationUpdateCount} точек</span>
                                 </div>
-                            )}
+                            </div>
                         </div>
 
+                        {/* Location Info */}
                         {currentLocation && (
-                            <div className="flex items-center space-x-2 text-sm text-green-700">
-                                <MapPin className="h-4 w-4" />
-                                <span>
-                                    Координаты: {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
-                                    (±{Math.round(currentLocation.accuracy)}м)
-                                </span>
+                            <div className="mt-4 pt-4 border-t border-white/20">
+                                <div className="flex items-start gap-2 text-xs sm:text-sm">
+                                    <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-mono opacity-90 break-all">
+                                            {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
+                                        </p>
+                                        <p className="text-xs opacity-75 mt-0.5">
+                                            Точность: ±{Math.round(currentLocation.accuracy)}м
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
                         {/* Progress Bar */}
                         <div className="mt-4">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-green-700">Прогресс</span>
-                                <span className="text-sm font-bold text-green-900">{progress}%</span>
+                                <span className="text-xs font-semibold opacity-90">Прогресс сбора</span>
+                                <span className="text-sm font-bold">{progress}%</span>
                             </div>
-                            <div className="w-full bg-green-200 rounded-full h-3">
+                            <div className="w-full bg-white/20 rounded-full h-2.5 overflow-hidden">
                                 <div
-                                    className="bg-green-600 h-3 rounded-full transition-all duration-300"
+                                    className="bg-white h-2.5 rounded-full transition-all duration-500 ease-out shadow-lg"
                                     style={{ width: `${progress}%` }}
                                 ></div>
                             </div>
@@ -437,78 +478,99 @@ const DriverCollection = () => {
                     </div>
                 )}
 
-                {/* Containers List */}
-                <div className="mb-6 rounded-lg bg-white p-6 shadow-sm">
-                    <div className="mb-4 flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-slate-800 flex items-center">
-                            <Package className="h-5 w-5 mr-2 text-teal-600" />
-                            Контейнеры ({selectedCount})
-                        </h3>
-                        <div className="flex items-center space-x-2">
-                            {!activeSession && selectedCount > 0 && (
-                                <button
-                                    onClick={clearSelection}
-                                    className="flex items-center text-sm text-red-600 hover:text-red-700 px-3 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                                >
-                                    <X className="mr-1 h-4 w-4" />
-                                    Очистить
-                                </button>
-                            )}
+                {/* Containers Section */}
+                <div className="mb-4 rounded-2xl bg-white shadow-lg overflow-hidden">
+                    {/* Header */}
+                    <div className="p-4 bg-gradient-to-r from-teal-50 to-blue-50 border-b border-slate-200">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <Package className="h-5 w-5 text-teal-600" />
+                                <h3 className="text-base sm:text-lg font-bold text-slate-800">
+                                    Контейнеры ({selectedCount})
+                                </h3>
+                            </div>
                             {!activeSession && (
                                 <button
-                                    onClick={selectAll}
-                                    className="flex items-center text-sm text-teal-600 hover:text-teal-700 px-3 py-1 rounded-lg hover:bg-teal-50 transition-colors"
+                                    onClick={() => setShowContainerSelector(!showContainerSelector)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors active:scale-95"
                                 >
-                                    <CheckCircle className="mr-1 h-4 w-4" />
-                                    Выбрать все
+                                    {showContainerSelector ? (
+                                        <>
+                                            <X className="h-4 w-4" />
+                                            <span className="hidden sm:inline">Закрыть</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Plus className="h-4 w-4" />
+                                            <span className="hidden sm:inline">Выбрать</span>
+                                        </>
+                                    )}
                                 </button>
                             )}
-                            <button
-                                onClick={() => setShowContainerSelector(!showContainerSelector)}
-                                className="flex items-center text-teal-600 hover:text-teal-700 px-3 py-2 rounded-lg hover:bg-teal-50 transition-colors"
-                                disabled={activeSession !== null}
-                            >
-                                {showContainerSelector ? <X className="mr-1 h-4 w-4" /> : <Plus className="mr-1 h-4 w-4" />}
-                                {showContainerSelector ? 'Закрыть' : 'Выбрать'}
-                            </button>
                         </div>
+
+                        {/* Action Buttons */}
+                        {!activeSession && selectedCount > 0 && (
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={selectAll}
+                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-white text-teal-700 text-xs font-medium rounded-lg hover:bg-teal-50 transition-colors border border-teal-200"
+                                >
+                                    <CheckCircle className="h-3.5 w-3.5" />
+                                    Выбрать все
+                                </button>
+                                <button
+                                    onClick={clearSelection}
+                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-white text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors border border-red-200"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                    Очистить
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {/* Container Selector */}
                     {showContainerSelector && !activeSession && (
-                        <div className="mb-4 rounded-lg border border-slate-200 overflow-hidden">
-                            <div className="p-3 bg-slate-50 border-b border-slate-200">
-                                <input
-                                    type="text"
-                                    placeholder="Поиск по ID, отделению или типу..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                />
+                        <div className="border-b border-slate-200">
+                            {/* Search */}
+                            <div className="p-3 bg-slate-50">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Поиск..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm"
+                                    />
+                                </div>
                             </div>
-                            <div className="max-h-64 overflow-y-auto">
+
+                            {/* Container List */}
+                            <div className="max-h-72 overflow-y-auto">
                                 {filteredContainers.length > 0 ? (
                                     filteredContainers.map((container) => (
                                         <label
                                             key={container._id}
-                                            className="flex items-center space-x-3 px-4 py-3 cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                                            className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-0 transition-colors"
                                         >
                                             <input
                                                 type="checkbox"
                                                 checked={selectedContainers.includes(container._id)}
                                                 onChange={() => toggleContainerSelection(container._id)}
-                                                className="h-5 w-5 text-teal-600 rounded focus:ring-teal-500"
+                                                className="h-5 w-5 text-teal-600 rounded focus:ring-2 focus:ring-teal-500 cursor-pointer"
                                             />
-                                            <div className="flex-1">
-                                                <p className="font-medium text-slate-800">
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-slate-800 text-sm truncate">
                                                     {container.binId}
                                                 </p>
-                                                <p className="text-sm text-slate-500">
+                                                <p className="text-xs text-slate-500 truncate">
                                                     {container.department} • {container.wasteType}
                                                 </p>
                                             </div>
-                                            {container.fillLevel && (
-                                                <div className={`text-xs px-2 py-1 rounded-full ${
+                                            {container.fillLevel != null && (
+                                                <div className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                                                     container.fillLevel > 80 ? 'bg-red-100 text-red-700' :
                                                         container.fillLevel > 60 ? 'bg-amber-100 text-amber-700' :
                                                             'bg-green-100 text-green-700'
@@ -519,130 +581,147 @@ const DriverCollection = () => {
                                         </label>
                                     ))
                                 ) : (
-                                    <div className="text-center py-8 text-slate-500">
-                                        <Trash2 className="h-12 w-12 mx-auto mb-2 text-slate-300" />
-                                        <p>Контейнеры не найдены</p>
+                                    <div className="text-center py-12 px-4">
+                                        <Trash2 className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+                                        <p className="text-sm text-slate-500 font-medium">Контейнеры не найдены</p>
                                     </div>
                                 )}
                             </div>
                         </div>
                     )}
 
-                    {/* Selected Containers List */}
-                    {selectedCount > 0 ? (
-                        <div className="space-y-2">
-                            {containers
-                                .filter(c => selectedContainers.includes(c._id))
-                                .map((container) => {
-                                    const containerData = activeSession?.selectedContainers.find(
-                                        sc => sc.container._id === container._id
-                                    );
-                                    const isVisited = containerData?.visited;
+                    {/* Selected Containers */}
+                    <div className="p-4">
+                        {selectedCount > 0 ? (
+                            <div className="space-y-2">
+                                {containers
+                                    .filter(c => selectedContainers.includes(c._id))
+                                    .map((container) => {
+                                        const containerData = activeSession?.selectedContainers.find(
+                                            sc => sc.container._id === container._id
+                                        );
+                                        const isVisited = containerData?.visited;
 
-                                    return (
-                                        <div
-                                            key={container._id}
-                                            className={`flex items-center justify-between rounded-lg border p-4 transition-all ${
-                                                isVisited
-                                                    ? 'border-green-300 bg-green-50 shadow-sm'
-                                                    : 'border-slate-200 hover:border-slate-300'
-                                            }`}
-                                        >
-                                            <div className="flex items-center space-x-3">
-                                                {isVisited ? (
-                                                    <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
-                                                ) : (
-                                                    <div className="h-6 w-6 rounded-full border-2 border-slate-300 flex-shrink-0"></div>
-                                                )}
-                                                <div>
-                                                    <p className="font-medium text-slate-800">
+                                        return (
+                                            <div
+                                                key={container._id}
+                                                className={`flex items-center gap-3 rounded-xl p-3 transition-all ${
+                                                    isVisited
+                                                        ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 shadow-sm'
+                                                        : 'bg-slate-50 border border-slate-200 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <div className="flex-shrink-0">
+                                                    {isVisited ? (
+                                                        <CheckCircle className="h-6 w-6 text-green-600" />
+                                                    ) : (
+                                                        <div className="h-6 w-6 rounded-full border-2 border-slate-300"></div>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-slate-800 text-sm truncate">
                                                         {container.binId}
                                                     </p>
-                                                    <p className="text-sm text-slate-500">
-                                                        {container.department} • {container.wasteType}
+                                                    <p className="text-xs text-slate-500 truncate">
+                                                        {container.department}
                                                     </p>
                                                 </div>
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                    {container.fillLevel != null && (
+                                                        <div className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                                            container.fillLevel > 80 ? 'bg-red-100 text-red-700' :
+                                                                container.fillLevel > 60 ? 'bg-amber-100 text-amber-700' :
+                                                                    'bg-green-100 text-green-700'
+                                                        }`}>
+                                                            {container.fillLevel}%
+                                                        </div>
+                                                    )}
+                                                    {isVisited && (
+                                                        <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                                                            ✓
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="flex items-center space-x-3">
-                                                {container.fillLevel && (
-                                                    <div className={`text-xs font-medium px-2 py-1 rounded ${
-                                                        container.fillLevel > 80 ? 'bg-red-100 text-red-700' :
-                                                            container.fillLevel > 60 ? 'bg-amber-100 text-amber-700' :
-                                                                'bg-green-100 text-green-700'
-                                                    }`}>
-                                                        {container.fillLevel}%
-                                                    </div>
-                                                )}
-                                                {isVisited && (
-                                                    <span className="text-xs text-green-700 font-semibold bg-green-100 px-3 py-1 rounded-full">
-                                                        ✓ Посещено
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                        </div>
-                    ) : (
-                        <div className="text-center py-12 text-slate-400">
-                            <Package className="h-16 w-16 mx-auto mb-3 opacity-50" />
-                            <p className="font-medium">Контейнеры не выбраны</p>
-                            <p className="text-sm mt-1">Нажмите "Выбрать" чтобы добавить контейнеры</p>
-                        </div>
-                    )}
+                                        );
+                                    })}
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 px-4">
+                                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+                                    <Package className="h-8 w-8 text-slate-400" />
+                                </div>
+                                <p className="text-sm font-medium text-slate-600 mb-1">Контейнеры не выбраны</p>
+                                <p className="text-xs text-slate-500">Нажмите "Выбрать" для добавления</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* Warning if no geolocation */}
-                {activeSession && !isTracking && (
-                    <div className="mb-6 rounded-lg bg-amber-50 border border-amber-200 p-4">
-                        <div className="flex items-start">
-                            <AlertCircle className="h-5 w-5 text-amber-600 mr-2 flex-shrink-0 mt-0.5" />
-                            <div>
-                                <p className="text-sm font-medium text-amber-800">
-                                    Отслеживание местоположения отключено
-                                </p>
-                                <p className="text-sm text-amber-700 mt-1">
-                                    Пожалуйста, включите геолокацию для корректного отслеживания маршрута.
-                                </p>
-                            </div>
+                {/* Debug Info - Collapsible */}
+                {activeSession && (
+                    <button
+                        onClick={() => setShowDebug(!showDebug)}
+                        className="w-full mb-4 rounded-xl bg-blue-50 border border-blue-200 p-3 text-left hover:bg-blue-100 transition-colors"
+                    >
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-blue-800">🔧 Debug Info</span>
+                            <span className="text-xs text-blue-600">{showDebug ? '▼' : '▶'}</span>
                         </div>
-                    </div>
+                        {showDebug && (
+                            <div className="mt-2 text-xs font-mono text-blue-700 space-y-1">
+                                <div>Session: {activeSession.sessionId}</div>
+                                <div>Ref: {activeSessionRef.current?.sessionId || 'NULL'}</div>
+                                <div>Tracking: {isTracking ? '✅' : '❌'}</div>
+                                <div>Updates: {locationUpdateCount}</div>
+                                <div>Watch: {watchIdRef.current || 'None'}</div>
+                                <div>Platform: {Capacitor.getPlatform()}</div>
+                            </div>
+                        )}
+                    </button>
                 )}
             </div>
 
-            {/* Fixed Bottom Action Bar */}
-            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-lg">
-                <div className="mx-auto max-w-4xl flex space-x-4">
+            {/* Fixed Bottom Action Bar - Mobile optimized */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-2xl safe-bottom">
+                <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
                     {activeSession ? (
-                        <>
-                            <button
-                                onClick={handleStopCollection}
-                                className="flex-1 flex items-center justify-center rounded-lg bg-red-600 px-6 py-4 text-white hover:bg-red-700 transition-colors shadow-lg font-semibold"
-                            >
-                                <Square className="mr-2 h-5 w-5" />
-                                Завершить Сбор
-                            </button>
-                        </>
+                        <button
+                            onClick={handleStopCollection}
+                            className="w-full flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 text-white font-bold text-base sm:text-lg hover:from-red-700 hover:to-red-800 transition-all shadow-lg hover:shadow-xl active:scale-98"
+                        >
+                            <Square className="h-5 w-5 sm:h-6 sm:w-6" />
+                            Завершить Сбор
+                        </button>
                     ) : (
-                        <>
+                        <div className="flex gap-2 sm:gap-3">
                             <button
                                 onClick={() => navigate('/driver/dashboard')}
-                                className="flex-1 rounded-lg border-2 border-slate-300 px-6 py-4 text-slate-700 hover:bg-slate-50 transition-colors font-medium"
+                                className="flex-1 rounded-xl sm:rounded-2xl border-2 border-slate-300 px-4 sm:px-6 py-4 text-slate-700 font-semibold text-sm sm:text-base hover:bg-slate-50 transition-all active:scale-98"
                             >
                                 Отмена
                             </button>
                             <button
                                 onClick={handleStartCollection}
                                 disabled={selectedContainers.length === 0}
-                                className="flex-1 flex items-center justify-center rounded-lg bg-teal-600 px-6 py-4 text-white hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg font-semibold"
+                                className="flex-[2] flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-teal-600 to-blue-600 px-4 sm:px-6 py-4 text-white font-bold text-sm sm:text-base hover:from-teal-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg active:scale-98"
                             >
-                                <Play className="mr-2 h-5 w-5" />
-                                Начать Сбор ({selectedCount})
+                                <Play className="h-4 w-4 sm:h-5 sm:w-5" />
+                                Начать ({selectedCount})
                             </button>
-                        </>
+                        </div>
                     )}
                 </div>
             </div>
+
+            <style jsx>{`
+                .safe-bottom {
+                    padding-bottom: env(safe-area-inset-bottom);
+                }
+                .active\\:scale-98:active {
+                    transform: scale(0.98);
+                }
+            `}</style>
         </div>
     );
 };
