@@ -18,21 +18,22 @@ const { validateRequest } = require('../middleware/validators');
 // Public route for getting active companies (for registration dropdown)
 router.get('/active', getActiveCompanies);
 
-// All routes below require authentication
-router.use(auth);
+// Get all companies (admin only) - auth + restrictTo explicitly
+router.get('/', auth, restrictTo('admin'), getAllCompanies);
 
-// Get all companies (admin only)
-router.get('/', restrictTo('admin'), getAllCompanies);
-
-// Get single company
+// Get single company - FIXED: add auth explicitly
 router.get('/:id',
+    auth,  // Add auth explicitly here
+    restrictTo('admin'),
     param('id').isMongoId().withMessage('Invalid company ID'),
     validateRequest,
     getCompany
 );
 
-// Get company statistics
+// Get company statistics - FIXED: add auth explicitly
 router.get('/:id/stats',
+    auth,  // Add auth explicitly here
+    restrictTo('admin'),
     param('id').isMongoId().withMessage('Invalid company ID'),
     validateRequest,
     getCompanyStats
@@ -40,6 +41,7 @@ router.get('/:id/stats',
 
 // Create new company (admin only)
 router.post('/',
+    auth,  // Add auth explicitly
     restrictTo('admin'),
     [
         body('name').trim().notEmpty().withMessage('Company name is required'),
@@ -53,6 +55,7 @@ router.post('/',
 
 // Update company (admin only)
 router.patch('/:id',
+    auth,  // Add auth explicitly
     restrictTo('admin'),
     param('id').isMongoId().withMessage('Invalid company ID'),
     validateRequest,
@@ -61,6 +64,7 @@ router.patch('/:id',
 
 // Delete company (admin only)
 router.delete('/:id',
+    auth,  // Add auth explicitly
     restrictTo('admin'),
     param('id').isMongoId().withMessage('Invalid company ID'),
     validateRequest,
@@ -69,6 +73,7 @@ router.delete('/:id',
 
 // Assign bins to company (admin only)
 router.post('/assign-bins',
+    auth,  // Add auth explicitly
     restrictTo('admin'),
     [
         body('companyId').isMongoId().withMessage('Valid company ID is required'),

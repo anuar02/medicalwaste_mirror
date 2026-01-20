@@ -19,6 +19,7 @@ import DriverDashboard from "./pages/DriverDashboard";
 import DriverCollection from "./pages/DriverCollection";
 import ErrorBoundary from "./utils/errorBoundary";
 import DeviceHealth from "./pages/DeviceHealth";
+import CompanyDetails from "./pages/admin/CompanyDetails";
 
 // Pages - Using lazy loading for improved performance
 const MedicalCompanyManagement = React.lazy(() => import('./components/MedicalCompanyManagement'));
@@ -173,6 +174,7 @@ const App = () => {
                                                 </ProtectedRoute>
                                             }
                                         />
+                                        <Route path="/admin/companies/:id" element={<CompanyDetails />} />
                                         <Route
                                             path="/driver/dashboard"
                                             element={

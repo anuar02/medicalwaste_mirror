@@ -250,6 +250,13 @@ const simpleDeviceAuth = async (req, res, next) => {
  */
 const restrictTo = (...roles) => {
     return (req, res, next) => {
+        // Check if req.user exists (should be set by auth middleware)
+        if (!req.user) {
+            return next(
+                new AppError('Authentication required. Please log in.', 401)
+            );
+        }
+
         // Check if user's role is in the allowed roles
         if (!roles.includes(req.user.role)) {
             return next(
