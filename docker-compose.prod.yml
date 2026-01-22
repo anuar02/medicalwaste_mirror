@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   frontend:
-    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/frontend:${CI_COMMIT_SHA:-latest}
+    image: ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
     deploy:
       replicas: 1
       placement:
@@ -14,14 +14,13 @@ services:
     networks:
       - myapp_app-network
     environment:
-      # Frontend environment variables
       - PORT=4000
+      - REACT_APP_API_URL=/api  # ← Правильно для app.medicalwaste.kz
       - NODE_ENV=production
-      - REACT_APP_API_URL=/api
       - REACT_APP_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
 
   backend:
-    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/anuar021/trashbin}/backend:${CI_COMMIT_SHA:-latest}
+    image: ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
     deploy:
       replicas: 1
       placement:
@@ -34,21 +33,19 @@ services:
     networks:
       - myapp_app-network
     environment:
-      # Backend environment variables
       - PORT=5000
-      - NODE_ENV=production
       - MONGODB_URI=mongodb://myapp_mongodb:27017/trashbin_db
+      - NODE_ENV=production
       - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=24h
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - JWT_REFRESH_EXPIRES_IN=7d
-      - JWT_COOKIE_EXPIRES_IN=24
-      - JWT_REFRESH_COOKIE_EXPIRES_IN=7
-      - BCRYPT_ROUNDS=12
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - GOOGLE_REDIRECT_URI=https://app.medicalwaste.kz/auth/google/callback  # ← Обновите
+      - FRONTEND_URL=https://app.medicalwaste.kz  # ← Новая переменная
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - BCRYPT_ROUNDS=12
+      # CORS origins для backend (если нужно)
+      - ALLOWED_ORIGINS=https://app.medicalwaste.kz,https://medicalwaste.kz,capacitor://localhost
 
   mongodb:
     image: mongo:4.4
@@ -67,7 +64,7 @@ services:
       - myapp_app-network
 
   nginx:
-    image: $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
+    image: ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
     deploy:
       replicas: 1
       placement:
@@ -81,13 +78,13 @@ services:
       - "80:8080"   # HTTP (redirects to HTTPS)
       - "443:8443"  # HTTPS
     volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro  # Mount SSL certificates
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       - myapp_app-network
     environment:
       - FRONTEND_HOST=myapp_frontend
       - BACKEND_HOST=myapp_backend
-      - SERVER_NAME=$SERVER_NAME
+      - SERVER_NAME=app.medicalwaste.kz  # ← Основной домен приложения
 
 networks:
   myapp_app-network:
