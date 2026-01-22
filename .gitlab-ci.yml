@@ -210,7 +210,6 @@ build-nginx:
 
           # API requests
           location ^~ /api/ {
-              rewrite ^/api(/.*)$ $1 break;
 
               # CORS headers
               add_header 'Access-Control-Allow-Origin'  $cors_origin always;
