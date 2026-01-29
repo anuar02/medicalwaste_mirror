@@ -10,7 +10,7 @@
 
 A comprehensive IoT solution for medical waste management that monitors smart waste bins, tracks collection vehicles, and provides real-time analytics through an intuitive web dashboard. Built for healthcare facilities to optimize waste collection, ensure compliance, and reduce operational costs.
 
-**Live Demo:** https://narutouzumaki.kz
+**Live Demo:** https://app.medicalwaste.kz
 
 ## ✨ Features
 
