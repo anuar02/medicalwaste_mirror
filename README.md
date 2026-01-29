@@ -2,10 +2,6 @@
 
 > IoT-based real-time monitoring and management system for medical waste bins in healthcare facilities
 
-[![CI Pipeline](https://github.com/[username]/medical-waste-management/workflows/CI%20Pipeline/badge.svg)](https://github.com/[username]/medical-waste-management/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
-
 ## 📋 Overview
 
 A comprehensive IoT solution for medical waste management that monitors smart waste bins, tracks collection vehicles, and provides real-time analytics through an intuitive web dashboard. Built for healthcare facilities to optimize waste collection, ensure compliance, and reduce operational costs.
@@ -36,10 +32,3 @@ A comprehensive IoT solution for medical waste management that monitors smart wa
 - Node.js >= 18.0.0
 - MongoDB >= 5.0
 - npm or yarn
-
-### Installation
-
-1. **Clone the repository**
-```bash
-git clone https://github.com/[username]/medical-waste-management.git
-cd medical-waste-management
