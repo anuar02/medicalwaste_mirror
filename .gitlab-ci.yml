@@ -354,7 +354,7 @@ deploy:
   stage: deploy
   image: alpine:latest
   variables:
-    SWARM_MANAGER: "51.20.79.185"
+    SWARM_MANAGER: $NEW_SERVER_IP
     SSH_USER: "ubuntu"
   dependencies:
     - build-frontend
