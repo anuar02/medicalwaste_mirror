@@ -99,12 +99,10 @@ const Login = () => {
 
     // Utility functions
     const handleError = (message) => {
-        setError(message);
         toast.error(message);
     };
 
     const handleSuccess = (message) => {
-        toast.success(message);
         navigate('/');
     };
 
