@@ -4,25 +4,13 @@ stages:
 
 variables:
   DOCKER_DRIVER: overlay2
-  DOCKER_HOST: tcp://docker:2375
-  DOCKER_TLS_CERTDIR: ""
+  # NO DOCKER_HOST HERE
 
 default:
   image: docker:20.10.16
-  services:
-    - name: docker:20.10.16-dind
-      alias: docker  # This ensures the hostname 'docker' works
+  # NO SERVICES HERE
   before_script:
-    # Wait until the docker daemon is actually ready
-    - |
-      for i in $(seq 1 30); do
-        if docker info >/dev/null 2>&1; then
-          echo "Docker daemon is ready!"
-          break
-        fi
-        echo "Waiting for Docker daemon..."
-        sleep 1
-      done
+    - docker info  # This is the test! If this works, the rest will work.
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
 
 # -----------------------------
