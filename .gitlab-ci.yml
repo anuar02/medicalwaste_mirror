@@ -2,43 +2,41 @@ stages:
   - build
   - deploy
 
-services:
-  - docker:20.10.16-dind
-
 variables:
-  DOCKER_HOST: tcp://docker:2375
-  DOCKER_TLS_CERTDIR: ""
   DOCKER_DRIVER: overlay2
+  # This tells the Docker CLI where to find the Docker-in-Docker service
+  DOCKER_HOST: tcp://docker:2375
+  # Disabling TLS for simplicity in internal CI networking
+  DOCKER_TLS_CERTDIR: ""
+
+default:
+  image: docker:20.10.16
+  services:
+    - name: docker:20.10.16-dind
+      alias: docker
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
 
 # -----------------------------
 # BUILD FRONTEND
 # -----------------------------
 build-frontend:
   stage: build
-  image: docker:20.10.16
   tags:
     - swarm
   script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-
-    - mkdir -p temp
-
+    - mkdir -p temp/frontend
     - |
       cat > temp/server.js << 'EOF'
       const express = require("express");
       const path = require("path");
       const app = express();
       const PORT = process.env.PORT || 4000;
-
       app.get("/health", (_, res) => res.status(200).send("OK"));
       app.use(express.static(path.join(__dirname, "build")));
       app.get("*", (_, res) => res.sendFile(path.join(__dirname, "build", "index.html")));
-
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Frontend running on ${PORT}`);
-      });
+      app.listen(PORT, "0.0.0.0", () => { console.log(`Frontend running on ${PORT}`); });
       EOF
-
     - |
       cat > temp/Dockerfile.frontend << 'EOF'
       FROM node:18-alpine AS build
@@ -52,7 +50,6 @@ build-frontend:
       ENV REACT_APP_API_URL=$REACT_APP_API_URL
       ENV CI=false
       RUN npm run build
-
       FROM node:18-alpine
       WORKDIR /app
       COPY --from=build /app/build ./build
@@ -61,18 +58,13 @@ build-frontend:
       EXPOSE 4000
       CMD ["node", "server.js"]
       EOF
-
-    - mkdir -p temp/frontend
     - cp -r frontend/* temp/frontend/
     - cp temp/server.js temp/frontend/
-    - cd temp/frontend
-
-    - docker build \
-      --build-arg REACT_APP_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
-      --build-arg REACT_APP_API_URL="/api" \
-      -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA \
-      -f ../Dockerfile.frontend .
-
+    - docker build
+      --build-arg REACT_APP_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID"
+      --build-arg REACT_APP_API_URL="/api"
+      -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
+      -f temp/Dockerfile.frontend temp/frontend
     - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
     - docker tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/frontend:latest
     - docker push $CI_REGISTRY_IMAGE/frontend:latest
@@ -82,13 +74,10 @@ build-frontend:
 # -----------------------------
 build-backend:
   stage: build
-  image: docker:20.10.16
   tags:
     - swarm
   script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-
-    - mkdir -p temp
+    - mkdir -p temp/backend
     - |
       cat > temp/Dockerfile.backend << 'EOF'
       FROM node:18-alpine
@@ -99,12 +88,8 @@ build-backend:
       EXPOSE 5000
       CMD ["node", "server.js"]
       EOF
-
-    - mkdir -p temp/backend
     - cp -r backend/* temp/backend/
-    - cd temp/backend
-
-    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -f ../Dockerfile.backend .
+    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -f temp/Dockerfile.backend temp/backend
     - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
     - docker tag $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/backend:latest
     - docker push $CI_REGISTRY_IMAGE/backend:latest
@@ -114,18 +99,10 @@ build-backend:
 # -----------------------------
 build-nginx:
   stage: build
-  image: docker:20.10.16
   tags:
     - swarm
   script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-
-    - mkdir -p temp/nginx
-
-    - cp nginx/* temp/nginx/ || true
-    - cd temp/nginx
-
-    - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA .
+    - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA ./nginx
     - docker push $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
     - docker tag $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/nginx:latest
     - docker push $CI_REGISTRY_IMAGE/nginx:latest
@@ -135,7 +112,6 @@ build-nginx:
 # -----------------------------
 deploy:
   stage: deploy
-  image: docker:20.10.16
   tags:
     - swarm
   only:
@@ -143,7 +119,6 @@ deploy:
   environment:
     name: production
   script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker stack deploy --with-registry-auth -c docker-compose.prod.yml myapp
     - sleep 15
     - docker service ls
