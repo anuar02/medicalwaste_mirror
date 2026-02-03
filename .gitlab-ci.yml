@@ -4,17 +4,25 @@ stages:
 
 variables:
   DOCKER_DRIVER: overlay2
-  # This tells the Docker CLI where to find the Docker-in-Docker service
   DOCKER_HOST: tcp://docker:2375
-  # Disabling TLS for simplicity in internal CI networking
   DOCKER_TLS_CERTDIR: ""
 
 default:
   image: docker:20.10.16
   services:
     - name: docker:20.10.16-dind
-      alias: docker
+      alias: docker  # This ensures the hostname 'docker' works
   before_script:
+    # Wait until the docker daemon is actually ready
+    - |
+      for i in $(seq 1 30); do
+        if docker info >/dev/null 2>&1; then
+          echo "Docker daemon is ready!"
+          break
+        fi
+        echo "Waiting for Docker daemon..."
+        sleep 1
+      done
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
 
 # -----------------------------
