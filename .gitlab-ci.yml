@@ -357,13 +357,10 @@ deploy:
     - swarm
   script:
     - echo "Logging in to registry..."
-    - echo "$CI_REGISTRY_PASSWORD" | docker login \
-      -u "$CI_REGISTRY_USER" \
-      --password-stdin "$CI_REGISTRY"
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
 
     - echo "Deploying stack..."
-    - docker stack deploy --with-registry-auth \
-      -c docker-compose.prod.yml myapp
+    - docker stack deploy --with-registry-auth -c docker-compose.prod.yml myapp
 
     - echo "Waiting for services..."
     - sleep 15
@@ -376,4 +373,5 @@ deploy:
     - main
   environment:
     name: production
+
 
