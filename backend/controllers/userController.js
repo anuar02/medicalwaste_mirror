@@ -236,7 +236,8 @@ const getDepartments = asyncHandler(async (req, res) => {
  * Update user role (admin only)
  */
 const updateUserRole = asyncHandler(async (req, res, next) => {
-    const { userId, role } = req.body;
+    const { userId } = req.params; // Get from URL
+    const { role } = req.body;     // Get from JSON body
 
     // Check if valid role
     if (!['user', 'admin', 'supervisor'].includes(role)) {

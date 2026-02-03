@@ -88,12 +88,10 @@ router.get('/', getAllUsers);
 
 // Update user role
 router.patch(
-    '/role',
+    '/:userId/role',
     [
-        body('userId').isMongoId().withMessage('Invalid user ID'),
-        body('role')
-            .isIn(['user', 'admin', 'supervisor'])
-            .withMessage('Invalid role')
+        param('userId').isMongoId().withMessage('Invalid user ID'), // Use param, not body
+        body('role').isIn(['user', 'admin', 'supervisor']).withMessage('Invalid role')
     ],
     validateRequest,
     updateUserRole
@@ -103,7 +101,7 @@ router.patch(
 router.patch(
     '/:userId/deactivate',
     [
-        body('userId').isMongoId().withMessage('Invalid user ID')
+        param('userId').isMongoId().withMessage('Invalid user ID') // Check URL param
     ],
     validateRequest,
     deactivateUser
@@ -113,7 +111,7 @@ router.patch(
 router.patch(
     '/:userId/activate',
     [
-        body('userId').isMongoId().withMessage('Invalid user ID')
+        param('userId').isMongoId().withMessage('Invalid user ID') // Check URL param
     ],
     validateRequest,
     activateUser
