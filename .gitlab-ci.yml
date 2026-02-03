@@ -481,10 +481,14 @@ deploy:
       echo "Logging in to registry..."
       echo $2 | docker login --username $1 --password-stdin $3
       
+      # 1. Clean up unused cache/images BEFORE pulling to ensure enough disk space
+      echo "Pre-deploy cleanup..."
+      docker system prune -f
+      
       echo "Pulling latest images..."
-      docker pull ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA} || echo "Backend pull failed, continuing..."
-      docker pull ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA} || echo "Frontend pull failed, continuing..."
-      docker pull ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA} || echo "Nginx pull failed, continuing..."
+      docker pull ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
+      docker pull ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
+      docker pull ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
       
       echo "Deploying stack..."
       docker stack deploy --with-registry-auth -c docker-compose.prod.yml myapp
@@ -492,22 +496,14 @@ deploy:
       echo "Waiting for services to start..."
       sleep 15
       
+      # 2. Clean up old images AFTER deployment is successful
+      echo "Post-deploy cleanup..."
+      docker system prune -f
+      
       echo "Verifying deployment..."
       docker service ls
-      
-      echo "Checking service status..."
-      docker service ps myapp_backend --no-trunc | head -5
-      docker service ps myapp_frontend --no-trunc | head -5
-      docker service ps myapp_nginx --no-trunc | head -5
-      
-      echo "Checking backend logs..."
-      docker service logs --tail 10 myapp_backend || true
-      
       echo "Deployment completed!"
       EOF
-    - chmod +x deploy.sh
-    - scp docker-compose.prod.yml deploy.sh ${SSH_USER}@${SWARM_MANAGER}:~/
-    - ssh ${SSH_USER}@${SWARM_MANAGER} "./deploy.sh $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD $CI_REGISTRY"
   only:
     - main
   environment:
