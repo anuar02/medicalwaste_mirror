@@ -469,27 +469,34 @@ deploy:
       #!/bin/sh
       set -e
       
-      echo "Cleaning registry and pulling new images..."
-      echo $2 | docker login --username $1 --password-stdin $3
+      # Assign arguments to readable variables
+      REGISTRY_USER=$1
+      REGISTRY_PASS=$2
+      REGISTRY_URL=$3
+      IMAGE_BASE=$4
+      COMMIT_SHA=$5
       
-      # CRITICAL: Clean up before pull. If disk is full, the pull will freeze the EC2.
+      echo "Logging in to $REGISTRY_URL..."
+      echo "$REGISTRY_PASS" | docker login --username "$REGISTRY_USER" --password-stdin "$REGISTRY_URL"
+      
+      echo "Cleaning up old data to save RAM/Disk..."
       docker system prune -f
       
-      docker pull ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
-      docker pull ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
-      docker pull ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
+      echo "Pulling images for commit $COMMIT_SHA..."
+      docker pull ${IMAGE_BASE}/backend:${COMMIT_SHA}
+      docker pull ${IMAGE_BASE}/frontend:${COMMIT_SHA}
+      docker pull ${IMAGE_BASE}/nginx:${COMMIT_SHA}
       
       echo "Deploying stack..."
       docker stack deploy --with-registry-auth -c docker-compose.prod.yml myapp
       
       echo "Post-deploy cleanup..."
       sleep 20
-      docker image prune -a -f
+      docker image prune -f
       EOF
 
     # Execute on server
     - scp docker-compose.prod.yml $SSH_USER@$SWARM_MANAGER:~/docker-compose.prod.yml
     - scp deploy.sh $SSH_USER@$SWARM_MANAGER:~/deploy.sh
-    - ssh $SSH_USER@$SWARM_MANAGER "bash ~/deploy.sh $CI_REGISTRY_USER '$CI_REGISTRY_PASSWORD' $CI_REGISTRY"
-  only:
+    - ssh $SSH_USER@$SWARM_MANAGER "bash ~/deploy.sh '$CI_REGISTRY_USER' '$CI_REGISTRY_PASSWORD' '$CI_REGISTRY' '$CI_REGISTRY_IMAGE' '$CI_COMMIT_SHA'"  only:
     - main
