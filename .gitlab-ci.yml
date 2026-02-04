@@ -6,7 +6,7 @@ variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
 
-# Build images separately to avoid context issues
+# --- FRONTEND BUILD ---
 build-frontend:
   stage: build
   image: docker:20.10.16
@@ -14,11 +14,6 @@ build-frontend:
     - docker:20.10.16-dind
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-
-    # Debug environment variables
-    - echo "GOOGLE_CLIENT_ID available:" $([ -n "$GOOGLE_CLIENT_ID" ] && echo "YES" || echo "NO")
-
-    # Create a proper server.js file first
     - mkdir -p temp
     - |
       cat > temp/server.js << 'EOF'
@@ -26,97 +21,41 @@ build-frontend:
       const path = require("path");
       const app = express();
       const PORT = process.env.PORT || 4000;
-
-      // Health check endpoint
-      app.get("/health", (req, res) => {
-        res.status(200).send("OK");
-      });
-
-      // Serve static files from the React build
+      app.get("/health", (req, res) => res.status(200).send("OK"));
       app.use(express.static(path.join(__dirname, "build")));
-
-      // Handle React routing, return all requests to React app
-      app.get("*", (req, res) => {
-        res.sendFile(path.join(__dirname, "build", "index.html"));
-      });
-
-      // Make sure to listen on all interfaces
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Frontend server running on port ${PORT}`);
-      });
+      app.get("*", (req, res) => res.sendFile(path.join(__dirname, "build", "index.html")));
+      app.listen(PORT, "0.0.0.0", () => console.log(`Frontend running on ${PORT}`));
       EOF
-
-    # Create simple, working Dockerfile
     - |
       cat > temp/Dockerfile.frontend << 'EOF'
-      # Build stage
       FROM node:18-alpine as build
-
       WORKDIR /app
-
-      # Copy package files
       COPY package*.json ./
-
-      # Install dependencies - use npm ci if package-lock exists, otherwise npm install
       RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
-
-      # Copy application code
       COPY . .
-
-      # Build arguments for React environment variables
       ARG REACT_APP_GOOGLE_CLIENT_ID
       ARG REACT_APP_API_URL
-
-      # Set as environment variables for build
       ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID
       ENV REACT_APP_API_URL=$REACT_APP_API_URL
-      ENV CI=false
-      ENV GENERATE_SOURCEMAP=false
-
-      # Build the application
       RUN npm run build
-
-      # Production stage
       FROM node:18-alpine
-
       WORKDIR /app
-
-      # Copy build files
       COPY --from=build /app/build ./build
-      
-      # Copy our prewritten server.js
       COPY server.js .
-
-      # Install express for serving
-      RUN npm init -y && \
-          npm install express@4.18.2
-
-      # Expose port
+      RUN npm init -y && npm install express@4.18.2
       EXPOSE 4000
-
-      # Start the server
       CMD ["node", "server.js"]
       EOF
-
-    # Copy the repo contents to our temp directory
     - mkdir -p temp/frontend
-    - cp -r frontend/* temp/frontend/ || echo "No frontend files to copy"
-
-    # Copy our server.js to the build context
+    - cp -r frontend/* temp/frontend/ || echo "No files"
     - cp temp/server.js temp/frontend/
-
-    # Build the Docker image with build arguments
     - cd temp/frontend
-    - docker build
-      --build-arg REACT_APP_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID"
-      --build-arg REACT_APP_API_URL="/api"
-      -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
-      -f ../Dockerfile.frontend .
+    - docker build --build-arg REACT_APP_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" --build-arg REACT_APP_API_URL="/api" -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -f ../Dockerfile.frontend .
     - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
     - docker tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/frontend:latest
     - docker push $CI_REGISTRY_IMAGE/frontend:latest
-    - cd ../..
 
+# --- BACKEND BUILD ---
 build-backend:
   stage: build
   image: docker:20.10.16
@@ -124,47 +63,27 @@ build-backend:
     - docker:20.10.16-dind
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-
-    # Create the modified Dockerfile for backend - WITHOUT overriding server.js
     - mkdir -p temp
     - |
       cat > temp/Dockerfile.backend << 'EOF'
       FROM node:18-alpine
-
-      # Create app directory
       WORKDIR /app
-
-      # Copy package files
       COPY package*.json ./
-
-      # Install dependencies
       RUN npm ci --only=production || npm install --production
-
-      # Make sure logs directory exists
       RUN mkdir -p logs
-
-      # Copy application code
       COPY . .
-
-      # Expose the API port
       EXPOSE 5000
-
-      # Start the application
       CMD ["node", "server.js"]
       EOF
-
-    # Copy the repo contents to our temp directory
     - mkdir -p temp/backend
-    - cp -r backend/* temp/backend/ || echo "No backend files to copy"
-
-    # Build the Docker image - using original server.js from repo
+    - cp -r backend/* temp/backend/ || echo "No files"
     - cd temp/backend
     - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -f ../Dockerfile.backend .
     - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
     - docker tag $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/backend:latest
     - docker push $CI_REGISTRY_IMAGE/backend:latest
-    - cd ../..
 
+# --- NGINX BUILD ---
 build-nginx:
   stage: build
   image: docker:20.10.16
@@ -172,184 +91,48 @@ build-nginx:
     - docker:20.10.16-dind
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-
-    # Create Nginx config file
     - mkdir -p temp/nginx
     - |
       cat > temp/nginx/default.conf.template << 'EOF'
-      # HTTP server - redirect to HTTPS
-      server {
-        listen 8080;
-        server_name app.medicalwaste.kz api.medicalwaste.kz;
-        return 301 https://$server_name$request_uri;
-      }
-      
+      server { listen 8080; server_name app.medicalwaste.kz api.medicalwaste.kz; return 301 https://$server_name$request_uri; }
       server {
           listen 8443 ssl;
           server_name app.medicalwaste.kz;
-
-          # SSL certificates
           ssl_certificate /etc/letsencrypt/live/app.medicalwaste.kz/fullchain.pem;
           ssl_certificate_key /etc/letsencrypt/live/app.medicalwaste.kz/privkey.pem;
-          ssl_protocols TLSv1.2 TLSv1.3;
-          ssl_ciphers HIGH:!aNULL:!MD5;
-          ssl_prefer_server_ciphers on;
-
-          # Health check
-          location = /health {
-              access_log off;
-              return 200 "healthy\n";
-          }
-
-          # CORS for Capacitor
-          set $cors_origin "";
-          if ($http_origin = "https://localhost")         { set $cors_origin $http_origin; }
-          if ($http_origin = "http://localhost")          { set $cors_origin $http_origin; }
-          if ($http_origin = "capacitor://localhost")     { set $cors_origin $http_origin; }
-          if ($http_origin = "https://app.medicalwaste.kz") { set $cors_origin $http_origin; }
-
-          # API requests
-          location ^~ /api/ {
-
-              # CORS headers
-              add_header 'Access-Control-Allow-Origin'  $cors_origin always;
-              add_header 'Vary'                         'Origin'     always;
-              add_header 'Access-Control-Allow-Credentials' 'true'    always;
-              add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-              add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, X-Requested-With' always;
-              add_header 'Access-Control-Max-Age' '3600' always;
-
-              if ($request_method = OPTIONS) {
-                  return 204;
-              }
-
+          location /api/ {
               proxy_pass http://${BACKEND_HOST}:5000;
-              proxy_http_version 1.1;
-              proxy_set_header Upgrade $http_upgrade;
-              proxy_set_header Connection 'upgrade';
               proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              proxy_set_header Origin $http_origin;
-              proxy_cache_bypass $http_upgrade;
           }
-
-          # Frontend
           location / {
               proxy_pass http://${FRONTEND_HOST}:4000;
-              proxy_http_version 1.1;
-              proxy_set_header Upgrade $http_upgrade;
-              proxy_set_header Connection 'upgrade';
               proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              proxy_cache_bypass $http_upgrade;
-          }
-      }
-
-      # HTTPS server
-      server {
-          listen 8443 ssl;
-          server_name api.medicalwaste.kz;
-
-          ssl_certificate /etc/letsencrypt/live/api.medicalwaste.kz/fullchain.pem;
-          ssl_certificate_key /etc/letsencrypt/live/api.medicalwaste.kz/privkey.pem;
-          ssl_protocols TLSv1.2 TLSv1.3;
-          ssl_ciphers HIGH:!aNULL:!MD5;
-          ssl_prefer_server_ciphers on;
-
-          # CORS
-          set $cors_origin "";
-          if ($http_origin = "https://localhost")         { set $cors_origin $http_origin; }
-          if ($http_origin = "http://localhost")          { set $cors_origin $http_origin; }
-          if ($http_origin = "capacitor://localhost")     { set $cors_origin $http_origin; }
-          if ($http_origin = "https://app.medicalwaste.kz") { set $cors_origin $http_origin; }
-          if ($http_origin = "https://medicalwaste.kz")   { set $cors_origin $http_origin; }
-
-          # Direct API access (no /api prefix)
-          location / {
-              add_header 'Access-Control-Allow-Origin'  $cors_origin always;
-              add_header 'Vary'                         'Origin'     always;
-              add_header 'Access-Control-Allow-Credentials' 'true'    always;
-              add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
-              add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, X-Requested-With' always;
-              add_header 'Access-Control-Max-Age' '3600' always;
-
-              if ($request_method = OPTIONS) {
-                  return 204;
-              }
-
-              proxy_pass http://${BACKEND_HOST}:5000;
-              proxy_http_version 1.1;
-              proxy_set_header Upgrade $http_upgrade;
-              proxy_set_header Connection 'upgrade';
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              proxy_set_header Origin $http_origin;
-              proxy_cache_bypass $http_upgrade;
           }
       }
       EOF
-
-    # Create enhanced entrypoint script with debugging
     - |
       cat > temp/nginx/docker-entrypoint.sh << 'EOF'
       #!/bin/sh
-      set -e
-
-      # Debug - print environment variables
-      echo "Environment variables:"
-      echo "FRONTEND_HOST: ${FRONTEND_HOST}"
-      echo "BACKEND_HOST: ${BACKEND_HOST}"
-      echo "SERVER_NAME: ${SERVER_NAME}"
-
-      # Replace environment variables in the config
       envsubst '${FRONTEND_HOST} ${BACKEND_HOST} ${SERVER_NAME}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
-
-      # Debug - print the generated config
-      echo "Generated Nginx config:"
-      cat /etc/nginx/conf.d/default.conf
-
-      # Test nginx configuration
-      echo "Testing Nginx configuration..."
-      nginx -t
-
-      # Start nginx
       exec "$@"
       EOF
-
-    # Create Dockerfile for Nginx
     - |
       cat > temp/nginx/Dockerfile << 'EOF'
       FROM nginx:1.25-alpine
-      
-      # Install dependencies
       RUN apk add --no-cache gettext bash
-      
-      # Copy our configuration files
       COPY default.conf.template /etc/nginx/conf.d/default.conf.template
       COPY docker-entrypoint.sh /docker-entrypoint.sh
-      
-      # Make entrypoint executable
       RUN chmod +x /docker-entrypoint.sh
-      
-      # Use our custom entrypoint
       ENTRYPOINT ["/docker-entrypoint.sh"]
       CMD ["nginx", "-g", "daemon off;"]
       EOF
-
-    # Build the Docker image
     - cd temp/nginx
     - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA -f Dockerfile .
     - docker push $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
     - docker tag $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/nginx:latest
     - docker push $CI_REGISTRY_IMAGE/nginx:latest
-    - cd ../..
 
+# --- DEPLOYMENT ---
 deploy:
   stage: deploy
   image: alpine:latest
@@ -375,16 +158,10 @@ deploy:
           image: $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
           deploy:
             replicas: 1
-            placement:
-              constraints: [node.hostname == ip-10-0-1-166]
-            resources:
-              limits:
-                memory: 150M  # Prevents frontend from spiking
-            restart_policy:
-              condition: on-failure # Don't restart if crashing repeatedly
-              delay: 10s
-          networks:
-            - myapp_app-network
+            placement: { constraints: [node.hostname == ip-10-0-1-166] }
+            resources: { limits: { memory: 150M } }
+            restart_policy: { condition: on-failure, delay: 10s }
+          networks: [myapp_app-network]
           environment:
             - PORT=4000
             - REACT_APP_API_URL=/api
@@ -395,16 +172,10 @@ deploy:
           image: $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
           deploy:
             replicas: 1
-            placement:
-              constraints: [node.hostname == ip-10-0-1-166]
-            resources:
-              limits:
-                memory: 250M # Node backend limit
-            restart_policy:
-              condition: on-failure
-              delay: 10s
-          networks:
-            - myapp_app-network
+            placement: { constraints: [node.hostname == ip-10-0-1-166] }
+            resources: { limits: { memory: 250M } }
+            restart_policy: { condition: on-failure, delay: 10s }
+          networks: [myapp_app-network]
           environment:
             - PORT=5000
             - MONGODB_URI=mongodb://myapp_mongodb:27017/trashbin_db
@@ -422,35 +193,21 @@ deploy:
           image: mongo:4.4
           deploy:
             replicas: 1
-            placement:
-              constraints: [node.hostname == ip-10-0-1-166]
-            resources:
-              limits:
-                memory: 350M # MongoDB is hungry, give it the most
-            restart_policy:
-              condition: on-failure
-              delay: 15s
-          volumes:
-            - mongodb_data:/data/db
-          networks:
-            - myapp_app-network
+            placement: { constraints: [node.hostname == ip-10-0-1-166] }
+            resources: { limits: { memory: 350M } }
+            restart_policy: { condition: on-failure, delay: 15s }
+          volumes: [mongodb_data:/data/db]
+          networks: [myapp_app-network]
       
         nginx:
           image: $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
           deploy:
             replicas: 1
-            placement:
-              constraints: [node.hostname == ip-10-0-1-166]
-            resources:
-              limits:
-                memory: 64M # Nginx is light
-          ports:
-            - "80:8080"
-            - "443:8443"
-          volumes:
-            - /etc/letsencrypt:/etc/letsencrypt:ro
-          networks:
-            - myapp_app-network
+            placement: { constraints: [node.hostname == ip-10-0-1-166] }
+            resources: { limits: { memory: 64M } }
+          ports: ["80:8080", "443:8443"]
+          volumes: ["/etc/letsencrypt:/etc/letsencrypt:ro"]
+          networks: [myapp_app-network]
           environment:
             - FRONTEND_HOST=myapp_frontend
             - BACKEND_HOST=myapp_backend
@@ -468,35 +225,19 @@ deploy:
       cat > deploy.sh << 'EOF'
       #!/bin/sh
       set -e
-      
-      # Assign arguments to readable variables
-      REGISTRY_USER=$1
-      REGISTRY_PASS=$2
-      REGISTRY_URL=$3
-      IMAGE_BASE=$4
-      COMMIT_SHA=$5
-      
-      echo "Logging in to $REGISTRY_URL..."
+      REGISTRY_USER=$1; REGISTRY_PASS=$2; REGISTRY_URL=$3; IMAGE_BASE=$4; COMMIT_SHA=$5
       echo "$REGISTRY_PASS" | docker login --username "$REGISTRY_USER" --password-stdin "$REGISTRY_URL"
-      
-      echo "Cleaning up old data to save RAM/Disk..."
       docker system prune -f
-      
-      echo "Pulling images for commit $COMMIT_SHA..."
       docker pull ${IMAGE_BASE}/backend:${COMMIT_SHA}
       docker pull ${IMAGE_BASE}/frontend:${COMMIT_SHA}
       docker pull ${IMAGE_BASE}/nginx:${COMMIT_SHA}
-      
-      echo "Deploying stack..."
       docker stack deploy --with-registry-auth -c docker-compose.prod.yml myapp
-      
-      echo "Post-deploy cleanup..."
-      sleep 20
+      sleep 10
       docker image prune -f
       EOF
 
-    # Execute on server
     - scp docker-compose.prod.yml $SSH_USER@$SWARM_MANAGER:~/docker-compose.prod.yml
     - scp deploy.sh $SSH_USER@$SWARM_MANAGER:~/deploy.sh
-    - ssh $SSH_USER@$SWARM_MANAGER "bash ~/deploy.sh '$CI_REGISTRY_USER' '$CI_REGISTRY_PASSWORD' '$CI_REGISTRY' '$CI_REGISTRY_IMAGE' '$CI_COMMIT_SHA'"  only:
+    - ssh $SSH_USER@$SWARM_MANAGER "bash ~/deploy.sh '$CI_REGISTRY_USER' '$CI_REGISTRY_PASSWORD' '$CI_REGISTRY' '$CI_REGISTRY_IMAGE' '$CI_COMMIT_SHA'"
+  only:
     - main
