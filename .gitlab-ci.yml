@@ -360,21 +360,12 @@ deploy:
     - build-frontend
     - build-backend
     - build-nginx
-  needs:
-    - build-frontend
-    - build-backend
-    - build-nginx
   before_script:
     - apk add --no-cache openssh-client
     - mkdir -p ~/.ssh
     - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
     - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
-    - echo "=== GitLab CI Variables Check ==="
-    - echo "JWT_SECRET is set:" $([ -n "$JWT_SECRET" ] && echo "YES" || echo "NO")
-    - echo "GOOGLE_CLIENT_ID is set:" $([ -n "$GOOGLE_CLIENT_ID" ] && echo "YES" || echo "NO")
-    - echo "CI_REGISTRY_IMAGE:" $CI_REGISTRY_IMAGE
-    - echo "CI_COMMIT_SHA:" $CI_COMMIT_SHA
   script:
     - |
       cat > docker-compose.prod.yml << EOF
@@ -385,12 +376,13 @@ deploy:
           deploy:
             replicas: 1
             placement:
-              constraints:
-                - node.hostname==ip-10-0-1-166
+              constraints: [node.hostname == ip-10-0-1-166]
+            resources:
+              limits:
+                memory: 150M  # Prevents frontend from spiking
             restart_policy:
-              condition: any
-              delay: 5s
-              max_attempts: 5
+              condition: on-failure # Don't restart if crashing repeatedly
+              delay: 10s
           networks:
             - myapp_app-network
           environment:
@@ -404,12 +396,13 @@ deploy:
           deploy:
             replicas: 1
             placement:
-              constraints:
-                - node.hostname==ip-10-0-1-166
+              constraints: [node.hostname == ip-10-0-1-166]
+            resources:
+              limits:
+                memory: 250M # Node backend limit
             restart_policy:
-              condition: any
-              delay: 5s
-              max_attempts: 5
+              condition: on-failure
+              delay: 10s
           networks:
             - myapp_app-network
           environment:
@@ -424,39 +417,38 @@ deploy:
             - FRONTEND_URL=$FRONTEND_URL
             - TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
             - BCRYPT_ROUNDS=12
-        
+      
         mongodb:
           image: mongo:4.4
           deploy:
             replicas: 1
             placement:
-              constraints:
-                - node.hostname==ip-10-0-1-166
+              constraints: [node.hostname == ip-10-0-1-166]
+            resources:
+              limits:
+                memory: 350M # MongoDB is hungry, give it the most
             restart_policy:
-              condition: any
-              delay: 5s
-              max_attempts: 5
+              condition: on-failure
+              delay: 15s
           volumes:
             - mongodb_data:/data/db
           networks:
             - myapp_app-network
-        
+      
         nginx:
           image: $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
           deploy:
             replicas: 1
             placement:
-              constraints:
-                - node.hostname==ip-10-0-1-166
-            restart_policy:
-              condition: any
-              delay: 5s
-              max_attempts: 5
+              constraints: [node.hostname == ip-10-0-1-166]
+            resources:
+              limits:
+                memory: 64M # Nginx is light
           ports:
-            - "80:8080"   # HTTP (redirects to HTTPS)
-            - "443:8443"  # HTTPS
+            - "80:8080"
+            - "443:8443"
           volumes:
-            - /etc/letsencrypt:/etc/letsencrypt:ro  # Mount SSL certificates
+            - /etc/letsencrypt:/etc/letsencrypt:ro
           networks:
             - myapp_app-network
           environment:
@@ -471,21 +463,18 @@ deploy:
       volumes:
         mongodb_data:
       EOF
-    - echo "=== Generated docker-compose.prod.yml content ==="
-    - head -50 docker-compose.prod.yml
+
     - |
       cat > deploy.sh << 'EOF'
       #!/bin/sh
       set -e
       
-      echo "Logging in to registry..."
+      echo "Cleaning registry and pulling new images..."
       echo $2 | docker login --username $1 --password-stdin $3
       
-      # 1. Clean up unused cache/images BEFORE pulling to ensure enough disk space
-      echo "Pre-deploy cleanup..."
+      # CRITICAL: Clean up before pull. If disk is full, the pull will freeze the EC2.
       docker system prune -f
       
-      echo "Pulling latest images..."
       docker pull ${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHA}
       docker pull ${CI_REGISTRY_IMAGE}/frontend:${CI_COMMIT_SHA}
       docker pull ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
@@ -493,18 +482,14 @@ deploy:
       echo "Deploying stack..."
       docker stack deploy --with-registry-auth -c docker-compose.prod.yml myapp
       
-      echo "Waiting for services to start..."
-      sleep 15
-      
-      # 2. Clean up old images AFTER deployment is successful
       echo "Post-deploy cleanup..."
-      docker system prune -f
-      
-      echo "Verifying deployment..."
-      docker service ls
-      echo "Deployment completed!"
+      sleep 20
+      docker image prune -a -f
       EOF
+
+    # Execute on server
+    - scp docker-compose.prod.yml $SSH_USER@$SWARM_MANAGER:~/docker-compose.prod.yml
+    - scp deploy.sh $SSH_USER@$SWARM_MANAGER:~/deploy.sh
+    - ssh $SSH_USER@$SWARM_MANAGER "bash ~/deploy.sh $CI_REGISTRY_USER '$CI_REGISTRY_PASSWORD' $CI_REGISTRY"
   only:
     - main
-  environment:
-    name: production
