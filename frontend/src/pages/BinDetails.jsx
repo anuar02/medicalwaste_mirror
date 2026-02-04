@@ -684,50 +684,6 @@ const BinDetails = () => {
                                 </div>
                             </div>
                         )}
-
-
-                        {/* Sensor data if available */}
-                        {(bin.temperature || bin.weight || bin.distance !== undefined) && (
-                            <InfoCard
-                                title="Показатели датчиков"
-                                items={[
-                                    ...(bin.distance !== undefined ? [{
-                                        label: 'Расстояние от датчика',
-                                        value: `${distance} см`,
-                                        icon: <Share2 className="h-4 w-4 text-slate-400"/>
-                                    }] : []),
-                                    ...(bin.distance !== undefined ? [{
-                                        label: 'Расчет заполненности',
-                                        value: `((${containerHeight} - ${distance}) / ${containerHeight}) × 100 = ${fullness.toFixed(1)}%`,
-                                        className: 'text-xs text-slate-500 font-mono'
-                                    }] : []),
-                                    ...(bin.temperature ? [{
-                                        label: 'Температура',
-                                        value: `${Number(bin.temperature).toFixed(1)}°C`,
-                                        icon: <Thermometer className="h-4 w-4 text-slate-400"/>
-                                    }] : []),
-                                    ...(bin.weight ? [{
-                                        label: 'Вес',
-                                        value: `${Number(bin.weight).toFixed(1)} кг`,
-                                        icon: <Weight className="h-4 w-4 text-slate-400"/>
-                                    }] : []),
-                                    {
-                                        label: 'Статус сети',
-                                        value: isOnline() ? (
-                                            <span className="flex items-center text-emerald-600">
-                                                <span className="mr-2 h-2 w-2 rounded-full bg-emerald-500"></span>
-                                                Онлайн
-                                            </span>
-                                        ) : (
-                                            <span className="flex items-center text-slate-500">
-                                                <span className="mr-2 h-2 w-2 rounded-full bg-slate-400"></span>
-                                                Офлайн
-                                            </span>
-                                        ),
-                                    },
-                                ]}
-                            />
-                        )}
                     </div>
                 </div>
 

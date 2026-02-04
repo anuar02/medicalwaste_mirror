@@ -204,7 +204,7 @@ const Register = () => {
                 setError(result.error || t('register.error'));
             } else {
                 // Success animation or redirect
-                navigate('/dashboard');
+                navigate('/');
             }
         } catch (err) {
             setError(t('register.tryError'));

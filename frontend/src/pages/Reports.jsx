@@ -29,8 +29,8 @@ const Reports = () => {
     const handleExportData = useCallback(async (format = 'csv') => {
         try {
             const response = await apiService.wasteBins.exportData(format, {
-                startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-                endDate: new Date().toISOString()
+                startDate: new Date(dateRange.from).toISOString(),
+                endDate: new Date(dateRange.to).toISOString()
             });
 
             const blob = response.data;

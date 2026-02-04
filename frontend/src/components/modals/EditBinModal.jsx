@@ -139,7 +139,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
                 {/* Header */}
                 <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-xl font-semibold text-slate-800">
-                        {t('binModals.editTitle', `Редактирование контейнера ${bin.binId}`)}
+                        {t('binModals.editTitle', { id: bin.binId })}
                     </h2>
                     <button
                         onClick={onClose}
