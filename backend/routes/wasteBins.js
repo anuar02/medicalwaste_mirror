@@ -672,8 +672,9 @@ router.get('/export/:format',
     param('format').isIn(['csv', 'xlsx', 'pdf']),
     query('startDate').optional().isISO8601(),
     query('endDate').optional().isISO8601(),
-    query('departments').optional(),
-    validateRequest,
+    query('departments').optional().toArray(), // Add .toArray()
+    query('binIds').optional().toArray(),      // Add this line
+    validateRequest, // <--- If this fails, it might return 404/400
     logActivity('data_export'),
     exportBinData
 );

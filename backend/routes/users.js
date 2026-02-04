@@ -88,11 +88,10 @@ router.get('/', getAllUsers);
 
 // Update user role
 router.patch(
-    '/role',
+    '/:userId/role', // Matches the frontend's /users/${userId}/role
     [
-        body('userId').isMongoId().withMessage('Invalid user ID'),
         body('role')
-            .isIn(['user', 'admin', 'supervisor'])
+            .isIn(['user', 'admin', 'supervisor', 'driver'])
             .withMessage('Invalid role')
     ],
     validateRequest,

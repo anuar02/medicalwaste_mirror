@@ -236,14 +236,16 @@ const getDepartments = asyncHandler(async (req, res) => {
  * Update user role (admin only)
  */
 const updateUserRole = asyncHandler(async (req, res, next) => {
-    const { userId, role } = req.body;
+    // 1. Get userId from params, role from body
+    const { userId } = req.params;
+    const { role } = req.body;
 
-    // Check if valid role
-    if (!['user', 'admin', 'supervisor'].includes(role)) {
-        return next(new AppError('Invalid role', 400));
+    // 2. Security check: Prevent an admin from demoting themselves (optional but recommended)
+    if (userId === req.user.id && role !== 'admin') {
+        return next(new AppError('You cannot change your own admin role', 400));
     }
 
-    // Find and update user
+    // 3. Update the user
     const user = await User.findByIdAndUpdate(
         userId,
         { role },
