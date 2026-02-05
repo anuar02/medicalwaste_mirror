@@ -6,7 +6,7 @@ variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
 
-# --- FRONTEND BUILD ---
+# --- FRONTEND BUILD (OPTIMIZED) ---
 build-frontend:
   stage: build
   image: docker:20.10.16
@@ -15,6 +15,7 @@ build-frontend:
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - mkdir -p temp
+    # 1. Create server.js for the production runner
     - |
       cat > temp/server.js << 'EOF'
       const express = require("express");
@@ -26,20 +27,32 @@ build-frontend:
       app.get("*", (req, res) => res.sendFile(path.join(__dirname, "build", "index.html")));
       app.listen(PORT, "0.0.0.0", () => console.log(`Frontend running on ${PORT}`));
       EOF
+    # 2. Optimized Multi-Stage Dockerfile
     - |
       cat > temp/Dockerfile.frontend << 'EOF'
+      # --- Stage 1: Build ---
       FROM node:18-alpine as build
       WORKDIR /app
+      # Copy package files first to leverage Docker Cache
       COPY package*.json ./
+      # Install dependencies (only if package.json changes)
       RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      # Copy source code
       COPY . .
+      # Build Arguments
       ARG REACT_APP_GOOGLE_CLIENT_ID
       ARG REACT_APP_API_URL
       ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID
       ENV REACT_APP_API_URL=$REACT_APP_API_URL
+      ENV CI=false
+      # CRITICAL: Disables source maps to save ~40% Memory
+      ENV GENERATE_SOURCEMAP=false 
       RUN npm run build
+      
+      # --- Stage 2: Production ---
       FROM node:18-alpine
       WORKDIR /app
+      # Copy only built artifacts
       COPY --from=build /app/build ./build
       COPY server.js .
       RUN npm init -y && npm install express@4.18.2
@@ -55,7 +68,7 @@ build-frontend:
     - docker tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/frontend:latest
     - docker push $CI_REGISTRY_IMAGE/frontend:latest
 
-# --- BACKEND BUILD ---
+# --- BACKEND BUILD (OPTIMIZED) ---
 build-backend:
   stage: build
   image: docker:20.10.16
@@ -68,9 +81,11 @@ build-backend:
       cat > temp/Dockerfile.backend << 'EOF'
       FROM node:18-alpine
       WORKDIR /app
+      # Cache layer: Install deps first
       COPY package*.json ./
       RUN npm ci --only=production || npm install --production
       RUN mkdir -p logs
+      # Copy app code
       COPY . .
       EXPOSE 5000
       CMD ["node", "server.js"]
@@ -132,7 +147,7 @@ build-nginx:
     - docker tag $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/nginx:latest
     - docker push $CI_REGISTRY_IMAGE/nginx:latest
 
-# --- DEPLOYMENT ---
+# --- DEPLOYMENT (DISTRIBUTED) ---
 deploy:
   stage: deploy
   image: alpine:latest
@@ -158,8 +173,8 @@ deploy:
           image: $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
           deploy:
             replicas: 1
-            placement: { constraints: [node.hostname == ip-10-0-1-166] }
-            resources: { limits: { memory: 150M } }
+            # UNLOCKED: Can run on any worker node
+            resources: { limits: { memory: 250M } }
             restart_policy: { condition: on-failure, delay: 10s }
           networks: [myapp_app-network]
           environment:
@@ -172,8 +187,8 @@ deploy:
           image: $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
           deploy:
             replicas: 1
-            placement: { constraints: [node.hostname == ip-10-0-1-166] }
-            resources: { limits: { memory: 250M } }
+            # UNLOCKED: Can run on any worker node
+            resources: { limits: { memory: 300M } }
             restart_policy: { condition: on-failure, delay: 10s }
           networks: [myapp_app-network]
           environment:
@@ -193,6 +208,7 @@ deploy:
           image: mongo:4.4
           deploy:
             replicas: 1
+            # LOCKED: Must stay on Master for Data Persistence
             placement: { constraints: [node.hostname == ip-10-0-1-166] }
             resources: { limits: { memory: 350M } }
             restart_policy: { condition: on-failure, delay: 15s }
@@ -203,7 +219,7 @@ deploy:
           image: $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
           deploy:
             replicas: 1
-            placement: { constraints: [node.hostname == ip-10-0-1-166] }
+            # UNLOCKED: Can run on any worker node
             resources: { limits: { memory: 64M } }
           ports: ["80:8080", "443:8443"]
           volumes: ["/etc/letsencrypt:/etc/letsencrypt:ro"]
