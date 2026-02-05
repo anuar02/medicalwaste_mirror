@@ -16,6 +16,9 @@ const sendEmail = async (options) => {
     const transporter = nodemailer.createTransport({
         host: process.env.EMAIL_HOST,
         port: process.env.EMAIL_PORT,
+        // ВАЖНО: Если порт 465, secure должно быть true.
+        // Если 587 (TLS), то false.
+        secure: process.env.EMAIL_PORT === 465,
         auth: {
             user: process.env.EMAIL_USERNAME,
             pass: process.env.EMAIL_PASSWORD
