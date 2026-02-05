@@ -18,7 +18,7 @@ const sendEmail = async (options) => {
         port: process.env.EMAIL_PORT,
         // ВАЖНО: Если порт 465, secure должно быть true.
         // Если 587 (TLS), то false.
-        secure: process.env.EMAIL_PORT === 465,
+        secure: true,
         auth: {
             user: process.env.EMAIL_USERNAME,
             pass: process.env.EMAIL_PASSWORD
