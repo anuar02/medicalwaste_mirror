@@ -6,16 +6,22 @@ variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
 
-# --- FRONTEND BUILD (OPTIMIZED) ---
+# --- REUSABLE ANCHOR FOR DOCKER LOGIN ---
+.docker_login: &docker_login
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+# --- FRONTEND BUILD ---
 build-frontend:
   stage: build
   image: docker:20.10.16
   services:
     - docker:20.10.16-dind
+  rules:
+    - changes:
+        - frontend/**/*
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - *docker_login
     - mkdir -p temp
-    # 1. Create server.js for the production runner
     - |
       cat > temp/server.js << 'EOF'
       const express = require("express");
@@ -27,32 +33,23 @@ build-frontend:
       app.get("*", (req, res) => res.sendFile(path.join(__dirname, "build", "index.html")));
       app.listen(PORT, "0.0.0.0", () => console.log(`Frontend running on ${PORT}`));
       EOF
-    # 2. Optimized Multi-Stage Dockerfile
     - |
       cat > temp/Dockerfile.frontend << 'EOF'
-      # --- Stage 1: Build ---
       FROM node:18-alpine as build
       WORKDIR /app
-      # Copy package files first to leverage Docker Cache
       COPY package*.json ./
-      # Install dependencies (only if package.json changes)
       RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      # Copy source code
       COPY . .
-      # Build Arguments
       ARG REACT_APP_GOOGLE_CLIENT_ID
       ARG REACT_APP_API_URL
       ENV REACT_APP_GOOGLE_CLIENT_ID=$REACT_APP_GOOGLE_CLIENT_ID
       ENV REACT_APP_API_URL=$REACT_APP_API_URL
       ENV CI=false
-      # CRITICAL: Disables source maps to save ~40% Memory
       ENV GENERATE_SOURCEMAP=false 
       RUN npm run build
       
-      # --- Stage 2: Production ---
       FROM node:18-alpine
       WORKDIR /app
-      # Copy only built artifacts
       COPY --from=build /app/build ./build
       COPY server.js .
       RUN npm init -y && npm install express@4.18.2
@@ -63,29 +60,28 @@ build-frontend:
     - cp -r frontend/* temp/frontend/ || echo "No files"
     - cp temp/server.js temp/frontend/
     - cd temp/frontend
-    - docker build --build-arg REACT_APP_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" --build-arg REACT_APP_API_URL="/api" -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -f ../Dockerfile.frontend .
-    - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
-    - docker tag $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/frontend:latest
+    - docker build --build-arg REACT_APP_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" --build-arg REACT_APP_API_URL="/api" -t $CI_REGISTRY_IMAGE/frontend:latest -f ../Dockerfile.frontend .
     - docker push $CI_REGISTRY_IMAGE/frontend:latest
 
-# --- BACKEND BUILD (OPTIMIZED) ---
+# --- BACKEND BUILD ---
 build-backend:
   stage: build
   image: docker:20.10.16
   services:
     - docker:20.10.16-dind
+  rules:
+    - changes:
+        - backend/**/*
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - *docker_login
     - mkdir -p temp
     - |
       cat > temp/Dockerfile.backend << 'EOF'
       FROM node:18-alpine
       WORKDIR /app
-      # Cache layer: Install deps first
       COPY package*.json ./
       RUN npm ci --only=production || npm install --production
       RUN mkdir -p logs
-      # Copy app code
       COPY . .
       EXPOSE 5000
       CMD ["node", "server.js"]
@@ -93,9 +89,7 @@ build-backend:
     - mkdir -p temp/backend
     - cp -r backend/* temp/backend/ || echo "No files"
     - cd temp/backend
-    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -f ../Dockerfile.backend .
-    - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
-    - docker tag $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/backend:latest
+    - docker build -t $CI_REGISTRY_IMAGE/backend:latest -f ../Dockerfile.backend .
     - docker push $CI_REGISTRY_IMAGE/backend:latest
 
 # --- NGINX BUILD ---
@@ -104,8 +98,12 @@ build-nginx:
   image: docker:20.10.16
   services:
     - docker:20.10.16-dind
+  rules:
+    - changes:
+        - nginx/**/* # Assuming you have an nginx folder, or triggers on CI change
+        - .gitlab-ci.yml
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - *docker_login
     - mkdir -p temp/nginx
     - |
       cat > temp/nginx/default.conf.template << 'EOF'
@@ -142,22 +140,18 @@ build-nginx:
       CMD ["nginx", "-g", "daemon off;"]
       EOF
     - cd temp/nginx
-    - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA -f Dockerfile .
-    - docker push $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
-    - docker tag $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/nginx:latest
+    - docker build -t $CI_REGISTRY_IMAGE/nginx:latest -f Dockerfile .
     - docker push $CI_REGISTRY_IMAGE/nginx:latest
 
-# --- DEPLOYMENT (DISTRIBUTED) ---
+# --- DEPLOYMENT ---
 deploy:
   stage: deploy
   image: alpine:latest
   variables:
     SWARM_MANAGER: $NEW_SERVER_IP
     SSH_USER: "ubuntu"
-  dependencies:
-    - build-frontend
-    - build-backend
-    - build-nginx
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   before_script:
     - apk add --no-cache openssh-client
     - mkdir -p ~/.ssh
@@ -170,12 +164,11 @@ deploy:
       version: '3.8'
       services:
         frontend:
-          image: $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
+          image: $CI_REGISTRY_IMAGE/frontend:latest
           deploy:
             replicas: 1
-            # UNLOCKED: Can run on any worker node
             resources: { limits: { memory: 250M } }
-            restart_policy: { condition: on-failure, delay: 10s }
+            restart_policy: { condition: on-failure }
           networks: [myapp_app-network]
           environment:
             - PORT=4000
@@ -184,12 +177,11 @@ deploy:
             - REACT_APP_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
       
         backend:
-          image: $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
+          image: $CI_REGISTRY_IMAGE/backend:latest
           deploy:
             replicas: 1
-            # UNLOCKED: Can run on any worker node
             resources: { limits: { memory: 300M } }
-            restart_policy: { condition: on-failure, delay: 10s }
+            restart_policy: { condition: on-failure }
           networks: [myapp_app-network]
           environment:
             - PORT=5000
@@ -213,19 +205,15 @@ deploy:
           image: mongo:4.4
           deploy:
             replicas: 1
-            # LOCKED: Must stay on Master for Data Persistence
-            placement: { constraints: [node.hostname == ip-10-0-1-166] }
+            placement: { constraints: [node.role == manager] }
             resources: { limits: { memory: 350M } }
-            restart_policy: { condition: on-failure, delay: 15s }
           volumes: [mongodb_data:/data/db]
           networks: [myapp_app-network]
       
         nginx:
-          image: $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
+          image: $CI_REGISTRY_IMAGE/nginx:latest
           deploy:
             replicas: 1
-            # UNLOCKED: Can run on any worker node
-            resources: { limits: { memory: 64M } }
           ports: ["80:8080", "443:8443"]
           volumes: ["/etc/letsencrypt:/etc/letsencrypt:ro"]
           networks: [myapp_app-network]
@@ -246,19 +234,21 @@ deploy:
       cat > deploy.sh << 'EOF'
       #!/bin/sh
       set -e
-      REGISTRY_USER=$1; REGISTRY_PASS=$2; REGISTRY_URL=$3; IMAGE_BASE=$4; COMMIT_SHA=$5
+      REGISTRY_USER=$1; REGISTRY_PASS=$2; REGISTRY_URL=$3; IMAGE_BASE=$4
       echo "$REGISTRY_PASS" | docker login --username "$REGISTRY_USER" --password-stdin "$REGISTRY_URL"
-      docker system prune -f
-      docker pull ${IMAGE_BASE}/backend:${COMMIT_SHA}
-      docker pull ${IMAGE_BASE}/frontend:${COMMIT_SHA}
-      docker pull ${IMAGE_BASE}/nginx:${COMMIT_SHA}
+      
+      # Pull latest versions of everything
+      docker pull ${IMAGE_BASE}/backend:latest
+      docker pull ${IMAGE_BASE}/frontend:latest
+      docker pull ${IMAGE_BASE}/nginx:latest
+      
+      # Swarm will compare image digests. It will ONLY restart services where 'latest' has a new digest.
       docker stack deploy --with-registry-auth -c docker-compose.prod.yml myapp
+      
       sleep 10
       docker image prune -f
       EOF
 
     - scp docker-compose.prod.yml $SSH_USER@$SWARM_MANAGER:~/docker-compose.prod.yml
     - scp deploy.sh $SSH_USER@$SWARM_MANAGER:~/deploy.sh
-    - ssh $SSH_USER@$SWARM_MANAGER "bash ~/deploy.sh '$CI_REGISTRY_USER' '$CI_REGISTRY_PASSWORD' '$CI_REGISTRY' '$CI_REGISTRY_IMAGE' '$CI_COMMIT_SHA'"
-  only:
-    - main
+    - ssh $SSH_USER@$SWARM_MANAGER "bash ~/deploy.sh '$CI_REGISTRY_USER' '$CI_REGISTRY_PASSWORD' '$CI_REGISTRY' '$CI_REGISTRY_IMAGE'"
