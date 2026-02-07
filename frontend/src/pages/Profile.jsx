@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { User, Mail, Key, Save, AlertCircle, CheckCircle, Eye, EyeOff, Building, MessageCircle, Bell, BellOff, Send } from 'lucide-react';
+import { User, Mail, Key, Save, AlertCircle, CheckCircle, Eye, EyeOff, Building, MessageCircle, Bell, BellOff, Send, Phone } from 'lucide-react';
 import toast from 'react-hot-toast';
 import apiService from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,7 @@ import Loader from '../components/ui/Loader';
 
 const Profile = () => {
     const { user } = useAuth();
+    const serverPhoneRef = useRef('');
 
     // Profile form state
     const [profileData, setProfileData] = useState({
@@ -30,6 +31,13 @@ const Profile = () => {
         chatId: '',
     });
 
+    // Phone verification state
+    const [phoneData, setPhoneData] = useState({
+        phoneNumber: '',
+        code: '',
+        verified: false
+    });
+
     // Telegram connection status state
     const [telegramStatus, setTelegramStatus] = useState({
         connected: false,
@@ -42,20 +50,34 @@ const Profile = () => {
     const [profileFormError, setProfileFormError] = useState('');
     const [passwordFormError, setPasswordFormError] = useState('');
     const [telegramFormError, setTelegramFormError] = useState('');
+    const [phoneFormError, setPhoneFormError] = useState('');
 
     // Fetch user details
     const { data: userData, isLoading: userLoading, error: userError, refetch: refetchUser } = useQuery({
         queryKey: ['userProfile'],
         queryFn: () => apiService.users.getProfile(),
         onSuccess: (data) => {
-            const user = data.data.data.user;
+            const user = data?.data?.data?.user || data?.data?.user;
+            if (!user) return;
             setProfileData({
                 username: user.username || '',
                 email: user.email || '',
                 department: user.department || '',
             });
+            setPhoneData((prev) => ({
+                ...prev,
+                phoneNumber: user.phoneNumber || '',
+                verified: user.phoneNumberVerified || false
+            }));
+            serverPhoneRef.current = user.phoneNumber || '';
         },
     });
+
+    const serverUser = userData?.data?.data?.user || userData?.data?.user || null;
+    const phoneVerified = serverUser?.phoneNumberVerified ?? phoneData.verified;
+    const displayEmail = serverUser?.email || profileData.email || '—';
+    const displayPhone = serverUser?.phoneNumber || phoneData.phoneNumber || '—';
+    const displayDepartment = serverUser?.department || profileData.department || '—';
 
 // Fetch departments for dropdown
     const { data: departmentsData } = useQuery({
@@ -165,6 +187,60 @@ const Profile = () => {
         }
     );
 
+    const updatePhoneMutation = useMutation({
+        mutationFn: (data) => apiService.users.updatePhone(data),
+        onSuccess: (response) => {
+            toast.success('Телефон обновлен');
+            const updatedUser = response?.data?.data?.user;
+            if (updatedUser) {
+                serverPhoneRef.current = updatedUser.phoneNumber || '';
+                setPhoneData((prev) => ({
+                    ...prev,
+                    phoneNumber: updatedUser.phoneNumber || '',
+                    verified: updatedUser.phoneNumberVerified || false
+                }));
+            }
+            setPhoneFormError('');
+            refetchUser();
+        },
+        onError: (error) => {
+            setPhoneFormError(error.response?.data?.message || 'Ошибка при обновлении телефона');
+        }
+    });
+
+    const startPhoneVerificationMutation = useMutation({
+        mutationFn: (data) => apiService.users.startPhoneVerification(data),
+        onSuccess: () => {
+            toast.success('Код подтверждения отправлен');
+            setPhoneFormError('');
+        },
+        onError: (error) => {
+            setPhoneFormError(error.response?.data?.message || 'Ошибка при отправке кода');
+        }
+    });
+
+    const checkPhoneVerificationMutation = useMutation({
+        mutationFn: (data) => apiService.users.checkPhoneVerification(data),
+        onSuccess: (response) => {
+            toast.success('Телефон подтвержден');
+            const updatedUser = response?.data?.data?.user;
+            if (updatedUser?.phoneNumber) {
+                serverPhoneRef.current = updatedUser.phoneNumber;
+            }
+            setPhoneData((prev) => ({
+                ...prev,
+                phoneNumber: updatedUser?.phoneNumber || prev.phoneNumber,
+                verified: updatedUser?.phoneNumberVerified || false,
+                code: ''
+            }));
+            setPhoneFormError('');
+            refetchUser();
+        },
+        onError: (error) => {
+            setPhoneFormError(error.response?.data?.message || 'Ошибка подтверждения телефона');
+        }
+    });
+
     // Function to check Telegram connection status - now using the dedicated getStatus endpoint
     const checkTelegramStatus = async () => {
         try {
@@ -231,6 +307,17 @@ const Profile = () => {
         });
     };
 
+    const handlePhoneChange = (e) => {
+        const { name, value } = e.target;
+        const normalizedValue = value.trim();
+        const normalizedServerValue = (serverPhoneRef.current || '').trim();
+        setPhoneData((prev) => ({
+            ...prev,
+            [name]: value,
+            verified: name === 'phoneNumber' && normalizedValue !== normalizedServerValue ? false : prev.verified
+        }));
+    };
+
     // Handle profile form submission
     const handleProfileSubmit = async (e) => {
         e.preventDefault();
@@ -289,6 +376,26 @@ const Profile = () => {
         sendTestNotificationMutation.mutate();
     };
 
+    const handleStartPhoneVerification = (e) => {
+        e.preventDefault();
+        setPhoneFormError('');
+        if (!phoneData.phoneNumber) {
+            setPhoneFormError('Введите номер телефона');
+            return;
+        }
+        startPhoneVerificationMutation.mutate({ phoneNumber: phoneData.phoneNumber });
+    };
+
+    const handleCheckPhoneVerification = (e) => {
+        e.preventDefault();
+        setPhoneFormError('');
+        if (!phoneData.code) {
+            setPhoneFormError('Введите код подтверждения');
+            return;
+        }
+        checkPhoneVerificationMutation.mutate({ phoneNumber: phoneData.phoneNumber, code: phoneData.code });
+    };
+
     // Loading state for user data
     if (userLoading) {
         return <Loader text="Загрузка профиля..." />;
@@ -318,16 +425,75 @@ const Profile = () => {
         'Реанимация',
     ];
 
-    return (
-        <div className="container mx-auto p-4">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-slate-800">Мой профиль</h1>
-                <p className="text-sm text-slate-500">
-                    Управление личными данными и настройками безопасности
-                </p>
-            </div>
+    const initials = (profileData.username || user?.username || 'U')
+        .slice(0, 2)
+        .toUpperCase();
+    const profileTheme = {
+        '--profile-ink': '#0f172a',
+        '--profile-muted': '#475569',
+        '--profile-accent': '#0ea5a4',
+        '--profile-accent-soft': '#ccfbf1',
+        '--profile-warm': '#fef3c7',
+        '--profile-sand': '#f8fafc',
+        '--profile-card': '#ffffff',
+        '--profile-shadow': '0 18px 45px rgba(15, 23, 42, 0.08)'
+    };
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    return (
+        <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#e0f2fe,_transparent_55%),radial-gradient(circle_at_80%_20%,_#fef3c7,_transparent_45%)] py-6" style={profileTheme}>
+            <div className="container mx-auto px-4">
+                <div className="mb-8 rounded-2xl bg-[var(--profile-card)] p-6 shadow-[var(--profile-shadow)]">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--profile-accent-soft)] text-xl font-semibold text-[var(--profile-ink)]">
+                                {initials}
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-semibold text-[var(--profile-ink)]">Мой профиль</h1>
+                                <p className="text-sm text-[var(--profile-muted)]">
+                                    Обновляйте личные данные и подтверждайте телефон
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <span className="rounded-full bg-[var(--profile-warm)] px-3 py-1 text-xs font-medium text-[var(--profile-ink)]">
+                                Роль: {serverUser?.role || user?.role || 'user'}
+                            </span>
+                            <span className={`rounded-full px-3 py-1 text-xs font-medium ${phoneVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                Телефон: {phoneVerified ? 'Подтвержден' : 'Не подтвержден'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-xl border border-slate-100 bg-[var(--profile-sand)] p-4">
+                            <p className="text-xs uppercase tracking-wide text-[var(--profile-muted)]">Email</p>
+                            <p className="mt-2 text-sm font-medium text-[var(--profile-ink)]">
+                                {displayEmail}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-[var(--profile-sand)] p-4">
+                            <p className="text-xs uppercase tracking-wide text-[var(--profile-muted)]">Телефон</p>
+                            <p className="mt-2 text-sm font-medium text-[var(--profile-ink)]">
+                                {displayPhone}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-[var(--profile-sand)] p-4">
+                            <p className="text-xs uppercase tracking-wide text-[var(--profile-muted)]">Отделение</p>
+                            <p className="mt-2 text-sm font-medium text-[var(--profile-ink)]">
+                                {displayDepartment}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-[var(--profile-sand)] p-4">
+                            <p className="text-xs uppercase tracking-wide text-[var(--profile-muted)]">Статус</p>
+                            <p className="mt-2 text-sm font-medium text-[var(--profile-ink)]">
+                                {serverUser?.active ? 'Активен' : 'Отключен'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 {/* Profile Information */}
                 <div className="overflow-hidden rounded-xl bg-white shadow-sm">
                     <div className="border-b border-slate-100 px-6 py-4">
@@ -552,6 +718,90 @@ const Profile = () => {
                     </div>
                 </div>
 
+                {/* Phone Verification */}
+                <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+                    <div className="border-b border-slate-100 px-6 py-4 flex justify-between items-center">
+                        <div>
+                            <h2 className="text-lg font-semibold text-slate-800">Телефон и подтверждение</h2>
+                            <p className="text-sm text-slate-500">
+                                Номер нужен для SMS/WhatsApp уведомлений
+                            </p>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-xs font-medium ${phoneVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {phoneVerified ? 'Подтвержден' : 'Не подтвержден'}
+                        </div>
+                    </div>
+
+                    <div className="p-6">
+                        {phoneFormError && (
+                            <div className="mb-4 flex items-center rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+                                <AlertCircle className="mr-2 h-4 w-4" />
+                                <p>{phoneFormError}</p>
+                            </div>
+                        )}
+
+                        <form onSubmit={handleStartPhoneVerification} className="space-y-4">
+                            <div>
+                                <label htmlFor="phoneNumber" className="mb-1 block text-sm font-medium text-slate-700">
+                                    Номер телефона
+                                </label>
+                                <div className="relative">
+                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                    <Phone className="h-4 w-4" />
+                                  </span>
+                                    <input
+                                        id="phoneNumber"
+                                        name="phoneNumber"
+                                        type="tel"
+                                        value={phoneData.phoneNumber}
+                                        onChange={handlePhoneChange}
+                                        className="block w-full rounded-lg border border-slate-200 pl-10 pr-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
+                                        placeholder="+77051234567"
+                                        disabled={updatePhoneMutation.isLoading || startPhoneVerificationMutation.isLoading || checkPhoneVerificationMutation.isLoading}
+                                    />
+                                </div>
+                                <p className="mt-1 text-xs text-slate-500">Формат E.164, например +77051234567</p>
+                            </div>
+
+                            <Button
+                                type="submit"
+                                color="teal"
+                                isLoading={startPhoneVerificationMutation.isLoading}
+                                disabled={!phoneData.phoneNumber}
+                            >
+                                Отправить код
+                            </Button>
+                        </form>
+
+                        {!phoneVerified && (
+                            <form onSubmit={handleCheckPhoneVerification} className="mt-6 space-y-4">
+                                <div>
+                                    <label htmlFor="phoneCode" className="mb-1 block text-sm font-medium text-slate-700">
+                                        Код подтверждения
+                                    </label>
+                                    <input
+                                        id="phoneCode"
+                                        name="code"
+                                        type="text"
+                                        value={phoneData.code}
+                                        onChange={handlePhoneChange}
+                                        className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-700 focus:border-teal-500 focus:ring-teal-500"
+                                        placeholder="123456"
+                                        disabled={checkPhoneVerificationMutation.isLoading}
+                                    />
+                                </div>
+
+                                <Button
+                                    type="submit"
+                                    isLoading={checkPhoneVerificationMutation.isLoading}
+                                >
+                                    Подтвердить телефон
+                                </Button>
+                            </form>
+                        )}
+                    </div>
+                </div>
+
                 {/* Telegram Settings */}
                 <div className="lg:col-span-2 overflow-hidden rounded-xl bg-white shadow-sm">
                     <div className="border-b border-slate-100 px-6 py-4 flex justify-between items-center">
@@ -694,6 +944,7 @@ const Profile = () => {
                     </div>
                 </div>
             </div>
+        </div>
         </div>
     );
 };
