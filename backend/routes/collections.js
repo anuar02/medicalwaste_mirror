@@ -24,6 +24,7 @@ router.post('/start',
     [
         body('containerIds').optional().isArray({ min: 1 }).withMessage('containerIds must be a non-empty array'),
         body('containerIds.*').customSanitizer(v => (v == null ? v : String(v).trim())),
+        body('routeId').optional().isMongoId().withMessage('routeId must be a valid ID'),
         body('startLocation.coordinates').optional().isArray({ min: 2, max: 2 }).withMessage('Invalid coordinates'),
     ],
     validateRequest,

@@ -8,18 +8,20 @@ import {
     BarChart3,
     Settings,
     User,
-    Menu,
     X,
     Truck,
     Bell,
     UserCheck,
     Building2,
+    Factory,
     PackageX,
     Navigation as NavigationIcon,
     LogOut,
     ChevronDown,
     Wifi,
     Heart,
+    Route as RouteIcon,
+    ClipboardCheck,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -70,6 +72,132 @@ const safeCount = (data) => {
 // SIDEBAR COMPONENT
 // ============================================================================
 
+const buildNavItems = (t, hasActiveSession) => ([
+    {
+        icon: <LayoutDashboard className="h-5 w-5" />,
+        label: t('nav.dashboard'),
+        path: '/',
+        hideForDriver: true,
+        bottomNav: true,
+    },
+    {
+        icon: <Trash2 className="h-5 w-5" />,
+        label: t('nav.bins'),
+        path: '/bins',
+        hideForDriver: true,
+    },
+    {
+        icon: <MapPin className="h-5 w-5" />,
+        label: t('nav.map'),
+        path: '/map',
+        hideForDriver: true,
+        bottomNav: true,
+    },
+    {
+        icon: <BarChart3 className="h-5 w-5" />,
+        label: t('nav.reports'),
+        path: '/reports',
+        hideForDriver: true,
+        bottomNav: true,
+    },
+    {
+        icon: <PackageX className="h-5 w-5" />,
+        label: 'Неназначенные',
+        path: '/admin/unassigned-bins',
+        adminOnly: true,
+    },
+    {
+        icon: <User className="h-5 w-5" />,
+        label: t('nav.beDriver'),
+        path: '/driver/register',
+        userOnly: true,
+    },
+    {
+        icon: <Truck className="h-5 w-5" />,
+        label: 'Сбор',
+        path: '/driver/collection',
+        driverOnly: true,
+        showBadge: hasActiveSession,
+        bottomNav: true,
+    },
+    {
+        icon: <RouteIcon className="h-5 w-5" />,
+        label: 'Маршруты',
+        path: '/routes',
+        supervisorOnly: true,
+        bottomNav: true,
+    },
+    {
+        icon: <RouteIcon className="h-5 w-5" />,
+        label: 'Маршрут на сегодня',
+        path: '/driver/route',
+        driverOnly: true,
+        bottomNav: true,
+    },
+    {
+        icon: <ClipboardCheck className="h-5 w-5" />,
+        label: 'Акты передачи',
+        path: '/handoffs',
+        supervisorOnly: true,
+        bottomNav: true,
+    },
+    {
+        icon: <UserCheck className="h-5 w-5" />,
+        label: t('nav.driverVerification'),
+        path: '/admin/drivers',
+        adminOnly: true,
+    },
+    {
+        icon: <Building2 className="h-5 w-5" />,
+        label: t('nav.medicalCompanies'),
+        path: '/admin/companies',
+        adminOnly: true,
+    },
+    {
+        icon: <Factory className="h-5 w-5" />,
+        label: 'Заводы утилизации',
+        path: '/admin/incineration-plants',
+        supervisorOnly: true,
+    },
+    {
+        icon: <NavigationIcon className="h-5 w-5" />,
+        label: 'История маршрутов',
+        path: '/route-history',
+        hideForDriver: true,
+    },
+    {
+        icon: <Truck className="h-5 w-5" />,
+        label: t('nav.drivers'),
+        path: '/driver/dashboard',
+        driverOnly: true,
+        bottomNav: true,
+    },
+    {
+        icon: <Settings className="h-5 w-5" />,
+        label: t('nav.settings'),
+        path: '/settings',
+        adminOnly: true,
+    },
+    {
+        icon: <Heart className="h-5 w-5" />,
+        label: 'Здоровье Устройств',
+        path: '/device-health',
+        adminOnly: true,
+    },
+]);
+
+const filterNavItems = (items, { isAdmin, isSupervisor, userRole, isDriver }) => (
+    items.filter((item) => {
+        if (item.adminOnly && !isAdmin) return false;
+        if (item.supervisorOnly && !isSupervisor) return false;
+        if (item.userOnly && (isAdmin || userRole === 'driver')) return false;
+        if (item.driverOnly && !isDriver) return false;
+        if (item.driverOrAdmin && !(isDriver || isAdmin)) return false;
+        if (item.hideForDriver && isDriver) return false;
+        return true;
+    })
+);
+
 const Sidebar = React.memo(function Sidebar({
                                                 isMobile = false,
                                                 isOpen = false,
@@ -78,7 +206,7 @@ const Sidebar = React.memo(function Sidebar({
                                                 onToggleCollapse = () => {},
                                             }) {
     const { t } = useTranslation();
-    const { user, isAdmin } = useAuth();
+    const { user, isAdmin, isSupervisor } = useAuth();
     const { pathname } = useLocation();
     const [isHovered, setIsHovered] = useState(false);
 
@@ -99,95 +227,19 @@ const Sidebar = React.memo(function Sidebar({
 
     // Navigation items configuration
     const navItems = useMemo(
-        () => [
-            {
-                icon: <LayoutDashboard className="h-5 w-5" />,
-                label: t('nav.dashboard'),
-                path: '/',
-            },
-            {
-                icon: <Trash2 className="h-5 w-5" />,
-                label: t('nav.bins'),
-                path: '/bins',
-            },
-            {
-                icon: <MapPin className="h-5 w-5" />,
-                label: t('nav.map'),
-                path: '/map',
-            },
-            {
-                icon: <BarChart3 className="h-5 w-5" />,
-                label: t('nav.reports'),
-                path: '/reports',
-            },
-            {
-                icon: <PackageX className="h-5 w-5" />,
-                label: 'Неназначенные',
-                path: '/admin/unassigned-bins',
-                adminOnly: true,
-            },
-            {
-                icon: <User className="h-5 w-5" />,
-                label: t('nav.beDriver'),
-                path: '/driver/register',
-                userOnly: true,
-            },
-            {
-                icon: <Truck className="h-5 w-5" />,
-                label: 'Сбор',
-                path: '/driver/collection',
-                driverOnly: true,
-                showBadge: hasActiveSession,
-            },
-            {
-                icon: <UserCheck className="h-5 w-5" />,
-                label: t('nav.driverVerification'),
-                path: '/admin/drivers',
-                adminOnly: true,
-            },
-            {
-                icon: <Building2 className="h-5 w-5" />,
-                label: t('nav.medicalCompanies'),
-                path: '/admin/companies',
-                adminOnly: true,
-            },
-            {
-                icon: <NavigationIcon className="h-5 w-5" />,
-                label: 'История маршрутов',
-                path: '/route-history',
-            },
-            {
-                icon: <Truck className="h-5 w-5" />,
-                label: t('nav.drivers'),
-                path: '/driver/dashboard',
-                driverOnly: true,
-            },
-            {
-                icon: <Settings className="h-5 w-5" />,
-                label: t('nav.settings'),
-                path: '/settings',
-                adminOnly: true,
-            },
-            {
-                icon: <Heart className="h-5 w-5" />,
-                label: 'Здоровье Устройств',
-                path: '/device-health',
-                adminOnly: true,
-            },
-        ],
+        () => buildNavItems(t, hasActiveSession),
         [t, hasActiveSession]
     );
 
     // Filter navigation items based on user role
     const filteredNavItems = useMemo(() => {
-        return navItems.filter((item) => {
-            if (item.adminOnly && !isAdmin) return false;
-            if (item.userOnly && (isAdmin || user?.role === 'driver')) return false;
-            if (item.driverOnly && !isDriver) return false;
-            if (item.driverOrAdmin && !(isDriver || isAdmin)) return false;
-            return true;
+        return filterNavItems(navItems, {
+            isAdmin,
+            isSupervisor,
+            userRole: user?.role,
+            isDriver
         });
-    }, [navItems, isAdmin, user?.role, isDriver]);
+    }, [navItems, isAdmin, isSupervisor, user?.role, isDriver]);
 
     const shouldExpand = !isMobile && (isCollapsed ? isHovered : true);
 
@@ -337,7 +389,7 @@ const Sidebar = React.memo(function Sidebar({
 // HEADER COMPONENT
 // ============================================================================
 
-const Header = React.memo(function Header({ onMenuClick }) {
+const Header = React.memo(function Header({ showMenuButton, onMenuClick }) {
     const { user, logout } = useAuth();
     const { t, i18n } = useTranslation();
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -379,16 +431,24 @@ const Header = React.memo(function Header({ onMenuClick }) {
 
     return (
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 md:px-6">
-            {/* Mobile menu button */}
             <div className="flex items-center">
-                <button
-                    onClick={onMenuClick}
-                    className="mr-4 rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-500 md:hidden"
-                    aria-label={t('nav.openSidebar')}
-                    aria-controls="mobile-sidebar"
-                >
-                    <Menu className="h-5 w-5" />
-                </button>
+                {showMenuButton && (
+                    <button
+                        onClick={onMenuClick}
+                        className="mr-4 rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-500 md:hidden"
+                        aria-label={t('nav.openSidebar')}
+                        aria-controls="mobile-sidebar"
+                    >
+                        <span className="sr-only">{t('nav.openSidebar')}</span>
+                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path
+                                fillRule="evenodd"
+                                d="M3 5h14a1 1 0 010 2H3a1 1 0 010-2zm0 4h14a1 1 0 010 2H3a1 1 0 010-2zm0 4h14a1 1 0 010 2H3a1 1 0 010-2z"
+                                clipRule="evenodd"
+                            />
+                        </svg>
+                    </button>
+                )}
             </div>
 
             {/* Right side controls */}
@@ -470,17 +530,126 @@ const Header = React.memo(function Header({ onMenuClick }) {
     );
 });
 
+const BottomNav = React.memo(function BottomNav() {
+    const { t } = useTranslation();
+    const { user, isAdmin, isSupervisor } = useAuth();
+    const { pathname } = useLocation();
+
+    const isDriver =
+        user?.role === 'driver' && user?.verificationStatus === 'approved';
+    const isIncinerator =
+        user?.role === 'incinerator' || user?.role === 'incinerator_operator';
+
+    const { data: activeSessionData } = useQuery({
+        queryKey: ['activeCollectionSession'],
+        queryFn: () => apiService.collections.getActive(),
+        enabled: isDriver,
+        refetchInterval: 30_000,
+        retry: false,
+    });
+
+    const hasActiveSession =
+        activeSessionData?.data?.data?.session?.status === 'active';
+
+    const navItems = useMemo(
+        () => buildNavItems(t, hasActiveSession),
+        [t, hasActiveSession]
+    );
+
+    const filteredNavItems = useMemo(() => {
+        return filterNavItems(navItems, {
+            isAdmin,
+            isSupervisor,
+            userRole: user?.role,
+            isDriver
+        }).filter((item) => item.bottomNav);
+    }, [navItems, isAdmin, isSupervisor, user?.role, isDriver]);
+
+    if (!isDriver && !isIncinerator) return null;
+    if (pathname.startsWith('/driver/collection')) return null;
+    if (filteredNavItems.length + 1 > 5) return null;
+
+    return (
+        <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white md:hidden">
+            <div className="flex items-center justify-around gap-2 px-2 py-2">
+                {filteredNavItems.map((item) => (
+                    <NavLink
+                        key={item.path}
+                        to={item.path}
+                        className={({ isActive }) =>
+                            `flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-medium ${
+                                isActive
+                                    ? 'text-teal-700'
+                                    : 'text-slate-600'
+                            }`
+                        }
+                        end={item.path === '/'}
+                        title={item.label}
+                    >
+                        <div className="relative">
+                            {item.icon}
+                            {item.showBadge && (
+                                <span
+                                    className="absolute -right-1 -top-1 flex h-2 w-2"
+                                    aria-hidden="true"
+                                >
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                                </span>
+                            )}
+                        </div>
+                        <span className="truncate">{item.label}</span>
+                    </NavLink>
+                ))}
+                <NavLink
+                    to="/profile"
+                    className={({ isActive }) =>
+                        `flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-[11px] font-medium ${
+                            isActive
+                                ? 'text-teal-700'
+                                : 'text-slate-600'
+                        }`
+                    }
+                    title="Мой Профиль"
+                >
+                    <User className="h-5 w-5" />
+                    <span className="truncate">Профиль</span>
+                </NavLink>
+            </div>
+        </nav>
+    );
+});
+
 // ============================================================================
 // DASHBOARD LAYOUT COMPONENT
 // ============================================================================
 
 const DashboardLayout = () => {
-    const [isSidebarOpen, setSidebarOpen] = useState(false);
+    const { t } = useTranslation();
+    const { user, isAdmin, isSupervisor } = useAuth();
     const [isCollapsed, setIsCollapsed] = useState(true);
+    const [isSidebarOpen, setSidebarOpen] = useState(false);
 
+    const handleToggleCollapse = () => setIsCollapsed((prev) => !prev);
     const handleSidebarOpen = () => setSidebarOpen(true);
     const handleSidebarClose = () => setSidebarOpen(false);
-    const handleToggleCollapse = () => setIsCollapsed((prev) => !prev);
+
+    const isDriver =
+        user?.role === 'driver' && user?.verificationStatus === 'approved';
+    const isIncinerator =
+        user?.role === 'incinerator' || user?.role === 'incinerator_operator';
+
+    const bottomNavItems = useMemo(() => {
+        const items = buildNavItems(t, false);
+        return filterNavItems(items, {
+            isAdmin,
+            isSupervisor,
+            userRole: user?.role,
+            isDriver
+        }).filter((item) => item.bottomNav);
+    }, [t, isAdmin, isSupervisor, user?.role, isDriver]);
+
+    const showBottomNav = (isDriver || isIncinerator) && bottomNavItems.length + 1 <= 5;
 
     return (
         <div className="flex h-screen bg-slate-50">
@@ -492,30 +661,33 @@ const DashboardLayout = () => {
                 />
             </div>
 
-            {/* Mobile sidebar */}
-            <div id="mobile-sidebar" className="md:hidden">
-                <Sidebar
-                    isMobile
-                    isOpen={isSidebarOpen}
-                    onClose={handleSidebarClose}
-                />
-            </div>
+            {!showBottomNav && (
+                <>
+                    <div id="mobile-sidebar" className="md:hidden">
+                        <Sidebar
+                            isMobile
+                            isOpen={isSidebarOpen}
+                            onClose={handleSidebarClose}
+                        />
+                    </div>
 
-            {/* Mobile overlay */}
-            {isSidebarOpen && (
-                <div
-                    className="fixed inset-0 z-40 bg-black/50 md:hidden"
-                    onClick={handleSidebarClose}
-                    aria-hidden="true"
-                />
+                    {isSidebarOpen && (
+                        <div
+                            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+                            onClick={handleSidebarClose}
+                            aria-hidden="true"
+                        />
+                    )}
+                </>
             )}
 
             {/* Main content area */}
             <div className="flex flex-1 flex-col overflow-hidden">
-                <Header onMenuClick={handleSidebarOpen} />
-                <main className="flex-1 overflow-auto">
+                <Header showMenuButton={!showBottomNav} onMenuClick={handleSidebarOpen} />
+                <main className={`flex-1 overflow-auto ${showBottomNav ? 'pb-20' : ''} md:pb-0`}>
                     <Outlet />
                 </main>
+                {showBottomNav && <BottomNav />}
             </div>
         </div>
     );

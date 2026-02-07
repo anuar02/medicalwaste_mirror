@@ -33,6 +33,7 @@ const medicalCompanyRoutes = require('./routes/medicalCompanies');
 const gpsRoutes = require('./routes/gps');
 const deviceLogsRoutes = require('./routes/deviceLogs');
 const healthCheckRoutes = require('./routes/healthCheck');
+const routeRoutes = require('./routes/routes');
 
 const app = express();
 
@@ -175,6 +176,7 @@ app.use('/api/tracking', trackingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/collections', collectionRoutes);
+app.use('/api/routes', routeRoutes);
 
 // Lightweight health endpoint
 app.get('/api/health', (req, res) => {

@@ -56,7 +56,7 @@ const CompanyDetails = () => {
         isLoading: isLoadingStats
     } = useQuery({
         queryKey: ['companyStats', id],
-        queryFn: () => apiService.companies.getStats(id),
+        // queryFn: () => apiService.companies.getStats(id),
         select: (resp) => resp?.data?.data?.statistics || resp?.data?.statistics || {}
     });
 

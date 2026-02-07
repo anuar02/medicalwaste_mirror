@@ -243,7 +243,8 @@ const Map = ({
                  markers = [],
                  showRadius = false,
                  radiusInMeters = 500,
-                 historyPath = null
+                 historyPath = null,
+                 plannedPath = null
              }) => {
     // Fix for leaflet marker images - moved inside the component
     useEffect(() => {
@@ -317,6 +318,17 @@ const Map = ({
                 />
             )}
 
+            {plannedPath && plannedPath.length > 0 && (
+                <Polyline
+                    positions={plannedPath}
+                    pathOptions={{
+                        color: '#10b981',
+                        weight: 4,
+                        opacity: 0.7
+                    }}
+                />
+            )}
+
             {/* Show radius circle if enabled */}
             {showRadius && (
                 <Circle
@@ -352,7 +364,8 @@ Map.propTypes = {
     ),
     showRadius: PropTypes.bool,
     radiusInMeters: PropTypes.number,
-    historyPath: PropTypes.array
+    historyPath: PropTypes.array,
+    plannedPath: PropTypes.array
 };
 
 export default Map;

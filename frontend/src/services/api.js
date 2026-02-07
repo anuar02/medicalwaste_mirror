@@ -524,10 +524,50 @@ const apiService = {
         stop: (data) => api.post('/collections/stop', data),
         recordLocation: (data) => api.post('/collections/location', data),
         addContainer: (data) => api.post('/collections/add-container', data),
+        markVisited: (data) => api.post('/collections/mark-visited', data),
         getActive: () => api.get('/collections/active'),
         getActiveDrivers: () => api.get('/collections/active-drivers'),
         getHistory: (driverId, params) => api.get(`/collections/history/${driverId || ''}`, { params }),
         getSessionRoute: (sessionId) => api.get(`/collections/session/${sessionId}/route`)
+    },
+
+    routes: {
+        getAll: createCompatibleMethod((params = {}) => api.get('/routes', { params })),
+        getToday: createCompatibleMethod(() => api.get('/routes/today')),
+        getById: createCompatibleMethod((id) => api.get(`/routes/${id}`)),
+        create: createCompatibleMethod((data) => api.post('/routes', data)),
+        update: createCompatibleMethod((id, data) => api.patch(`/routes/${id}`, data)),
+        delete: createCompatibleMethod((id) => api.delete(`/routes/${id}`)),
+        optimize: createCompatibleMethod((id) => api.post(`/routes/${id}/optimize`)),
+        getStats: createCompatibleMethod((id) => api.get(`/routes/${id}/stats`)),
+        getComparison: createCompatibleMethod((id, sessionId) => api.get(`/routes/${id}/comparison/${sessionId}`)),
+        getSuggestions: createCompatibleMethod(() => api.get('/routes/suggestions')),
+        approveSuggestion: createCompatibleMethod((id, data) => api.post(`/routes/suggestions/${id}/approve`, data))
+    },
+
+    handoffs: {
+        getAll: createCompatibleMethod((params = {}) => api.get('/handoffs', { params })),
+        getById: createCompatibleMethod((id) => api.get(`/handoffs/${id}`)),
+        create: createCompatibleMethod((data) => api.post('/handoffs', data)),
+        confirm: createCompatibleMethod((id) => api.patch(`/handoffs/${id}/confirm`)),
+        dispute: createCompatibleMethod((id, data) => api.patch(`/handoffs/${id}/dispute`, data)),
+        resolve: createCompatibleMethod((id, data) => api.patch(`/handoffs/${id}/resolve`, data)),
+        resendNotification: createCompatibleMethod((id) => api.post(`/handoffs/${id}/resend-notification`)),
+        getChain: createCompatibleMethod((sessionId) => api.get(`/handoffs/chain/${sessionId}`)),
+        getPublic: createCompatibleMethod((token) => api.get(`/handoffs/public/${token}`)),
+        confirmByToken: createCompatibleMethod((token) => api.post(`/handoffs/confirm/${token}`))
+    },
+
+    notifications: {
+        getHandoffLogs: createCompatibleMethod((handoffId) => api.get(`/notifications/handoff/${handoffId}`))
+    },
+
+    incinerationPlants: {
+        getAll: createCompatibleMethod((params = {}) => api.get('/incineration-plants', { params })),
+        getById: createCompatibleMethod((id) => api.get(`/incineration-plants/${id}`)),
+        create: createCompatibleMethod((data) => api.post('/incineration-plants', data)),
+        update: createCompatibleMethod((id, data) => api.patch(`/incineration-plants/${id}`, data)),
+        delete: createCompatibleMethod((id) => api.delete(`/incineration-plants/${id}`))
     },
 
     // Structured medical company endpoints (as per your original)

@@ -3,6 +3,7 @@ const CollectionSession = require('../models/CollectionSession');
 const DriverLocation = require('../models/DriverLocation');
 const WasteBin = require('../models/WasteBin');
 const User = require('../models/User');
+const Route = require('../models/Route');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
 const mongoose = require('mongoose');
@@ -11,7 +12,7 @@ const mongoose = require('mongoose');
  * Start a new collection session
  */
 const startCollection = asyncHandler(async (req, res, next) => {
-    const { containerIds = [], startLocation } = req.body;
+    const { containerIds = [], startLocation, routeId } = req.body;
     const driverId = req.user.id;
 
     // 1️⃣ Validate driver role and status
@@ -46,7 +47,36 @@ const startCollection = asyncHandler(async (req, res, next) => {
         }));
     }
 
-    // 4️⃣ Create session
+    // 4️⃣ Validate planned route if provided
+    let plannedRoute = null;
+    if (routeId) {
+        const route = await Route.findById(routeId).select('company assignedDriver status');
+        if (!route) {
+            return next(new AppError('Route not found', 404));
+        }
+        if (route.status !== 'active') {
+            return next(new AppError('Only active routes can be used for collection session', 400));
+        }
+
+        if (
+            route.assignedDriver &&
+            String(route.assignedDriver) !== String(driverId)
+        ) {
+            return next(new AppError('This route is assigned to another driver', 403));
+        }
+
+        if (
+            route.company &&
+            req.user.company &&
+            String(route.company) !== String(req.user.company)
+        ) {
+            return next(new AppError('Route belongs to another company', 403));
+        }
+
+        plannedRoute = route._id;
+    }
+
+    // 5️⃣ Create session
     const sessionId = `SESSION-${driverId}-${Date.now()}`;
 
     const session = await CollectionSession.create({
@@ -56,10 +86,11 @@ const startCollection = asyncHandler(async (req, res, next) => {
         status: 'active',
         selectedContainers: selected,
         startTime: new Date(),
-        startLocation: startLocation || null
+        startLocation: startLocation || null,
+        plannedRoute
     });
 
-    // 5️⃣ Log start location if provided
+    // 6️⃣ Log start location if provided
     if (startLocation?.coordinates) {
         await DriverLocation.create({
             driver: driverId,
@@ -69,10 +100,10 @@ const startCollection = asyncHandler(async (req, res, next) => {
         });
     }
 
-    // 6️⃣ Populate session containers
+    // 7️⃣ Populate session containers
     await session.populate('selectedContainers.container');
 
-    // 7️⃣ Return response
+    // 8️⃣ Return response
     res.status(201).json({
         status: 'success',
         data: { session },

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Geolocation } from '@capacitor/geolocation';
 import { KeepAwake } from '@capacitor-community/keep-awake';
@@ -12,7 +13,6 @@ import {
     MapPin,
     CheckCircle,
     Plus,
-    Navigation,
     Package,
     ArrowLeft,
     X,
@@ -20,9 +20,7 @@ import {
     Trash2,
     Search,
     Filter,
-    TrendingUp,
-    Clock,
-    Map as MapIcon
+    Clock
 } from 'lucide-react';
 import apiService from "../services/api";
 
@@ -39,6 +37,13 @@ const DriverCollection = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [locationUpdateCount, setLocationUpdateCount] = useState(0);
     const [showDebug, setShowDebug] = useState(false);
+    const [latestHandoff, setLatestHandoff] = useState(null);
+    const [pendingHandoffs, setPendingHandoffs] = useState([]);
+    const [sessionHandoffs, setSessionHandoffs] = useState([]);
+    const [incinerationPlantId, setIncinerationPlantId] = useState('');
+    const [incinerationPhone, setIncinerationPhone] = useState('');
+    const [incinerationSubmitting, setIncinerationSubmitting] = useState(false);
+    const [incinerationToken, setIncinerationToken] = useState('');
 
     // Refs to avoid closure issues
     const activeSessionRef = useRef(null);
@@ -50,6 +55,12 @@ const DriverCollection = () => {
     useEffect(() => {
         activeSessionRef.current = activeSession;
     }, [activeSession]);
+
+    useEffect(() => {
+        if (!activeSession?._id) return;
+        fetchLatestHandoff(activeSession._id);
+        fetchPendingHandoffs();
+    }, [activeSession?._id]);
 
     useEffect(() => {
         if (user?.role !== 'driver' || user?.verificationStatus !== 'approved') {
@@ -96,7 +107,7 @@ const DriverCollection = () => {
             if (session) {
                 setSelectedContainers(session.selectedContainers.map(c => c.container._id));
                 if (session.status === 'active') {
-                    console.log('🔄 Active session found, starting location tracking...');
+                    console.log('Active session found, starting location tracking...');
                     await startLocationTracking();
                 }
             }
@@ -104,6 +115,25 @@ const DriverCollection = () => {
             if (error.response?.status !== 404) {
                 console.error('Error fetching active session:', error);
             }
+        }
+    };
+
+    const handleManualVisited = async (containerId) => {
+        if (!activeSession?.sessionId) {
+            toast.error('Нет активной сессии');
+            return;
+        }
+        try {
+            const response = await apiService.collections.markVisited({
+                sessionId: activeSession.sessionId,
+                containerId
+            });
+            setActiveSession(response.data.data.session);
+            await fetchActiveSession();
+            toast.success('Контейнер отмечен как посещенный');
+        } catch (error) {
+            console.error('Manual visited error:', error);
+            toast.error('Не удалось отметить контейнер');
         }
     };
 
@@ -121,7 +151,7 @@ const DriverCollection = () => {
         const now = Date.now();
         const SEND_INTERVAL = 10000; // 10 seconds
 
-        console.log('📍 Got position update');
+        console.log('Got position update');
 
         if (!activeSessionRef.current) {
             console.warn('⚠️ No active session in ref, skipping location send');
@@ -161,8 +191,101 @@ const DriverCollection = () => {
         setLocationUpdateCount(prev => prev + 1);
     };
 
+    const fetchLatestHandoff = async (sessionObjectId) => {
+        try {
+            const response = await apiService.handoffs.getAll({
+                session: sessionObjectId
+            });
+            const handoffs = response?.data?.data?.handoffs || [];
+            setSessionHandoffs(handoffs);
+            if (handoffs.length > 0) {
+                setLatestHandoff(handoffs[0]);
+            }
+        } catch (error) {
+            console.warn('Failed to fetch handoffs:', error);
+        }
+    };
+
+    const fetchPendingHandoffs = async () => {
+        try {
+            const response = await apiService.handoffs.getAll({
+                status: 'confirmed_by_sender',
+                type: 'facility_to_driver'
+            });
+            setPendingHandoffs(response?.data?.data?.handoffs || []);
+        } catch (error) {
+            console.warn('Failed to fetch pending handoffs:', error);
+        }
+    };
+
+    const handleConfirmPendingHandoff = async (handoffId) => {
+        try {
+            await apiService.handoffs.confirm(handoffId);
+            toast.success('Акт подтвержден');
+            fetchPendingHandoffs();
+            if (activeSession?._id) {
+                fetchLatestHandoff(activeSession._id);
+            }
+        } catch (error) {
+            console.error('Confirm handoff error:', error);
+            toast.error('Не удалось подтвердить акт');
+        }
+    };
+
+    const handleIncinerationSubmit = async () => {
+        if (!activeSession) {
+            toast.error('Нет активной сессии');
+            return;
+        }
+        if (!step1Completed) {
+            toast.error('Сначала подтвердите передачу от объекта');
+            return;
+        }
+
+        const visitedContainers = activeSession.selectedContainers
+            ?.filter((item) => item.visited && item.container?._id)
+            .map((item) => item.container._id) || [];
+
+        if (visitedContainers.length === 0) {
+            toast.error('Нет посещенных контейнеров для передачи');
+            return;
+        }
+
+        if (!incinerationPlantId && !incinerationPhone) {
+            toast.error('Выберите завод или укажите номер получателя');
+            return;
+        }
+
+        setIncinerationSubmitting(true);
+        try {
+            const containersPayload = activeSession.selectedContainers
+                .filter((item) => item.visited && item.container?._id)
+                .map((item) => ({
+                    container: item.container._id,
+                    declaredWeight: item.collectedWeight || undefined
+                }));
+
+            const response = await apiService.handoffs.create({
+                sessionId: activeSession.sessionId,
+                type: 'driver_to_incinerator',
+                incinerationPlant: incinerationPlantId || undefined,
+                receiver: incinerationPhone ? { phone: incinerationPhone } : undefined,
+                containers: containersPayload
+            });
+
+            const token = response?.data?.data?.confirmationToken || '';
+            setIncinerationToken(token);
+            toast.success('Акт утилизации создан');
+        } catch (error) {
+            console.error('Incineration handoff error:', error);
+            toast.error('Не удалось создать акт утилизации');
+        } finally {
+            setIncinerationSubmitting(false);
+        }
+    };
+
     const startLocationTracking = async () => {
-        console.log('🚀 Starting location tracking...');
+        console.log('Starting location tracking...');
 
         try {
             if (Capacitor.isNativePlatform()) {
@@ -206,7 +329,7 @@ const DriverCollection = () => {
     };
 
     const stopLocationTracking = async () => {
-        console.log('🛑 Stopping location tracking...');
+        console.log('Stopping location tracking...');
 
         setIsTracking(false);
 
@@ -377,9 +500,41 @@ const DriverCollection = () => {
     const visitedCount = activeSession?.selectedContainers?.filter(c => c.visited).length || 0;
     const totalCount = activeSession?.selectedContainers?.length || selectedCount;
     const progress = totalCount > 0 ? Math.round((visitedCount / totalCount) * 100) : 0;
+    const driverProfileQuery = useQuery({
+        queryKey: ['driverProfile'],
+        queryFn: () => apiService.drivers.getDriverProfile(),
+        enabled: user?.role === 'driver' && !user?.company,
+        retry: false
+    });
+    const driverCompany = user?.company || driverProfileQuery.data?.data?.data?.driver?.medicalCompany || null;
+    const hasCompany = !!driverCompany;
+    const incinerationPlantsQuery = useQuery({
+        queryKey: ['incinerationPlantsActive'],
+        queryFn: () => apiService.incinerationPlants.getAll({ active: true }),
+        enabled: user?.role === 'driver'
+    });
+    const incinerationPlants = incinerationPlantsQuery.data?.data?.data?.plants || [];
+    const selectedPlant = incinerationPlants.find(
+        (plant) => String(plant._id) === String(incinerationPlantId)
+    );
+    const selectedOperator = selectedPlant?.operators?.find((operator) => operator.active !== false)
+        || selectedPlant?.operators?.[0] || null;
+    const step1Completed = sessionHandoffs.some(
+        (handoff) => handoff.type === 'facility_to_driver' && handoff.status === 'completed'
+    );
+    const step2Handoff = sessionHandoffs.find(
+        (handoff) => handoff.type === 'driver_to_incinerator'
+    );
+
+    useEffect(() => {
+        if (!selectedPlant) return;
+        if (!incinerationPhone && selectedOperator?.phone) {
+            setIncinerationPhone(selectedOperator.phone);
+        }
+    }, [selectedPlant, selectedOperator, incinerationPhone]);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+        <div className="min-h-screen bg-slate-50">
             {/* Mobile-optimized container */}
             <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 pb-28">
 
@@ -394,7 +549,7 @@ const DriverCollection = () => {
                         </button>
                         <div className="flex-1 min-w-0">
                             <h1 className="text-xl sm:text-3xl font-bold text-slate-800 truncate">
-                                {activeSession ? '🚛 Сбор в процессе' : '📋 Новый Сбор'}
+                                {activeSession ? 'Сбор в процессе' : 'Новый сбор'}
                             </h1>
                             {activeSession && (
                                 <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
@@ -405,18 +560,81 @@ const DriverCollection = () => {
                     </div>
                 </div>
 
+                <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p className="text-xs font-semibold text-slate-500">Компания</p>
+                            <p className="text-sm font-semibold text-slate-800">
+                                {driverCompany?.name || 'Не назначена'}
+                            </p>
+                            {driverCompany?.licenseNumber && (
+                                <p className="text-xs text-slate-500">Лицензия: {driverCompany.licenseNumber}</p>
+                            )}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                            {user?.vehicleInfo?.plateNumber
+                                ? `Транспорт: ${user.vehicleInfo.plateNumber}`
+                                : 'Транспорт не указан'}
+                        </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                        <span className={`rounded-full px-2 py-1 font-semibold ${
+                            user?.verificationStatus === 'approved'
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : user?.verificationStatus === 'rejected'
+                                    ? 'bg-red-50 text-red-700'
+                                    : 'bg-amber-50 text-amber-700'
+                        }`}>
+                            {user?.verificationStatus === 'approved'
+                                ? 'Верификация: одобрена'
+                                : user?.verificationStatus === 'rejected'
+                                    ? 'Верификация: отклонена'
+                                    : 'Верификация: ожидает'}
+                        </span>
+                        {user?.phoneNumber && (
+                            <span className="text-slate-500">Телефон: {user.phoneNumber}</span>
+                        )}
+                    </div>
+                </div>
+
+                {activeSession && (
+                    <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-3 text-xs">
+                            <div className={`rounded-full px-3 py-1 font-semibold ${
+                                step1Completed
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-amber-50 text-amber-700'
+                            }`}>
+                                1. Передача от объекта
+                            </div>
+                            <div className={`rounded-full px-3 py-1 font-semibold ${
+                                step2Handoff?.status === 'completed'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : step2Handoff
+                                        ? 'bg-blue-50 text-blue-700'
+                                        : 'bg-slate-100 text-slate-600'
+                            }`}>
+                                2. Утилизация
+                            </div>
+                            <span className="text-slate-500">
+                                Статус цепочки: {activeSession.handoffState?.stage || 'none'}
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Active Session Status Card */}
                 {activeSession && (
-                    <div className="mb-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-4 sm:p-6 shadow-xl text-white">
+                    <div className="mb-4 rounded-2xl bg-white border border-slate-200 p-4 sm:p-6 shadow-sm">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                             {/* Timer */}
                             <div className="flex items-center gap-3">
-                                <div className="rounded-full bg-white/20 p-3 backdrop-blur-sm">
+                                <div className="rounded-full bg-teal-50 p-3 text-teal-700">
                                     <Clock className="h-6 w-6" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-medium opacity-90">Время сбора</p>
-                                    <p className="text-2xl sm:text-3xl font-bold tracking-tight">
+                                    <p className="text-xs font-medium text-slate-500">Время сбора</p>
+                                    <p className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-800">
                                         {formatTime(sessionTime)}
                                     </p>
                                 </div>
@@ -425,21 +643,21 @@ const DriverCollection = () => {
                             {/* Tracking Status */}
                             <div className="flex flex-wrap items-center gap-3">
                                 {isTracking ? (
-                                    <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-2 rounded-full">
+                                    <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-2 rounded-full">
                                         <div className="relative flex h-2 w-2">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
                                         </div>
                                         <span className="text-xs font-semibold">GPS Активен</span>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-2 bg-red-500/30 backdrop-blur-sm px-3 py-2 rounded-full">
+                                    <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-3 py-2 rounded-full">
                                         <AlertCircle className="h-4 w-4" />
                                         <span className="text-xs font-semibold">GPS Выключен</span>
                                     </div>
                                 )}
 
-                                <div className="bg-white/20 backdrop-blur-sm px-3 py-2 rounded-full">
+                                <div className="bg-slate-100 px-3 py-2 rounded-full text-slate-600">
                                     <span className="text-xs font-semibold">{locationUpdateCount} точек</span>
                                 </div>
                             </div>
@@ -447,14 +665,14 @@ const DriverCollection = () => {
 
                         {/* Location Info */}
                         {currentLocation && (
-                            <div className="mt-4 pt-4 border-t border-white/20">
-                                <div className="flex items-start gap-2 text-xs sm:text-sm">
-                                    <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                            <div className="mt-4 pt-4 border-t border-slate-200">
+                                <div className="flex items-start gap-2 text-xs sm:text-sm text-slate-600">
+                                    <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5 text-slate-500" />
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-mono opacity-90 break-all">
+                                        <p className="font-mono break-all">
                                             {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
                                         </p>
-                                        <p className="text-xs opacity-75 mt-0.5">
+                                        <p className="text-xs text-slate-500 mt-0.5">
                                             Точность: ±{Math.round(currentLocation.accuracy)}м
                                         </p>
                                     </div>
@@ -465,12 +683,12 @@ const DriverCollection = () => {
                         {/* Progress Bar */}
                         <div className="mt-4">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-semibold opacity-90">Прогресс сбора</span>
-                                <span className="text-sm font-bold">{progress}%</span>
+                                <span className="text-xs font-semibold text-slate-500">Прогресс сбора</span>
+                                <span className="text-sm font-bold text-slate-800">{progress}%</span>
                             </div>
-                            <div className="w-full bg-white/20 rounded-full h-2.5 overflow-hidden">
+                            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
                                 <div
-                                    className="bg-white h-2.5 rounded-full transition-all duration-500 ease-out shadow-lg"
+                                    className="bg-emerald-500 h-2.5 rounded-full transition-all duration-500 ease-out"
                                     style={{ width: `${progress}%` }}
                                 ></div>
                             </div>
@@ -479,15 +697,18 @@ const DriverCollection = () => {
                 )}
 
                 {/* Containers Section */}
-                <div className="mb-4 rounded-2xl bg-white shadow-lg overflow-hidden">
+                <div className="mb-4 rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
                     {/* Header */}
-                    <div className="p-4 bg-gradient-to-r from-teal-50 to-blue-50 border-b border-slate-200">
+                    <div className="p-4 bg-slate-50 border-b border-slate-200">
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
                                 <Package className="h-5 w-5 text-teal-600" />
                                 <h3 className="text-base sm:text-lg font-bold text-slate-800">
-                                    Контейнеры ({selectedCount})
+                                    Контейнеры
                                 </h3>
+                                <span className="text-xs font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-full">
+                                    {activeSession ? `${visitedCount}/${totalCount}` : selectedCount}
+                                </span>
                             </div>
                             {!activeSession && (
                                 <button
@@ -607,7 +828,7 @@ const DriverCollection = () => {
                                                 key={container._id}
                                                 className={`flex items-center gap-3 rounded-xl p-3 transition-all ${
                                                     isVisited
-                                                        ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 shadow-sm'
+                                                        ? 'bg-emerald-50 border border-emerald-200'
                                                         : 'bg-slate-50 border border-slate-200 hover:border-slate-300'
                                                 }`}
                                             >
@@ -641,6 +862,15 @@ const DriverCollection = () => {
                                                             ✓
                                                         </span>
                                                     )}
+                                                    {!isVisited && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleManualVisited(container._id)}
+                                                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700"
+                                                        >
+                                                            подтвердить
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -658,6 +888,144 @@ const DriverCollection = () => {
                     </div>
                 </div>
 
+                {activeSession && (
+                    <div className="mb-4 space-y-3">
+                        {!hasCompany && (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                В аккаунте не указана компания. Обратитесь к супервайзеру для назначения.
+                            </div>
+                        )}
+                        {pendingHandoffs.length > 0 && (
+                            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <h3 className="text-sm font-semibold text-slate-800">Ожидают подтверждения</h3>
+                                <div className="mt-3 space-y-2">
+                                    {pendingHandoffs.map((handoff) => (
+                                        <div key={handoff._id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-xs">
+                                            <div>
+                                                <p className="font-semibold text-slate-800">
+                                                    {handoff.handoffId || handoff._id}
+                                                </p>
+                                                <p className="text-slate-500">
+                                                    Контейнеров: {handoff.totalContainers || 0} · Вес: {handoff.totalDeclaredWeight || 0} кг
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleConfirmPendingHandoff(handoff._id)}
+                                                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700"
+                                            >
+                                                Подтвердить
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {latestHandoff && (
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-semibold">Последний акт: {latestHandoff.handoffId || latestHandoff._id}</span>
+                                    <span className="text-xs uppercase">{latestHandoff.status}</span>
+                                </div>
+                                <div className="mt-1 text-xs text-emerald-700">
+                                    Контейнеров: {latestHandoff.totalContainers || 0} · Вес: {latestHandoff.totalDeclaredWeight || 0} кг
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                            <div className="px-4 py-3 border-b border-slate-200">
+                                <h3 className="text-sm font-semibold text-slate-800">Акт передачи</h3>
+                                <p className="text-xs text-slate-500">
+                                    Акт оформляет ответственный сотрудник объекта. Водитель подтверждает получение.
+                                </p>
+                            </div>
+                            <div className="p-4">
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                    Ожидайте акт от объекта или проверьте список «Ожидают подтверждения».
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                            <div className="px-4 py-3 border-b border-slate-200">
+                                <h3 className="text-sm font-semibold text-slate-800">Сдать на утилизацию</h3>
+                                <p className="text-xs text-slate-500">
+                                    Оформление передачи на инсенератор с публичной ссылкой подтверждения
+                                </p>
+                            </div>
+                            <div className="p-4 space-y-3">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                            Завод утилизации
+                                        </label>
+                                        <select
+                                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                                            value={incinerationPlantId}
+                                            onChange={(event) => setIncinerationPlantId(event.target.value)}
+                                        >
+                                            <option value="">Выберите завод</option>
+                                            {incinerationPlants.map((plant) => (
+                                                <option key={plant._id} value={plant._id}>
+                                                    {plant.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {selectedOperator?.name && (
+                                            <p className="mt-1 text-[11px] text-slate-500">
+                                                Оператор: {selectedOperator.name}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                            Телефон получателя
+                                        </label>
+                                        <input
+                                            type="tel"
+                                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                                            placeholder="+7..."
+                                            value={incinerationPhone}
+                                            onChange={(event) => setIncinerationPhone(event.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                                    Посещено контейнеров: {visitedCount}
+                                </div>
+                                {!step1Completed && (
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                        Сначала подтвердите акт передачи от объекта.
+                                    </div>
+                                )}
+                                {step2Handoff && (
+                                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                                        Акт утилизации: {step2Handoff.handoffId || step2Handoff._id} · {step2Handoff.status}
+                                    </div>
+                                )}
+
+                                {incinerationToken && (
+                                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+                                        <div className="font-semibold">Ссылка для подтверждения</div>
+                                        <div className="mt-1 break-all">
+                                            {`${window.location.origin}/confirm/${incinerationToken}`}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={handleIncinerationSubmit}
+                                    disabled={incinerationSubmitting || visitedCount === 0 || !step1Completed || !!step2Handoff}
+                                    className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                                >
+                                    {incinerationSubmitting ? 'Отправка...' : 'Создать акт утилизации'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Debug Info - Collapsible */}
                 {activeSession && (
                     <button
@@ -665,7 +1033,7 @@ const DriverCollection = () => {
                         className="w-full mb-4 rounded-xl bg-blue-50 border border-blue-200 p-3 text-left hover:bg-blue-100 transition-colors"
                     >
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-blue-800">🔧 Debug Info</span>
+                            <span className="text-xs font-semibold text-blue-800">Debug Info</span>
                             <span className="text-xs text-blue-600">{showDebug ? '▼' : '▶'}</span>
                         </div>
                         {showDebug && (

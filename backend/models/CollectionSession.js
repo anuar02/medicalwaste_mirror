@@ -77,6 +77,12 @@ const collectionSessionSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'DriverLocation'
     }],
+    plannedRoute: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Route',
+        default: null,
+        index: true
+    },
     totalDistance: {
         type: Number,
         default: 0 // in kilometers

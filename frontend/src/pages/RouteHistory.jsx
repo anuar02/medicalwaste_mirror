@@ -122,6 +122,14 @@ const RouteHistory = () => {
         refetchInterval: selectedRoute ? 15000 : false, // 15 seconds if active
     });
 
+    const plannedRouteId = routeDetailData?.data?.data?.session?.plannedRoute;
+    const plannedComparisonQuery = useQuery({
+        queryKey: ['routeComparison', plannedRouteId, selectedRoute],
+        queryFn: () => apiService.routes.getComparison(plannedRouteId, selectedRoute),
+        enabled: !!plannedRouteId && !!selectedRoute,
+        refetchInterval: plannedRouteId ? 30000 : false
+    });
+
     // When a route is selected, center map on it
     useEffect(() => {
         if (routeDetailData) {
@@ -155,6 +163,10 @@ const RouteHistory = () => {
             }
         }
     }, [routeDetailData]);
+
+    const plannedPath = plannedComparisonQuery.data?.data?.data?.plannedPath || [];
+    const comparison = plannedComparisonQuery.data?.data?.data?.comparison;
+    const plannedPathLatLng = plannedPath.map((point) => [point.lat, point.lng]);
 
     // Format time duration
     const formatDuration = (seconds) => {
@@ -586,6 +598,7 @@ const RouteHistory = () => {
                                     zoom={zoom}
                                     markers={getMapMarkers()}
                                     historyPath={getHistoryPath()}
+                                    plannedPath={plannedPathLatLng}
                                 />
                             </div>
                         ) : (
@@ -718,6 +731,58 @@ const RouteHistory = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            {comparison && (
+                                <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <h3 className="font-semibold text-slate-800 flex items-center">
+                                            <RouteIcon className="h-4 w-4 mr-2 text-emerald-600" />
+                                            План vs Факт
+                                        </h3>
+                                        {plannedComparisonQuery.isFetching && (
+                                            <span className="text-xs text-slate-500">Обновление данных...</span>
+                                        )}
+                                    </div>
+                                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                                        <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
+                                            <span className="text-slate-500">План контейнеров</span>
+                                            <span className="font-medium text-slate-800">
+                                                {comparison.plannedContainers?.length || 0}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
+                                            <span className="text-slate-500">Посещено</span>
+                                            <span className="font-medium text-emerald-600">
+                                                {comparison.visitedContainers?.length || 0}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
+                                            <span className="text-slate-500">Пропущено</span>
+                                            <span className="font-medium text-amber-600">
+                                                {comparison.missingContainers?.length || 0}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
+                                            <span className="text-slate-500">Лишние</span>
+                                            <span className="font-medium text-slate-800">
+                                                {comparison.extraContainers?.length || 0}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 md:col-span-2">
+                                            <span className="text-slate-500">Плановое время</span>
+                                            <span className="font-medium text-slate-800">
+                                                {comparison.plannedDuration || 0} мин
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 md:col-span-2">
+                                            <span className="text-slate-500">Отклонение</span>
+                                            <span className={`font-medium ${comparison.durationDelta > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                                {comparison.durationDelta || 0} мин
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Container Details Table */}
                             {selectedRouteDetail.selectedContainers && selectedRouteDetail.selectedContainers.length > 0 && (

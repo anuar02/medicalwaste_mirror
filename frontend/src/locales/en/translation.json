@@ -12,7 +12,7 @@
 		"devices": "Devices",
 		"beDriver": "Become a Driver",
 		"driverVerification": "Driver Verification",
-		"medicalCompanies": "Medical Companies",
+		"medicalCompanies": "Facilities",
 		"tracking": "Tracking",
 		"drivers": "Drivers",
 		"settings": "Settings",
@@ -467,5 +467,4 @@
 		"resetFilters": "Reset filters"
 	}
 }
-
 

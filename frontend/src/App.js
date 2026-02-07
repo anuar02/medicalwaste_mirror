@@ -20,6 +20,7 @@ import DriverCollection from "./pages/DriverCollection";
 import ErrorBoundary from "./utils/errorBoundary";
 import DeviceHealth from "./pages/DeviceHealth";
 import CompanyDetails from "./pages/admin/CompanyDetails";
+import IncinerationPlantManagement from "./pages/admin/IncinerationPlantManagement";
 
 // Pages - Using lazy loading for improved performance
 const MedicalCompanyManagement = React.lazy(() => import('./components/MedicalCompanyManagement'));
@@ -39,6 +40,12 @@ const Profile = React.lazy(() => import('./pages/Profile'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
 const DeviceTracking = React.lazy(() => import('./pages/DeviceTracking'));
 const RoutesHistory = React.lazy(() => import('./pages/RouteHistory'));
+const PublicConfirmation = React.lazy(() => import('./pages/handoffs/PublicConfirmation'));
+const HandoffManagement = React.lazy(() => import('./pages/handoffs/HandoffManagement'));
+const RouteManagement = React.lazy(() => import('./pages/routes/RouteManagement'));
+const RouteCreate = React.lazy(() => import('./pages/routes/RouteCreate'));
+const RouteDetail = React.lazy(() => import('./pages/routes/RouteDetail'));
+const DriverRouteView = React.lazy(() => import('./pages/driver/DriverRouteView'));
 
 
 // Enhanced Loading component with better UX
@@ -129,6 +136,8 @@ const App = () => {
                                         <Route path="/reset-password/:token" element={<ResetPassword/>}/>
                                     </Route>
 
+                                    <Route path="/confirm/:token" element={<PublicConfirmation/>} />
+
                                     {/* Dashboard Routes - Protected */}
                                     <Route element={<DashboardLayout/>}>
                                         <Route
@@ -192,6 +201,14 @@ const App = () => {
                                             }
                                         />
                                         <Route
+                                            path="/driver/route"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <DriverRouteView/>
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
                                             path="/bins"
                                             element={
                                                 <ProtectedRoute>
@@ -232,6 +249,38 @@ const App = () => {
                                             }
                                         />
                                         <Route
+                                            path="/routes"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <RouteManagement/>
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
+                                            path="/routes/create"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <RouteCreate/>
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
+                                            path="/routes/:id"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <RouteDetail/>
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
+                                            path="/handoffs"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <HandoffManagement/>
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
                                             path="/settings"
                                             element={
                                                 <ProtectedRoute>
@@ -244,6 +293,14 @@ const App = () => {
                                             element={
                                                 <ProtectedRoute>
                                                     <DeviceManagement/>
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
+                                            path="/admin/incineration-plants"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <IncinerationPlantManagement/>
                                                 </ProtectedRoute>
                                             }
                                         />

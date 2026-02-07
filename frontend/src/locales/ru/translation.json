@@ -12,7 +12,7 @@
 		"devices": "Устройства",
 		"beDriver": "Стать Водителем",
 		"driverVerification": "Проверка Водителей",
-		"medicalCompanies": "Мед. Компании",
+		"medicalCompanies": "Объекты",
 		"tracking": "Отслеживание",
 		"drivers": "Водители",
 		"settings": "Настройки",
@@ -469,5 +469,4 @@
 		"resetFilters": "Сбросить фильтры"
 	}
 }
-
 
