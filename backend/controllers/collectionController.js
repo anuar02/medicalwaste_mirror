@@ -179,7 +179,7 @@ const recordDriverLocation = asyncHandler(async (req, res, next) => {
         timestamp
     });
 
-    if (!latitude || !longitude) {
+    if (latitude == null || longitude == null) {
         return next(new AppError('Location coordinates are required', 400));
     }
 
@@ -313,6 +313,42 @@ const addContainerToSession = asyncHandler(async (req, res, next) => {
     );
 
     // 4️⃣ Reload session with populated containers
+    const updatedSession = await CollectionSession.findById(session._id)
+        .populate('selectedContainers.container');
+
+    res.status(200).json({
+        status: 'success',
+        data: { session: updatedSession }
+    });
+});
+
+/**
+ * Manually mark container as visited
+ */
+const markContainerVisited = asyncHandler(async (req, res, next) => {
+    const { sessionId, containerId, collectedWeight } = req.body;
+    const driverId = req.user.id;
+
+    const session = await CollectionSession.findOne({
+        driver: driverId,
+        sessionId,
+        status: 'active'
+    }).populate('selectedContainers.container');
+
+    if (!session) {
+        return next(new AppError('No active session found', 404));
+    }
+
+    const containerEntry = session.selectedContainers.find(
+        (item) => String(item.container?._id || item.container) === String(containerId)
+    );
+
+    if (!containerEntry) {
+        return next(new AppError('Container not found in session', 404));
+    }
+
+    await session.markContainerVisited(containerId, collectedWeight);
+
     const updatedSession = await CollectionSession.findById(session._id)
         .populate('selectedContainers.container');
 
@@ -486,6 +522,7 @@ module.exports = {
     stopCollection,
     recordDriverLocation,
     addContainerToSession,
+    markContainerVisited,
     getActiveSession,
     getCollectionHistory,
     getActiveDrivers,

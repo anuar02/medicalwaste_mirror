@@ -2,6 +2,7 @@
 const User = require('../models/User');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { startPhoneVerification, checkPhoneVerification } = require('../services/twilioVerifyService');
 
 /**
  * Get current user profile
@@ -25,27 +26,29 @@ const getProfile = async (req, res, next) => {
             });
         }
 
-        res.status(200).json({
-            status: 'success',
-            data: {
-                user: {
-                    _id: user._id,
-                    id: user._id, // Include both for compatibility
-                    username: user.username,
-                    email: user.email,
-                    role: user.role,
-                    department: user.department || '',
-                    company: user.company,
-                    verificationStatus: user.verificationStatus, // IMPORTANT: Include this
-                    vehicleInfo: user.vehicleInfo, // For drivers
-                    active: user.active,
-                    createdAt: user.createdAt,
-                    updatedAt: user.updatedAt,
-                    lastLogin: user.lastLogin,
-                    loginAttempts: user.loginAttempts
-                }
+    res.status(200).json({
+        status: 'success',
+        data: {
+            user: {
+                _id: user._id,
+                id: user._id, // Include both for compatibility
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                department: user.department || '',
+                company: user.company,
+                verificationStatus: user.verificationStatus, // IMPORTANT: Include this
+                vehicleInfo: user.vehicleInfo, // For drivers
+                phoneNumber: user.phoneNumber || null,
+                phoneNumberVerified: user.phoneNumberVerified || false,
+                active: user.active,
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt,
+                lastLogin: user.lastLogin,
+                loginAttempts: user.loginAttempts
             }
-        });
+        }
+    });
     } catch (error) {
         console.error('Get profile error:', error);
         next(error);
@@ -135,6 +138,131 @@ const updateProfile = asyncHandler(async (req, res, next) => {
                 email: user.email,
                 role: user.role,
                 department: user.department
+            }
+        }
+    });
+});
+
+const updatePhoneNumber = asyncHandler(async (req, res, next) => {
+    const { phoneNumber } = req.body;
+
+    if (!phoneNumber) {
+        return next(new AppError('Phone number is required', 400));
+    }
+
+    const existingUser = await User.findById(req.user._id);
+    if (!existingUser) {
+        return next(new AppError('User not found', 404));
+    }
+
+    if (existingUser.phoneNumber === phoneNumber) {
+        return res.status(200).json({
+            status: 'success',
+            data: {
+                user: {
+                    id: existingUser._id,
+                    phoneNumber: existingUser.phoneNumber,
+                    phoneNumberVerified: existingUser.phoneNumberVerified
+                }
+            }
+        });
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
+        { phoneNumber, phoneNumberVerified: false },
+        { new: true, runValidators: true }
+    );
+
+    if (!user) {
+        return next(new AppError('User not found', 404));
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            user: {
+                id: user._id,
+                phoneNumber: user.phoneNumber,
+                phoneNumberVerified: user.phoneNumberVerified
+            }
+        }
+    });
+});
+
+const startPhoneVerificationFlow = asyncHandler(async (req, res, next) => {
+    const { phoneNumber } = req.body;
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        return next(new AppError('User not found', 404));
+    }
+
+    const targetNumber = phoneNumber || user.phoneNumber;
+    if (!targetNumber) {
+        return next(new AppError('Phone number is required', 400));
+    }
+
+    if (phoneNumber && phoneNumber !== user.phoneNumber) {
+        user.phoneNumber = phoneNumber;
+        user.phoneNumberVerified = false;
+        await user.save();
+    }
+
+    const result = await startPhoneVerification(targetNumber);
+    if (!result.success) {
+        return next(new AppError(result.error || 'Failed to start verification', 400));
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            status: result.status
+        }
+    });
+});
+
+const checkPhoneVerificationFlow = asyncHandler(async (req, res, next) => {
+    const { phoneNumber, code } = req.body;
+    if (!code) {
+        return next(new AppError('Phone number and code are required', 400));
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        return next(new AppError('User not found', 404));
+    }
+
+    const targetNumber = phoneNumber || user.phoneNumber;
+    if (!targetNumber) {
+        return next(new AppError('Phone number and code are required', 400));
+    }
+
+    const result = await checkPhoneVerification(targetNumber, code);
+    if (!result.success) {
+        return next(new AppError(result.error || 'Failed to verify code', 400));
+    }
+
+    if (result.status !== 'approved') {
+        return next(new AppError('Verification code is invalid', 400));
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+        req.user._id,
+        { phoneNumber: targetNumber, phoneNumberVerified: true },
+        { new: true }
+    );
+
+    if (!updatedUser) {
+        return next(new AppError('User not found', 404));
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            user: {
+                id: updatedUser._id,
+                phoneNumber: updatedUser.phoneNumber,
+                phoneNumberVerified: updatedUser.phoneNumberVerified
             }
         }
     });
@@ -460,6 +588,9 @@ const activateUser = asyncHandler(async (req, res, next) => {
 module.exports = {
     getProfile,
     updateProfile,
+    updatePhoneNumber,
+    startPhoneVerificationFlow,
+    checkPhoneVerificationFlow,
     getDepartments,
     updateUserRole,
     getAllUsers,

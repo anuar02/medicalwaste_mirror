@@ -56,8 +56,12 @@ const registerDriver = asyncHandler(async (req, res, next) => {
         emergencyContact
     });
 
-    // Update user role to driver
-    await User.findByIdAndUpdate(req.user.id, { role: 'driver' });
+    // Update user role and company for consistent scoping
+    await User.findByIdAndUpdate(req.user.id, {
+        role: 'driver',
+        company: medicalCompanyId,
+        verificationStatus: 'pending'
+    });
 
     await driver.populate('medicalCompany', 'name licenseNumber contactInfo');
 
@@ -118,6 +122,11 @@ const verifyDriver = asyncHandler(async (req, res, next) => {
 
         await driver.save();
 
+        await User.findByIdAndUpdate(driver.user, {
+            verificationStatus: 'approved',
+            company: driver.medicalCompany
+        });
+
         // Send notification email to driver (optional)
         // await sendDriverApprovalEmail(driver.user.email, driver);
 
@@ -130,6 +139,10 @@ const verifyDriver = asyncHandler(async (req, res, next) => {
         // Reject the driver application
         driver.verificationNotes = notes || 'Rejected by admin';
         await driver.save();
+
+        await User.findByIdAndUpdate(driver.user, {
+            verificationStatus: 'rejected'
+        });
 
         // Optionally, you might want to remove the driver record or keep it for audit
         // await Driver.findByIdAndDelete(driverId);
@@ -182,6 +195,13 @@ const getDriverProfile = asyncHandler(async (req, res, next) => {
 
     if (!driver) {
         return next(new AppError('Driver profile not found', 404));
+    }
+
+    if (driver.medicalCompany && !req.user.company) {
+        await User.findByIdAndUpdate(req.user.id, {
+            company: driver.medicalCompany,
+            verificationStatus: driver.isVerified ? 'approved' : req.user.verificationStatus
+        });
     }
 
     res.status(200).json({

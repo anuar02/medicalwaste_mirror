@@ -16,6 +16,7 @@ const { logger } = require('./middleware/loggers');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandlers');
 const { requestLogger } = require('./middleware/loggers');
 const { initializeGpsWebSocket } = require('./utils/gpsWebSocket');
+const { startSmartSchedulerJob } = require('./jobs/smartSchedulerCron');
 
 // Routes
 const authRoutes = require('./routes/auth');
@@ -34,6 +35,9 @@ const gpsRoutes = require('./routes/gps');
 const deviceLogsRoutes = require('./routes/deviceLogs');
 const healthCheckRoutes = require('./routes/healthCheck');
 const routeRoutes = require('./routes/routes');
+const handoffRoutes = require('./routes/handoffs');
+const notificationRoutes = require('./routes/notifications');
+const incinerationPlantRoutes = require('./routes/incinerationPlants');
 
 const app = express();
 
@@ -177,6 +181,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/routes', routeRoutes);
+app.use('/api/handoffs', handoffRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/incineration-plants', incinerationPlantRoutes);
 
 // Lightweight health endpoint
 app.get('/api/health', (req, res) => {
@@ -200,6 +207,7 @@ const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 const cleanupGpsWs = initializeGpsWebSocket(server);
+const cleanupSmartScheduler = startSmartSchedulerJob();
 
 // ------------------------------------
 // Graceful shutdown
@@ -210,6 +218,10 @@ async function gracefulShutdown(signal) {
         if (cleanupGpsWs) {
             cleanupGpsWs();
             console.log('✓ GPS WebSocket cleaned up');
+        }
+        if (cleanupSmartScheduler) {
+            cleanupSmartScheduler();
+            console.log('✓ Smart scheduler job stopped');
         }
         await new Promise((resolve, reject) => {
             server.close(err => (err ? reject(err) : resolve()));

@@ -1,0 +1,25 @@
+{
+  "auth": {
+    "login": "Login",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign In",
+    "createAccount": "Create account",
+    "register": "Register",
+    "username": "Username",
+    "confirmPassword": "Confirm password",
+    "role": "Role",
+    "companyId": "Company ID",
+    "phoneNumber": "Phone number",
+    "vehiclePlate": "Vehicle plate"
+  },
+  "common": {
+    "loading": "Loading...",
+    "logout": "Logout"
+  },
+  "roles": {
+    "driver": "Driver",
+    "supervisor": "Supervisor",
+    "admin": "Admin"
+  }
+}

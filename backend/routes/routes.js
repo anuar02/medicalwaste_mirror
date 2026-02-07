@@ -8,7 +8,10 @@ const {
     deleteRoute,
     getTodayRoutes,
     getRouteStats,
-    optimizeRoute
+    getRouteSuggestions,
+    approveSuggestedRoute,
+    optimizeRoute,
+    getRouteComparison
 } = require('../controllers/routeController');
 const { auth, restrictTo } = require('../middleware/auth');
 const { validateRequest } = require('../middleware/validators');
@@ -50,6 +53,24 @@ router.get(
 );
 
 router.get(
+    '/suggestions',
+    restrictTo('admin', 'supervisor'),
+    getRouteSuggestions
+);
+
+router.post(
+    '/suggestions/:id/approve',
+    restrictTo('admin', 'supervisor'),
+    [
+        param('id').isMongoId().withMessage('Invalid route ID'),
+        body('assignedDriver').optional().isMongoId().withMessage('Invalid assignedDriver'),
+        body('assignedVehicle').optional().isString().withMessage('Invalid assignedVehicle')
+    ],
+    validateRequest,
+    approveSuggestedRoute
+);
+
+router.get(
     '/:id/stats',
     restrictTo('admin', 'supervisor', 'driver'),
     [
@@ -57,6 +78,17 @@ router.get(
     ],
     validateRequest,
     getRouteStats
+);
+
+router.get(
+    '/:id/comparison/:sessionId',
+    restrictTo('admin', 'supervisor', 'driver'),
+    [
+        param('id').isMongoId().withMessage('Invalid route ID'),
+        param('sessionId').notEmpty().withMessage('Session ID is required')
+    ],
+    validateRequest,
+    getRouteComparison
 );
 
 router.post(

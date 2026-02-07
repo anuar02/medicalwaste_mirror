@@ -95,6 +95,26 @@ const userSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    phoneNumberVerified: {
+        type: Boolean,
+        default: false
+    },
+    telegram: {
+        active: {
+            type: Boolean,
+            default: false
+        },
+        chatId: {
+            type: String,
+            default: null
+        }
+    },
+    notificationPreferences: {
+        receiveAlerts: {
+            type: Boolean,
+            default: true
+        }
+    },
     verificationStatus: {
         type: String,
         enum: ['pending', 'approved', 'rejected'],

@@ -1,0 +1,25 @@
+{
+  "auth": {
+    "login": "Вход",
+    "email": "Email",
+    "password": "Пароль",
+    "signIn": "Войти",
+    "createAccount": "Создать аккаунт",
+    "register": "Регистрация",
+    "username": "Имя пользователя",
+    "confirmPassword": "Подтвердите пароль",
+    "role": "Роль",
+    "companyId": "ID компании",
+    "phoneNumber": "Телефон",
+    "vehiclePlate": "Номер авто"
+  },
+  "common": {
+    "loading": "Загрузка...",
+    "logout": "Выйти"
+  },
+  "roles": {
+    "driver": "Водитель",
+    "supervisor": "Супервайзер",
+    "admin": "Админ"
+  }
+}

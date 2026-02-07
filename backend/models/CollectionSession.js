@@ -83,6 +83,27 @@ const collectionSessionSchema = new mongoose.Schema({
         default: null,
         index: true
     },
+    handoffChainId: {
+        type: String,
+        default: null,
+        index: true
+    },
+    handoffState: {
+        stage: {
+            type: String,
+            enum: ['none', 'facility_to_driver', 'driver_to_incinerator', 'completed'],
+            default: 'none'
+        },
+        updatedAt: {
+            type: Date
+        }
+    },
+    handoffs: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Handoff'
+        }
+    ],
     totalDistance: {
         type: Number,
         default: 0 // in kilometers
@@ -162,9 +183,9 @@ collectionSessionSchema.methods.addContainer = function(containerId) {
 
 // Method to mark container as visited
 collectionSessionSchema.methods.markContainerVisited = function(containerId, weight) {
-    const container = this.selectedContainers.find(
-        c => c.container.toString() === containerId.toString()
-    );
+    const container = this.selectedContainers.find((item) => (
+        String(item.container?._id || item.container) === String(containerId)
+    ));
 
     if (container) {
         container.visited = true;

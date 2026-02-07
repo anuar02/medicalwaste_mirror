@@ -7,6 +7,7 @@ const {
     stopCollection,
     recordDriverLocation,
     addContainerToSession,
+    markContainerVisited,
     getActiveSession,
     getCollectionHistory,
     getActiveDrivers,
@@ -60,6 +61,17 @@ router.post('/add-container',
     ],
     validateRequest,
     addContainerToSession
+);
+
+router.post('/mark-visited',
+    restrictTo('driver'),
+    [
+        body('sessionId').trim().notEmpty().withMessage('Session ID is required'),
+        body('containerId').isMongoId().withMessage('Valid container ID is required'),
+        body('collectedWeight').optional().isFloat({ min: 0 }).withMessage('Weight must be positive')
+    ],
+    validateRequest,
+    markContainerVisited
 );
 
 router.get('/active',

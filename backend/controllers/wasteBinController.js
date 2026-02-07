@@ -5,6 +5,7 @@ const User = require('../models/User');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { sendAlertNotification } = require('../utils/telegram');
+const { sendWhatsAppAlertNotification } = require('../utils/whatsapp');
 const { logger } = require('../middleware/loggers');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
@@ -1353,17 +1354,21 @@ const sendManualAlert = asyncHandler(async (req, res, next) => {
             lastUpdate: bin.lastUpdate
         };
 
-        // Send alert notification
-        const notificationResults = await sendAlertNotification(binData, userIds);
+        const telegramResults = await sendAlertNotification(binData, userIds);
+        const whatsappResults = await sendWhatsAppAlertNotification(binData, userIds);
 
-        logger.info(`Manual alert notifications sent for bin ${binId}. Results: ${JSON.stringify(notificationResults)}`);
+        const totalSent = (telegramResults?.length || 0) + (whatsappResults?.length || 0);
+        const successCount = (telegramResults?.filter(r => r.success)?.length || 0)
+            + (whatsappResults?.filter(r => r.success)?.length || 0);
+
+        logger.info(`Manual alert notifications sent for bin ${binId}. Results: ${JSON.stringify({ telegramResults, whatsappResults })}`);
 
         res.status(200).json({
             status: 'success',
             message: 'Alert notification sent successfully',
             data: {
-                notificationsSent: notificationResults?.length || 0,
-                successCount: notificationResults?.filter(r => r.success)?.length || 0
+                notificationsSent: totalSent,
+                successCount
             }
         });
     } catch (error) {

@@ -2,9 +2,12 @@ const Route = require('../models/Route');
 const User = require('../models/User');
 const WasteBin = require('../models/WasteBin');
 const CollectionSession = require('../models/CollectionSession');
+const DriverLocation = require('../models/DriverLocation');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { optimizeRoute: optimizeRouteService } = require('../services/routeOptimizer');
+const { generateSuggestionsForCompany } = require('../services/smartScheduler');
+const mongoose = require('mongoose');
 
 const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
@@ -217,6 +220,60 @@ const getRouteStats = asyncHandler(async (req, res, next) => {
     });
 });
 
+const getRouteSuggestions = asyncHandler(async (req, res) => {
+    const query = applyScopeFilter(req, { status: 'suggested' });
+    const suggestions = await Route.find(query)
+        .populate('assignedDriver', 'username phoneNumber')
+        .sort({ createdAt: -1 });
+
+    res.status(200).json({
+        status: 'success',
+        results: suggestions.length,
+        data: { routes: suggestions }
+    });
+});
+
+const approveSuggestedRoute = asyncHandler(async (req, res, next) => {
+    const query = applyScopeFilter(req, { _id: req.params.id, status: 'suggested' });
+    const route = await Route.findOne(query);
+
+    if (!route) {
+        return next(new AppError('Suggested route not found', 404));
+    }
+
+    const { assignedDriver, assignedVehicle, schedule, regenerateIfEmpty } = req.body;
+
+    if (assignedDriver) {
+        await validateAssignedDriver(assignedDriver, route.company);
+        route.assignedDriver = assignedDriver;
+    }
+    if (typeof assignedVehicle === 'string') {
+        route.assignedVehicle = assignedVehicle.trim();
+    }
+    if (schedule && typeof schedule === 'object') {
+        route.schedule = { ...route.schedule.toObject(), ...schedule };
+    }
+
+    route.status = 'active';
+    await route.save();
+
+    // Optional helper: if there are no suggestions left, generate new ones for this company.
+    if (regenerateIfEmpty) {
+        const stillSuggested = await Route.countDocuments({
+            company: route.company,
+            status: 'suggested'
+        });
+        if (stillSuggested === 0) {
+            await generateSuggestionsForCompany(route.company, 5);
+        }
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: { route }
+    });
+});
+
 const optimizeRoute = asyncHandler(async (req, res, next) => {
     const query = applyScopeFilter(req, { _id: req.params.id });
     const route = await Route.findOne(query);
@@ -270,6 +327,127 @@ const optimizeRoute = asyncHandler(async (req, res, next) => {
     });
 });
 
+const getRouteComparison = asyncHandler(async (req, res, next) => {
+    const routeQuery = applyScopeFilter(req, { _id: req.params.id });
+    const route = await Route.findOne(routeQuery);
+
+    if (!route) {
+        return next(new AppError('Route not found', 404));
+    }
+
+    const { sessionId } = req.params;
+    const isObjectId = mongoose.isValidObjectId(sessionId);
+    const session = isObjectId
+        ? await CollectionSession.findById(sessionId)
+        : await CollectionSession.findOne({ sessionId });
+
+    if (!session) {
+        return next(new AppError('Collection session not found', 404));
+    }
+
+    if (!session.plannedRoute || String(session.plannedRoute) !== String(route._id)) {
+        return next(new AppError('Session is not linked to this route', 400));
+    }
+
+    if (req.user.role === 'driver' && String(session.driver) !== String(req.user.id)) {
+        return next(new AppError('You do not have permission to view this session', 403));
+    }
+
+    if (req.user.role === 'supervisor' && session.company &&
+        String(session.company) !== String(req.user.company || '')) {
+        return next(new AppError('Session belongs to another company', 403));
+    }
+
+    const orderedStops = Array.isArray(route.stops)
+        ? [...route.stops].sort((a, b) => (a.order || 0) - (b.order || 0))
+        : [];
+
+    const containerIds = orderedStops
+        .flatMap((stop) => stop.containers || [])
+        .map(String);
+
+    const containersForLookup = orderedStops
+        .filter((stop) => !Array.isArray(stop.location?.coordinates) && (stop.containers || []).length > 0)
+        .flatMap((stop) => stop.containers || [])
+        .map(String);
+
+    const bins = containersForLookup.length
+        ? await WasteBin.find({ _id: { $in: containersForLookup } }).select('location')
+        : [];
+    const binLocationMap = new Map(bins.map((bin) => [String(bin._id), bin.location]));
+
+    const plannedStops = orderedStops.map((stop, index) => {
+        let coords = stop.location?.coordinates;
+        if ((!coords || coords.length !== 2) && (stop.containers || []).length > 0) {
+            const fallback = binLocationMap.get(String(stop.containers[0]));
+            coords = fallback?.coordinates;
+        }
+
+        return {
+            order: stop.order || index + 1,
+            containers: stop.containers || [],
+            hasLocation: Array.isArray(coords) && coords.length === 2,
+            location: Array.isArray(coords) && coords.length === 2
+                ? { lng: coords[0], lat: coords[1] }
+                : null
+        };
+    });
+
+    const plannedPath = plannedStops
+        .filter((stop) => stop.hasLocation)
+        .map((stop) => stop.location);
+
+    const selectedContainers = session.selectedContainers || [];
+    const visitedContainers = selectedContainers
+        .filter((item) => item.visited)
+        .map((item) => String(item.container));
+
+    const plannedSet = new Set(containerIds);
+    const visitedSet = new Set(visitedContainers);
+
+    const missingContainers = [...plannedSet].filter((id) => !visitedSet.has(id));
+    const extraContainers = [...visitedSet].filter((id) => !plannedSet.has(id));
+
+    const actualLocations = await DriverLocation.find({ session: session._id })
+        .sort({ timestamp: 1 })
+        .select('location timestamp');
+
+    const actualPath = actualLocations
+        .map((entry) => {
+            const coords = entry.location?.coordinates;
+            if (!Array.isArray(coords) || coords.length !== 2) return null;
+            return {
+                lng: coords[0],
+                lat: coords[1],
+                timestamp: entry.timestamp
+            };
+        })
+        .filter(Boolean);
+
+    const plannedDuration = route.estimatedDuration || 0;
+    const actualDuration = session.totalDuration || 0;
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            routeId: route._id,
+            sessionId: session._id,
+            plannedStops,
+            plannedPath,
+            actualPath,
+            comparison: {
+                plannedContainers: containerIds,
+                visitedContainers,
+                missingContainers,
+                extraContainers,
+                plannedDuration,
+                actualDuration,
+                durationDelta: actualDuration - plannedDuration
+            }
+        }
+    });
+});
+
 module.exports = {
     createRoute,
     getRoutes,
@@ -278,5 +456,8 @@ module.exports = {
     deleteRoute,
     getTodayRoutes,
     getRouteStats,
-    optimizeRoute
+    getRouteSuggestions,
+    approveSuggestedRoute,
+    optimizeRoute,
+    getRouteComparison
 };

@@ -6,6 +6,9 @@ const {
     getProfile,
     assignCompany,
     updateProfile,
+    updatePhoneNumber,
+    startPhoneVerificationFlow,
+    checkPhoneVerificationFlow,
     getDepartments,
     updateUserRole,
     getPendingDrivers,
@@ -19,6 +22,9 @@ const {
 } = require('../controllers/userController');
 const { auth, adminAuth, restrictTo} = require('../middleware/auth');
 const { validateRequest } = require('../middleware/validators');
+
+// Routes for authenticated users
+router.use(auth);
 
 // Input validation for profile update
 const updateProfileValidation = [
@@ -54,6 +60,14 @@ const updateProfileValidation = [
         .withMessage('Invalid department selection')
 ];
 
+const phoneValidation = [
+    body('phoneNumber')
+        .optional()
+        .trim()
+        .matches(/^\+[1-9]\d{6,14}$/)
+        .withMessage('Phone number must be in E.164 format, e.g. +77051234567')
+];
+
 router.get('/drivers', restrictTo('admin', 'supervisor'), getAllDrivers);
 router.get('/drivers/pending', restrictTo('admin', 'supervisor'), getPendingDrivers);
 router.get('/drivers/:driverId', getDriverDetails);
@@ -61,8 +75,7 @@ router.patch('/drivers/:driverId', updateDriverDetails);
 router.post('/drivers/verify', restrictTo('admin', 'supervisor'), verifyDriver);
 router.post('/assign-company', restrictTo('admin'), assignCompany);
 
-// Routes for authenticated users
-router.use(auth);
+
 
 // Get current user profile
 router.get('/profile', getProfile);
@@ -73,6 +86,36 @@ router.patch(
     updateProfileValidation,
     validateRequest,
     updateProfile
+);
+
+router.patch(
+    '/phone',
+    [body('phoneNumber').trim().matches(/^\+[1-9]\d{6,14}$/).withMessage('Phone number must be in E.164 format, e.g. +77051234567')],
+    validateRequest,
+    updatePhoneNumber
+);
+
+router.post(
+    '/phone/verify/start',
+    phoneValidation,
+    validateRequest,
+    startPhoneVerificationFlow
+);
+
+router.post(
+    '/phone/verify/check',
+    [
+        body('phoneNumber')
+            .optional()
+            .trim()
+            .matches(/^\+[1-9]\d{6,14}$/)
+            .withMessage('Phone number must be in E.164 format, e.g. +77051234567'),
+        body('code')
+            .notEmpty()
+            .withMessage('Verification code is required')
+    ],
+    validateRequest,
+    checkPhoneVerificationFlow
 );
 
 // Get available departments
