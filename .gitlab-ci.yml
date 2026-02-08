@@ -60,7 +60,8 @@ build-frontend:
     - cp -r frontend/* temp/frontend/ || echo "No files"
     - cp temp/server.js temp/frontend/
     - cd temp/frontend
-    - docker build --build-arg REACT_APP_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" --build-arg REACT_APP_API_URL="/api" -t $CI_REGISTRY_IMAGE/frontend:latest -f ../Dockerfile.frontend .
+    - docker build --build-arg REACT_APP_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" --build-arg REACT_APP_API_URL="/api" -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -t $CI_REGISTRY_IMAGE/frontend:latest -f ../Dockerfile.frontend .
+    - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
     - docker push $CI_REGISTRY_IMAGE/frontend:latest
 
 # --- BACKEND BUILD ---
@@ -89,7 +90,8 @@ build-backend:
     - mkdir -p temp/backend
     - cp -r backend/* temp/backend/ || echo "No files"
     - cd temp/backend
-    - docker build -t $CI_REGISTRY_IMAGE/backend:latest -f ../Dockerfile.backend .
+    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -t $CI_REGISTRY_IMAGE/backend:latest -f ../Dockerfile.backend .
+    - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
     - docker push $CI_REGISTRY_IMAGE/backend:latest
 
 # --- NGINX BUILD ---
@@ -140,7 +142,8 @@ build-nginx:
       CMD ["nginx", "-g", "daemon off;"]
       EOF
     - cd temp/nginx
-    - docker build -t $CI_REGISTRY_IMAGE/nginx:latest -f Dockerfile .
+    - docker build -t $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA -t $CI_REGISTRY_IMAGE/nginx:latest -f Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
     - docker push $CI_REGISTRY_IMAGE/nginx:latest
 
 # --- DEPLOYMENT ---
@@ -164,7 +167,7 @@ deploy:
       version: '3.8'
       services:
         frontend:
-          image: $CI_REGISTRY_IMAGE/frontend:latest
+          image: $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
           deploy:
             replicas: 1
             resources: { limits: { memory: 250M } }
@@ -177,7 +180,7 @@ deploy:
             - REACT_APP_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
       
         backend:
-          image: $CI_REGISTRY_IMAGE/backend:latest
+          image: $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
           deploy:
             replicas: 1
             resources: { limits: { memory: 300M } }
@@ -215,7 +218,7 @@ deploy:
           networks: [myapp_app-network]
       
         nginx:
-          image: $CI_REGISTRY_IMAGE/nginx:latest
+          image: $CI_REGISTRY_IMAGE/nginx:$CI_COMMIT_SHA
           deploy:
             replicas: 1
           ports: ["80:8080", "443:8443"]
