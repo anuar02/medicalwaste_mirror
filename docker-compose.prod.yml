@@ -64,27 +64,19 @@ services:
       - myapp_app-network
 
   nginx:
-    image: ${CI_REGISTRY_IMAGE}/nginx:${CI_COMMIT_SHA}
+    image: registry.gitlab.com/anuar021/trashbin/nginx:latest
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - node.hostname==ip-10-0-1-166
-      restart_policy:
-        condition: any
-        delay: 5s
-        max_attempts: 5
-    ports:
-      - "80:8080"   # HTTP (redirects to HTTPS)
-      - "443:8443"  # HTTPS
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    networks:
-      - myapp_app-network
+      placement: # ← ADD THIS
+        constraints: # ← ADD THIS
+          - node.role == manager           # ← ADD THIS
+    ports: [ "80:8080", "443:8443" ]
+    volumes: [ "/etc/letsencrypt:/etc/letsencrypt:ro" ]
+    networks: [ myapp_app-network ]
     environment:
       - FRONTEND_HOST=myapp_frontend
       - BACKEND_HOST=myapp_backend
-      - SERVER_NAME=app.medicalwaste.kz  # ← Основной домен приложения
+      - SERVER_NAME=app.medicalwaste.kz
 
 networks:
   myapp_app-network:
