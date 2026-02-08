@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import {
   useActiveCollection,
   useMarkVisited,
+  useSessionRoute,
   useStartCollection,
   useStopCollection,
 } from '../hooks/useCollections';
@@ -86,6 +87,23 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
   const [routeError, setRouteError] = useState<string | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [waypointOrder, setWaypointOrder] = useState<number[]>([]);
+
+  const sessionRouteQuery = useSessionRoute(data?._id ?? data?.sessionId, {
+    enabled: Boolean(data),
+    refetchInterval: data?.status === 'active' ? 15000 : false,
+  });
+
+  const driverRouteCoords = useMemo(() => {
+    const routePoints = sessionRouteQuery.data?.route ?? [];
+    const path = routePoints
+      .map((point) => {
+        const coords = point.location?.coordinates;
+        if (!coords || coords.length !== 2) return null;
+        return { latitude: coords[1], longitude: coords[0] };
+      })
+      .filter((point): point is { latitude: number; longitude: number } => Boolean(point));
+    return path.length > 1 ? path : [];
+  }, [sessionRouteQuery.data?.route]);
 
   const snapPoints = useMemo(() => ['12%', '50%', '85%'], []);
   const sheetRef = useRef<BottomSheet>(null);
@@ -455,6 +473,15 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
               coordinates={routeCoords}
               strokeWidth={4}
               strokeColor={dark.teal}
+            />
+          ) : null}
+          {/* Driver GPS route */}
+          {driverRouteCoords.length ? (
+            <Polyline
+              coordinates={driverRouteCoords}
+              strokeWidth={3}
+              strokeColor={dark.amber}
+              lineDashPattern={[6, 6]}
             />
           ) : null}
           {(data ? containerMarkers : availableMarkers).map((marker) => {

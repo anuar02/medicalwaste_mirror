@@ -92,12 +92,14 @@ const startCollection = asyncHandler(async (req, res, next) => {
 
     // 6️⃣ Log start location if provided
     if (startLocation?.coordinates) {
-        await DriverLocation.create({
+        const startLocationRecord = await DriverLocation.create({
             driver: driverId,
             session: session._id,
             location: startLocation,
             timestamp: new Date()
         });
+        session.route.push(startLocationRecord._id);
+        await session.save();
     }
 
     // 7️⃣ Populate session containers
@@ -135,12 +137,14 @@ const stopCollection = asyncHandler(async (req, res, next) => {
 
     // Record final location if provided
     if (endLocation && endLocation.coordinates) {
-        await DriverLocation.create({
+        const endLocationRecord = await DriverLocation.create({
             driver: driverId,
             session: session._id,
             location: endLocation,
             timestamp: new Date()
         });
+        session.route.push(endLocationRecord._id);
+        await session.save();
     }
 
     // Populate data for response
@@ -500,6 +504,9 @@ const getSessionRoute = asyncHandler(async (req, res, next) => {
     // ИСПРАВЛЕНИЕ: Получаем все локации по session._id
     const locations = await DriverLocation.find({ session: session._id })
         .sort({ timestamp: 1 });
+
+    // Also expose the route inside the session payload for frontend consumers.
+    session.route = locations;
 
     console.log(`📊 Session ${session.sessionId} route points:`, {
         routeArrayLength: session.route.length,

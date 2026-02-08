@@ -1,6 +1,6 @@
 import { api } from './api';
 import { ApiSuccess } from '../types/api';
-import { CollectionSession } from '../types/models';
+import { CollectionSession, DriverLocation } from '../types/models';
 
 export interface ActiveCollectionResponse {
   session?: CollectionSession;
@@ -23,6 +23,11 @@ export interface StartCollectionPayload {
 
 export interface StartCollectionResponse {
   session: CollectionSession;
+}
+
+export interface SessionRouteResponse {
+  session: CollectionSession;
+  route?: DriverLocation[];
 }
 
 export async function startCollection(payload: StartCollectionPayload): Promise<CollectionSession> {
@@ -89,4 +94,12 @@ export async function recordDriverLocation(payload: DriverLocationPayload) {
     throw new Error('Failed to record driver location');
   }
   return response.data.data?.location;
+}
+
+export async function fetchSessionRoute(sessionId: string): Promise<SessionRouteResponse> {
+  const response = await api.get<ApiSuccess<SessionRouteResponse>>(`/api/collections/session/${sessionId}/route`);
+  if (response.data.status !== 'success' || !response.data.data?.session) {
+    throw new Error('Failed to load session route');
+  }
+  return response.data.data;
 }

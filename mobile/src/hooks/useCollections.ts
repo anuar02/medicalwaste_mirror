@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchActiveCollection,
   fetchCollectionHistory,
+  fetchSessionRoute,
   markCollectionVisited,
   startCollection,
   stopCollection,
@@ -54,5 +55,14 @@ export function useCollectionHistory() {
   return useQuery({
     queryKey: ['collections', 'history'],
     queryFn: fetchCollectionHistory,
+  });
+}
+
+export function useSessionRoute(sessionId?: string, options?: { enabled?: boolean; refetchInterval?: number | false }) {
+  return useQuery({
+    queryKey: ['collections', 'route', sessionId],
+    queryFn: () => fetchSessionRoute(sessionId ?? ''),
+    enabled: Boolean(sessionId) && (options?.enabled ?? true),
+    refetchInterval: options?.refetchInterval,
   });
 }

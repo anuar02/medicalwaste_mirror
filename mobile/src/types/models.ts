@@ -77,6 +77,14 @@ export interface CollectionSession {
   selectedContainers?: CollectionContainer[];
 }
 
+export interface DriverLocation {
+  _id: string;
+  location?: {
+    coordinates?: [number, number];
+  };
+  timestamp?: string;
+}
+
 export interface HandoffParty {
   user?: {
     _id: string;
