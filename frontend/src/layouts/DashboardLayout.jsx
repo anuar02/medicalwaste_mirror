@@ -143,7 +143,7 @@ const buildNavItems = (t, hasActiveSession) => ([
     },
     {
         icon: <UserCheck className="h-5 w-5" />,
-        label: t('nav.driverVerification'),
+        label: t('nav.drivers'),
         path: '/admin/drivers',
         adminOnly: true,
     },

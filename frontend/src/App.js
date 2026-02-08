@@ -46,6 +46,7 @@ const RouteManagement = React.lazy(() => import('./pages/routes/RouteManagement'
 const RouteCreate = React.lazy(() => import('./pages/routes/RouteCreate'));
 const RouteDetail = React.lazy(() => import('./pages/routes/RouteDetail'));
 const DriverRouteView = React.lazy(() => import('./pages/driver/DriverRouteView'));
+const DriverDetails = React.lazy(() => import('./pages/admin/DriverDetails'));
 
 
 // Enhanced Loading component with better UX
@@ -172,6 +173,14 @@ const App = () => {
                                             element={
                                                 <ProtectedRoute>
                                                     <AdminDriverVerification/>
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
+                                            path="/admin/drivers/:driverId"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <DriverDetails/>
                                                 </ProtectedRoute>
                                             }
                                         />

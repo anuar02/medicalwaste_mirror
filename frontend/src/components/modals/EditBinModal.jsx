@@ -39,6 +39,7 @@ const EditBinModal = ({ isOpen, onClose, bin, onSuccess }) => {
             companiesData ??
             [];
         if (Array.isArray(raw)) return raw;
+        if (Array.isArray(raw.companies)) return raw.companies;
         if (Array.isArray(raw.items)) return raw.items;
         if (Array.isArray(raw.results)) return raw.results;
         // Some APIs nest under `content` or `records`

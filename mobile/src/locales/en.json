@@ -154,8 +154,11 @@
     "registration": {
       "title": "Driver registration",
       "subtitle": "Submit your driver details for verification.",
+      "helper": "Complete all fields below. Verification takes up to 24 hours.",
       "company": "Medical company",
+      "companyHint": "Select the company you will work with.",
       "details": "Driver details",
+      "detailsHint": "Make sure the data matches your documents.",
       "license": "License",
       "licenseNumber": "Driver license number",
       "licensePlaceholder": "Enter license number",
@@ -167,9 +170,19 @@
       "pending": "Your request is pending verification.",
       "rejected": "Your request was rejected. Please contact support.",
       "submitted": "Your request was submitted.",
+      "refresh": "Check status",
+      "refreshError": "Failed to refresh status.",
       "noCompanies": "No active companies available.",
       "loadCompaniesError": "Failed to load companies.",
-      "submitError": "Failed to submit request."
+      "submitError": "Failed to submit request.",
+      "companyRequired": "Select a medical company.",
+      "licenseNumberRequired": "Enter your license number.",
+      "licenseNumberLength": "License number must be at least 8 characters.",
+      "licenseExpiryRequired": "Enter the license expiry date.",
+      "licenseExpiryFormat": "Use the format YYYY-MM-DD.",
+      "vehiclePlateRequired": "Enter your vehicle plate.",
+      "vehiclePlateLength": "Vehicle plate must be at least 6 characters.",
+      "done": "Done"
     },
     "route": {
       "title": "Route",
