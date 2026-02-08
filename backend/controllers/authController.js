@@ -6,6 +6,7 @@ const User = require('../models/User');
 const AppError = require('../utils/appError');
 const { sendEmail } = require('../utils/email');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { startPhoneVerification, checkPhoneVerification } = require('../services/twilioVerifyService');
 
 const normalizePhone = (value) => {
     if (!value) return '';
@@ -29,6 +30,37 @@ const splitName = (rawName) => {
         return { firstName: parts[0], lastName: 'User' };
     }
     return { firstName: 'User', lastName: 'User' };
+};
+
+const toSlug = (value) => String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+const buildUniqueUsername = async ({ username, firstName, lastName, email }) => {
+    if (username) return username;
+    const base = toSlug(`${firstName || ''} ${lastName || ''}`) || toSlug(email?.split('@')[0]) || 'user';
+    let candidate = base;
+    let counter = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const exists = await User.findOne({ username: candidate }).select('_id');
+        if (!exists) return candidate;
+        counter += 1;
+        candidate = `${base}_${counter}`;
+    }
+};
+
+const ensureSingleUserByPhone = async (phoneNumber) => {
+    const users = await User.find({ phoneNumber }).select('_id role verificationStatus active');
+    if (users.length === 0) {
+        throw new AppError('User not found', 404);
+    }
+    if (users.length > 1) {
+        throw new AppError('Multiple accounts use this phone number. Contact support.', 409);
+    }
+    return users[0];
 };
 
 /**
@@ -170,12 +202,13 @@ const register = asyncHandler(async (req, res, next) => {
     }
 
     const normalizedPhoneNumber = normalizePhone(phoneNumber);
+    const resolvedUsername = await buildUniqueUsername({ username, firstName, lastName, email });
 
     // Build user data
     const userData = {
         firstName,
         lastName,
-        username,
+        username: resolvedUsername,
         email,
         password,
         role: role || 'user',
@@ -480,12 +513,8 @@ const login = asyncHandler(async (req, res, next) => {
     }
 
     // Check driver verification status
-    if (user.role === 'driver' && user.verificationStatus !== 'approved') {
-        let message = 'Your driver account is pending approval';
-        if (user.verificationStatus === 'rejected') {
-            message = 'Your driver account has been rejected. Please contact administrator.';
-        }
-        return next(new AppError(message, 403));
+    if (user.role === 'driver' && user.verificationStatus === 'rejected') {
+        return next(new AppError('Your driver account has been rejected. Please contact administrator.', 403));
     }
 
     // Reset login attempts on successful login
@@ -504,6 +533,53 @@ const login = asyncHandler(async (req, res, next) => {
             user
         }
     });
+});
+
+const startPhoneLogin = asyncHandler(async (req, res, next) => {
+    const { phoneNumber } = req.body;
+    const normalizedPhone = normalizePhone(phoneNumber);
+    if (!normalizedPhone) {
+        return next(new AppError('Phone number is required', 400));
+    }
+
+    await ensureSingleUserByPhone(normalizedPhone);
+
+    const result = await startPhoneVerification(normalizedPhone);
+    if (!result.success) {
+        return next(new AppError(result.error || 'Failed to start verification', 400));
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            status: result.status
+        }
+    });
+});
+
+const verifyPhoneLogin = asyncHandler(async (req, res, next) => {
+    const { phoneNumber, code } = req.body;
+    const normalizedPhone = normalizePhone(phoneNumber);
+    if (!normalizedPhone || !code) {
+        return next(new AppError('Phone number and code are required', 400));
+    }
+
+    const check = await checkPhoneVerification(normalizedPhone, code);
+    if (!check.success || check.status !== 'approved') {
+        return next(new AppError(check.error || 'Invalid verification code', 401));
+    }
+
+    const user = await ensureSingleUserByPhone(normalizedPhone);
+
+    if (!user.active) {
+        return next(new AppError('Your account has been deactivated', 401));
+    }
+
+    if (user.role === 'driver' && user.verificationStatus === 'rejected') {
+        return next(new AppError('Your driver account has been rejected. Please contact administrator.', 403));
+    }
+
+    await createAndSendTokens(user, 200, res);
 });
 
 /**
@@ -712,6 +788,8 @@ const verifyToken = asyncHandler(async (req, res) => {
 module.exports = {
     register,
     login,
+    startPhoneLogin,
+    verifyPhoneLogin,
     logout,
     refreshToken,
     forgotPassword,

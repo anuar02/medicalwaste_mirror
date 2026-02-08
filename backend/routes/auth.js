@@ -6,6 +6,8 @@ const { body } = require('express-validator');
 const {
     register,
     login,
+    startPhoneLogin,
+    verifyPhoneLogin,
     logout,
     refreshToken,
     forgotPassword,
@@ -38,12 +40,14 @@ const registerValidation = [
         .matches(/^\+[1-9]\d{6,14}$/)
         .withMessage('Phone number must be in E.164 format, e.g. +77051234567'),
     body('username')
+        .optional()
         .trim()
         .isLength({ min: 3, max: 30 })
         .withMessage('Username must be between 3 and 30 characters')
         .matches(/^[a-zA-Z0-9_-]+$/)
         .withMessage('Username can only contain letters, numbers, underscores and hyphens'),
     body('email')
+        .optional({ checkFalsy: true })
         .trim()
         .isEmail()
         .withMessage('Please provide a valid email')
@@ -93,6 +97,25 @@ const resetPasswordValidation = [
 // Routes
 router.post('/register', registerValidation, validateRequest, register);
 router.post('/login', loginValidation, validateRequest, login);
+router.post('/phone/start', [
+    body('phoneNumber')
+        .trim()
+        .notEmpty()
+        .withMessage('Phone number is required')
+        .customSanitizer((value) => value.replace(/[^\d+]/g, ''))
+        .matches(/^\+[1-9]\d{6,14}$/)
+        .withMessage('Phone number must be in E.164 format, e.g. +77051234567')
+], validateRequest, startPhoneLogin);
+router.post('/phone/verify', [
+    body('phoneNumber')
+        .trim()
+        .notEmpty()
+        .withMessage('Phone number is required')
+        .customSanitizer((value) => value.replace(/[^\d+]/g, ''))
+        .matches(/^\+[1-9]\d{6,14}$/)
+        .withMessage('Phone number must be in E.164 format, e.g. +77051234567'),
+    body('code').notEmpty().withMessage('Verification code is required')
+], validateRequest, verifyPhoneLogin);
 router.post('/logout', auth, logout);
 router.post('/refresh-token', refreshToken);
 router.post('/forgot-password', body('email').isEmail(), validateRequest, forgotPassword);

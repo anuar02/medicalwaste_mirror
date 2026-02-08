@@ -12,25 +12,32 @@ import DriverHistoryStack from './DriverHistoryStack';
 import DriverContainersStack from './DriverContainersStack';
 import { DriverTabParamList } from '../types/navigation';
 import { useActiveCollection } from '../hooks/useCollections';
+import { useAuthStore } from '../stores/authStore';
+import DriverRegistrationScreen from '../screens/driver/DriverRegistrationScreen';
 import { dark } from '../theme';
 
 const Tab = createBottomTabNavigator<DriverTabParamList>();
 
 export default function DriverNavigator() {
   const { t } = useTranslation();
+  const { user } = useAuthStore();
   const { data: session } = useActiveCollection();
   const hasSession = Boolean(session);
+  const isApprovedDriver = user?.role === 'driver' && user?.verificationStatus === 'approved';
 
   const initialRouteName = useMemo(
-    () => (hasSession ? 'DriverSession' : 'DriverHome'),
-    [hasSession],
+    () => {
+      if (!isApprovedDriver) return 'DriverRegistration';
+      return hasSession ? 'DriverSession' : 'DriverHome';
+    },
+    [hasSession, isApprovedDriver],
   );
 
   return (
     <>
-      <DriverLocationTracker />
+      {isApprovedDriver ? <DriverLocationTracker /> : null}
       <Tab.Navigator
-        key={hasSession ? 'session-active' : 'session-idle'}
+        key={`${isApprovedDriver ? 'approved' : 'pending'}-${hasSession ? 'session-active' : 'session-idle'}`}
         initialRouteName={initialRouteName}
         screenOptions={{
           headerShown: false,
@@ -42,59 +49,74 @@ export default function DriverNavigator() {
           },
         }}
       >
-        <Tab.Screen
-          name="DriverHome"
-          component={DriverHome}
-          options={{
-            title: t('driver.tabs.home'),
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="home-variant-outline" color={color} size={size} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="DriverSession"
-          component={DriverSessionScreen}
-          options={{
-            title: t('driver.tabs.session'),
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="package-variant-closed" color={color} size={size} />
-            ),
-            tabBarButton: (props) => {
-              if (hasSession) {
-                return <TouchableOpacity {...props} />;
-              }
-              return (
-                <TouchableOpacity
-                  {...props}
-                  disabled
-                  onPress={() => undefined}
-                  style={[props.style, { opacity: 0.4 }]}
-                />
-              );
-            },
-          }}
-        />
-        <Tab.Screen
-          name="DriverContainersStack"
-          component={DriverContainersStack}
-          options={{
-            title: t('driver.tabs.containers'),
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="package-variant" color={color} size={size} />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="DriverHistoryStack"
-          component={DriverHistoryStack}
-          options={{
-            title: t('driver.tabs.history'),
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="clipboard-text-outline" color={color} size={size} />
-            ),
-          }}
-        />
+        {isApprovedDriver ? (
+          <>
+            <Tab.Screen
+              name="DriverHome"
+              component={DriverHome}
+              options={{
+                title: t('driver.tabs.home'),
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="home-variant-outline" color={color} size={size} />
+                ),
+              }}
+            />
+            <Tab.Screen
+              name="DriverSession"
+              component={DriverSessionScreen}
+              options={{
+                title: t('driver.tabs.session'),
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="package-variant-closed" color={color} size={size} />
+                ),
+                tabBarButton: (props) => {
+                  if (hasSession) {
+                    return <TouchableOpacity {...props} />;
+                  }
+                  return (
+                    <TouchableOpacity
+                      {...props}
+                      disabled
+                      onPress={() => undefined}
+                      style={[props.style, { opacity: 0.4 }]}
+                    />
+                  );
+                },
+              }}
+            />
+            <Tab.Screen
+              name="DriverContainersStack"
+              component={DriverContainersStack}
+              options={{
+                title: t('driver.tabs.containers'),
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="package-variant" color={color} size={size} />
+                ),
+              }}
+            />
+            <Tab.Screen
+              name="DriverHistoryStack"
+              component={DriverHistoryStack}
+              options={{
+                title: t('driver.tabs.history'),
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="clipboard-text-outline" color={color} size={size} />
+                ),
+              }}
+            />
+          </>
+        ) : (
+          <Tab.Screen
+            name="DriverRegistration"
+            component={DriverRegistrationScreen}
+            options={{
+              title: t('driver.tabs.registration'),
+              tabBarIcon: ({ color, size }) => (
+                <MaterialCommunityIcons name="clipboard-account-outline" color={color} size={size} />
+              ),
+            }}
+          />
+        )}
         <Tab.Screen
           name="DriverProfile"
           component={DriverSettings}

@@ -2,8 +2,12 @@
   "auth": {
     "login": "Login",
     "email": "Email",
+    "emailOptional": "Email (optional)",
+    "emailOptionalHint": "Use email to sign in with password.",
     "password": "Password",
     "signIn": "Sign In",
+    "phoneLogin": "Phone",
+    "emailLogin": "Email",
     "createAccount": "Create account",
     "register": "Register",
     "username": "Username",
@@ -13,6 +17,7 @@
     "role": "Role",
     "companyId": "Company ID",
     "phoneNumber": "Phone number",
+    "phonePlaceholder": "+7 7xx xxx xx xx",
     "phoneHint": "Use E.164 format, e.g. +77051234567",
     "vehiclePlate": "Vehicle plate",
     "signInSubtitle": "Sign in to your account",
@@ -21,6 +26,10 @@
     "registerTitle": "Create Account",
     "registerSubtitle": "Join MedicalWaste.kz",
     "passwordHint": "Min 8 chars, upper, lower, number, special.",
+    "code": "Verification code",
+    "sendCode": "Send code",
+    "verifyCode": "Verify code",
+    "phoneLoginFailed": "Phone verification failed",
     "hasAccount": "Already have an account?",
     "registerFailed": "Registration failed"
   },
@@ -32,10 +41,11 @@
     "tabs": {
       "home": "Home",
       "session": "Session",
-      "containers": "Containers",
-      "history": "History",
-      "profile": "Profile"
-    },
+    "containers": "Containers",
+    "history": "History",
+    "registration": "Registration",
+    "profile": "Profile"
+  },
     "home": {
       "title": "Driver Dashboard",
       "subtitle": "Start a session to see your route and handoffs.",
@@ -140,6 +150,26 @@
         "incinerate": "Incinerate",
         "done": "Done"
       }
+    },
+    "registration": {
+      "title": "Driver registration",
+      "subtitle": "Submit your driver details for verification.",
+      "company": "Medical company",
+      "details": "Driver details",
+      "license": "License",
+      "licenseNumber": "Driver license number",
+      "licensePlaceholder": "Enter license number",
+      "licenseExpiry": "License expiry date",
+      "licenseExpiryPlaceholder": "YYYY-MM-DD",
+      "vehiclePlate": "Vehicle plate",
+      "vehiclePlaceholder": "e.g. 123ABC01",
+      "submit": "Submit request",
+      "pending": "Your request is pending verification.",
+      "rejected": "Your request was rejected. Please contact support.",
+      "submitted": "Your request was submitted.",
+      "noCompanies": "No active companies available.",
+      "loadCompaniesError": "Failed to load companies.",
+      "submitError": "Failed to submit request."
     },
     "route": {
       "title": "Route",

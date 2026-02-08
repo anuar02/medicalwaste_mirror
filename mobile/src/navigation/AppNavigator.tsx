@@ -36,12 +36,12 @@ export default function AppNavigator() {
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
         </Stack.Navigator>
-      ) : user.role === 'driver' ? (
-        <DriverNavigator />
       ) : user.role === 'admin' ? (
         <AdminNavigator />
-      ) : (
+      ) : user.role === 'supervisor' ? (
         <SupervisorNavigator />
+      ) : (
+        <DriverNavigator />
       )}
     </NavigationContainer>
   );

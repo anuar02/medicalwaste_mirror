@@ -142,3 +142,10 @@ export interface IncinerationPlant {
   };
   active?: boolean;
 }
+
+export interface MedicalCompany {
+  _id: string;
+  name: string;
+  licenseNumber?: string;
+  contactInfo?: { phone?: string };
+}

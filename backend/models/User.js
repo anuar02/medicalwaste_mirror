@@ -47,12 +47,14 @@ const userSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        required: [true, 'Email is required'],
         unique: true,
+        sparse: true,
         trim: true,
         lowercase: true,
         validate: {
-            validator: validator.isEmail,
+            validator: function(v) {
+                return !v || validator.isEmail(v);
+            },
             message: 'Please provide a valid email'
         }
     },
@@ -180,7 +182,7 @@ const userSchema = new mongoose.Schema({
 
 // Index for efficient queries
 userSchema.index({ username: 1 });
-userSchema.index({ email: 1 });
+userSchema.index({ email: 1 }, { unique: true, sparse: true });
 userSchema.index({ role: 1 });
 userSchema.index({ company: 1 });
 userSchema.index({ verificationStatus: 1 });

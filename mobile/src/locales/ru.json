@@ -2,8 +2,12 @@
   "auth": {
     "login": "Вход",
     "email": "Email",
+    "emailOptional": "Email (необязательно)",
+    "emailOptionalHint": "Email нужен для входа по паролю.",
     "password": "Пароль",
     "signIn": "Войти",
+    "phoneLogin": "Телефон",
+    "emailLogin": "Email",
     "createAccount": "Создать аккаунт",
     "register": "Регистрация",
     "username": "Имя пользователя",
@@ -13,6 +17,7 @@
     "role": "Роль",
     "companyId": "ID компании",
     "phoneNumber": "Телефон",
+    "phonePlaceholder": "+7 7xx xxx xx xx",
     "phoneHint": "Формат E.164, например +77051234567",
     "vehiclePlate": "Номер авто",
     "signInSubtitle": "Войдите в свой аккаунт",
@@ -21,6 +26,10 @@
     "registerTitle": "Регистрация",
     "registerSubtitle": "Присоединяйтесь к MedicalWaste.kz",
     "passwordHint": "Мин. 8 символов: заглавные, строчные, цифры, спецсимволы.",
+    "code": "Код подтверждения",
+    "sendCode": "Отправить код",
+    "verifyCode": "Подтвердить код",
+    "phoneLoginFailed": "Ошибка входа по телефону",
     "hasAccount": "Уже есть аккаунт?",
     "registerFailed": "Ошибка регистрации"
   },
@@ -32,10 +41,11 @@
     "tabs": {
       "home": "Главная",
       "session": "Сессия",
-      "containers": "Контейнеры",
-      "history": "История",
-      "profile": "Профиль"
-    },
+    "containers": "Контейнеры",
+    "history": "История",
+    "registration": "Регистрация",
+    "profile": "Профиль"
+  },
     "home": {
       "title": "Панель водителя",
       "subtitle": "Начните сессию, чтобы увидеть маршрут и передачи.",
@@ -140,6 +150,26 @@
         "incinerate": "Утилизация",
         "done": "Готово"
       }
+    },
+    "registration": {
+      "title": "Регистрация водителя",
+      "subtitle": "Отправьте данные для проверки.",
+      "company": "Медицинская компания",
+      "details": "Данные водителя",
+      "license": "Лицензия",
+      "licenseNumber": "Номер водительских прав",
+      "licensePlaceholder": "Введите номер прав",
+      "licenseExpiry": "Срок действия прав",
+      "licenseExpiryPlaceholder": "ГГГГ-ММ-ДД",
+      "vehiclePlate": "Номер авто",
+      "vehiclePlaceholder": "Например: 123ABC01",
+      "submit": "Отправить заявку",
+      "pending": "Заявка на проверке.",
+      "rejected": "Заявка отклонена. Свяжитесь с поддержкой.",
+      "submitted": "Заявка отправлена.",
+      "noCompanies": "Нет доступных компаний.",
+      "loadCompaniesError": "Не удалось загрузить компании.",
+      "submitError": "Не удалось отправить заявку."
     },
     "route": {
       "title": "Маршрут",

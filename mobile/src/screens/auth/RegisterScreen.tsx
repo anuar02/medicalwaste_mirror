@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -114,39 +115,26 @@ export default function RegisterScreen() {
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'supervisor' | 'driver'>('supervisor');
-  const [companyId, setCompanyId] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [vehiclePlate, setVehiclePlate] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('+7');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const driverFieldsRequired = role === 'driver';
-
   const canSubmit = useMemo(() => {
-    if (!firstName || !lastName || !phoneNumber || !username || !email || !password || !passwordConfirm) {
+    if (!firstName || !lastName || !phoneNumber || !password || !passwordConfirm) {
       return false;
     }
     if (password !== passwordConfirm) return false;
-    if (driverFieldsRequired) {
-      return Boolean(companyId && vehiclePlate);
-    }
     return true;
   }, [
     firstName,
     lastName,
     phoneNumber,
-    username,
     email,
     password,
     passwordConfirm,
-    driverFieldsRequired,
-    companyId,
-    vehiclePlate,
   ]);
 
   /* pulsing glow orb */
@@ -173,14 +161,11 @@ export default function RegisterScreen() {
       await register({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        username: username.trim(),
-        email: email.trim(),
+        email: email.trim() || undefined,
         password,
         passwordConfirm,
-        role,
-        company: companyId.trim() || undefined,
+        role: 'user',
         phoneNumber: phoneNumber.trim(),
-        vehiclePlate: vehiclePlate.trim() || undefined,
       });
     } catch (err: any) {
       setError(err?.response?.data?.message || t('auth.registerFailed'));
@@ -190,7 +175,11 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+    >
       <View style={styles.bgBlob1} />
       <View style={styles.bgBlob2} />
 
@@ -233,84 +222,21 @@ export default function RegisterScreen() {
           />
           <GlowInput
             icon="phone-outline"
-            placeholder={t('auth.phoneNumber')}
+            placeholder={t('auth.phonePlaceholder')}
             value={phoneNumber}
-            onChangeText={setPhoneNumber}
+            onChangeText={(value) => setPhoneNumber(value || '+7')}
             keyboardType="phone-pad"
           />
           <Text style={styles.hint}>{t('auth.phoneHint')}</Text>
           <GlowInput
-            icon="account-outline"
-            placeholder={t('auth.username')}
-            value={username}
-            onChangeText={setUsername}
-          />
-          <GlowInput
             icon="email-outline"
-            placeholder={t('auth.email')}
+            placeholder={t('auth.emailOptional')}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
           />
-
-          {/* role selector */}
-          <Text style={styles.roleLabel}>{t('auth.role')}</Text>
-          <View style={styles.roleRow}>
-            <TouchableOpacity
-              style={[styles.rolePill, role === 'supervisor' && styles.rolePillActive]}
-              onPress={() => setRole('supervisor')}
-              activeOpacity={0.7}
-            >
-              <MaterialCommunityIcons
-                name="clipboard-account-outline"
-                size={16}
-                color={role === 'supervisor' ? '#fff' : MUTED}
-              />
-              <Text style={[styles.rolePillText, role === 'supervisor' && styles.rolePillTextActive]}>
-                {t('roles.supervisor')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.rolePill, role === 'driver' && styles.rolePillActive]}
-              onPress={() => setRole('driver')}
-              activeOpacity={0.7}
-            >
-              <MaterialCommunityIcons
-                name="truck-outline"
-                size={16}
-                color={role === 'driver' ? '#fff' : MUTED}
-              />
-              <Text style={[styles.rolePillText, role === 'driver' && styles.rolePillTextActive]}>
-                {t('roles.driver')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {driverFieldsRequired ? (
-            <>
-              <GlowInput
-                icon="domain"
-                placeholder={t('auth.companyId')}
-                value={companyId}
-                onChangeText={setCompanyId}
-              />
-              <GlowInput
-                icon="car-outline"
-                placeholder={t('auth.vehiclePlate')}
-                value={vehiclePlate}
-                onChangeText={setVehiclePlate}
-                autoCapitalize="characters"
-              />
-            </>
-          ) : (
-            <GlowInput
-              icon="domain"
-              placeholder={t('auth.companyId')}
-              value={companyId}
-              onChangeText={setCompanyId}
-            />
-          )}
+          <Text style={styles.hint}>{t('auth.emailOptionalHint')}</Text>
 
           <GlowInput
             icon="lock-outline"
@@ -362,7 +288,7 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

@@ -25,22 +25,20 @@ export async function login(email: string, password: string): Promise<User> {
 }
 
 export async function register(payload: {
-  username: string;
   firstName: string;
   lastName: string;
-  email: string;
+  email?: string;
   password: string;
   passwordConfirm: string;
-  role: 'supervisor' | 'driver';
+  role?: 'user' | 'supervisor' | 'driver';
   company?: string;
   phoneNumber: string;
   vehiclePlate?: string;
 }): Promise<User> {
   const response = await api.post<ApiSuccess<AuthResponseData>>('/api/auth/register', {
-    username: payload.username,
     firstName: payload.firstName,
     lastName: payload.lastName,
-    email: payload.email,
+    email: payload.email || undefined,
     password: payload.password,
     passwordConfirm: payload.passwordConfirm,
     role: payload.role,
@@ -56,6 +54,28 @@ export async function register(payload: {
   await SecureStore.setItemAsync(TOKEN_KEY, response.data.token);
   await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.data.data.user));
 
+  return response.data.data.user;
+}
+
+export async function startPhoneLogin(phoneNumber: string): Promise<void> {
+  const response = await api.post<ApiSuccess<{ status: string }>>('/api/auth/phone/start', {
+    phoneNumber,
+  });
+  if (response.data.status !== 'success') {
+    throw new Error('Failed to start phone login');
+  }
+}
+
+export async function verifyPhoneLogin(phoneNumber: string, code: string): Promise<User> {
+  const response = await api.post<ApiSuccess<AuthResponseData>>('/api/auth/phone/verify', {
+    phoneNumber,
+    code,
+  });
+  if (response.data.status !== 'success' || !response.data.token || !response.data.data) {
+    throw new Error('Invalid phone login response');
+  }
+  await SecureStore.setItemAsync(TOKEN_KEY, response.data.token);
+  await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.data.data.user));
   return response.data.data.user;
 }
 

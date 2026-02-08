@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -27,7 +27,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useAuthStore } from '../../stores/authStore';
+import SegmentedControl from '../../components/shared/SegmentedControl';
 import { RootStackParamList } from '../../types/navigation';
+import { typography } from '../../theme';
 
 const BG = '#0f172a';
 const SURFACE = 'rgba(30, 41, 59, 0.8)';
@@ -111,8 +113,12 @@ function GlowInput({
 export default function LoginScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { login } = useAuthStore();
+  const { login, startPhoneLogin, verifyPhoneLogin } = useAuthStore();
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('+7');
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [mode, setMode] = useState<'phone' | 'email'>('phone');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -134,17 +140,39 @@ export default function LoginScreen() {
     transform: [{ scale: 0.9 + pulse.value * 0.1 }],
   }));
 
+  useEffect(() => {
+    setError(null);
+    setCode('');
+    setCodeSent(false);
+  }, [mode]);
+
   const handleSubmit = async () => {
     setError(null);
     setIsSubmitting(true);
     try {
-      await login(email.trim(), password);
+      if (mode === 'email') {
+        await login(email.trim(), password);
+        return;
+      }
+
+      if (!codeSent) {
+        await startPhoneLogin(phoneNumber.trim());
+        setCodeSent(true);
+        return;
+      }
+
+      await verifyPhoneLogin(phoneNumber.trim(), code.trim());
     } catch {
-      setError(t('auth.invalidCredentials'));
+      setError(t(mode === 'email' ? 'auth.invalidCredentials' : 'auth.phoneLoginFailed'));
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const segments = useMemo(() => ([
+    { key: 'phone', label: t('auth.phoneLogin') },
+    { key: 'email', label: t('auth.emailLogin') },
+  ]), [t]);
 
   return (
     <View style={styles.root}>
@@ -176,22 +204,55 @@ export default function LoginScreen() {
         </Animated.View>
 
         {/* form */}
-        <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.form}>
-          <GlowInput
-            icon="email-outline"
-            placeholder={t('auth.email')}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
+        <Animated.View entering={FadeInDown.delay(350).duration(600)} style={styles.form}>
+          <SegmentedControl
+            segments={segments}
+            activeKey={mode}
+            onSelect={(key) => setMode(key as 'phone' | 'email')}
           />
-          <GlowInput
-            icon="lock-outline"
-            placeholder={t('auth.password')}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(450).duration(600)} style={styles.form}>
+          {mode === 'email' ? (
+            <>
+              <GlowInput
+                icon="email-outline"
+                placeholder={t('auth.email')}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <GlowInput
+                icon="lock-outline"
+                placeholder={t('auth.password')}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+            </>
+          ) : (
+            <>
+              <GlowInput
+                icon="phone-outline"
+                placeholder={t('auth.phonePlaceholder')}
+                value={phoneNumber}
+                onChangeText={(value) => setPhoneNumber(value || '+7')}
+                keyboardType="phone-pad"
+              />
+              {codeSent ? (
+                <GlowInput
+                  icon="message-text-outline"
+                  placeholder={t('auth.code')}
+                  value={code}
+                  onChangeText={setCode}
+                  keyboardType="number-pad"
+                />
+              ) : (
+                <Text style={styles.hint}>{t('auth.phoneHint')}</Text>
+              )}
+            </>
+          )}
         </Animated.View>
 
         {error ? (
@@ -211,7 +272,13 @@ export default function LoginScreen() {
             {isSubmitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>{t('auth.signIn')}</Text>
+              <Text style={styles.buttonText}>
+                {mode === 'email'
+                  ? t('auth.signIn')
+                  : codeSent
+                    ? t('auth.verifyCode')
+                    : t('auth.sendCode')}
+              </Text>
             )}
           </TouchableOpacity>
         </Animated.View>
@@ -316,6 +383,13 @@ const styles = StyleSheet.create({
 
   /* form */
   form: { marginBottom: 8 },
+  hint: {
+    ...typography.caption,
+    color: MUTED,
+    marginTop: -8,
+    marginBottom: 12,
+    marginLeft: 6,
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',

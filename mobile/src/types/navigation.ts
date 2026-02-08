@@ -17,6 +17,7 @@ export type DriverTabParamList = {
   };
   DriverContainersStack: undefined;
   DriverHistoryStack: undefined;
+  DriverRegistration: undefined;
   DriverProfile: undefined;
 };
 

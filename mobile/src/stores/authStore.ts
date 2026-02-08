@@ -6,6 +6,8 @@ import {
   login as loginService,
   logout as logoutService,
   register as registerService,
+  startPhoneLogin as startPhoneLoginService,
+  verifyPhoneLogin as verifyPhoneLoginService,
   verifySession,
 } from '../services/auth';
 
@@ -14,14 +16,15 @@ interface AuthState {
   isLoading: boolean;
   setUser: (user: User) => void;
   login: (email: string, password: string) => Promise<void>;
+  startPhoneLogin: (phoneNumber: string) => Promise<void>;
+  verifyPhoneLogin: (phoneNumber: string, code: string) => Promise<void>;
   register: (payload: {
-    username: string;
     firstName: string;
     lastName: string;
-    email: string;
+    email?: string;
     password: string;
     passwordConfirm: string;
-    role: 'supervisor' | 'driver';
+    role?: 'user' | 'supervisor' | 'driver';
     company?: string;
     phoneNumber: string;
     vehiclePlate?: string;
@@ -36,6 +39,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   setUser: (user: User) => set({ user }),
   login: async (email, password) => {
     const user = await loginService(email, password);
+    set({ user });
+  },
+  startPhoneLogin: async (phoneNumber) => {
+    await startPhoneLoginService(phoneNumber);
+  },
+  verifyPhoneLogin: async (phoneNumber, code) => {
+    const user = await verifyPhoneLoginService(phoneNumber, code);
     set({ user });
   },
   register: async (payload) => {
