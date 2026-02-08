@@ -208,6 +208,7 @@ deploy:
           image: $CI_REGISTRY_IMAGE/nginx:latest
           deploy:
             replicas: 1
+            placement: { constraints: [node.role == manager] }
           ports: ["80:8080", "443:8443"]
           volumes: ["/etc/letsencrypt:/etc/letsencrypt:ro"]
           networks: [myapp_app-network]
