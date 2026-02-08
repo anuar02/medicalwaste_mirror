@@ -142,7 +142,6 @@ deploy:
     SSH_USER: "ubuntu"
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
-      when: manual
   before_script:
     - apk add --no-cache openssh-client
     - mkdir -p ~/.ssh
