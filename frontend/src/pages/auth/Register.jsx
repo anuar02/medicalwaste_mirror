@@ -13,6 +13,9 @@ const Register = () => {
 
     // Form state
     const [formData, setFormData] = useState({
+        firstName: '',
+        lastName: '',
+        phoneNumber: '',
         username: '',
         email: '',
         password: '',
@@ -21,6 +24,9 @@ const Register = () => {
 
     // Validation state
     const [validation, setValidation] = useState({
+        firstName: { isValid: false, message: '', touched: false },
+        lastName: { isValid: false, message: '', touched: false },
+        phoneNumber: { isValid: false, message: '', touched: false },
         username: { isValid: false, message: '', touched: false },
         email: { isValid: false, message: '', touched: false },
         password: { isValid: false, message: '', touched: false },
@@ -45,6 +51,47 @@ const Register = () => {
 
     // Validate form data based on rules
     useEffect(() => {
+        const firstNameValidation = {
+            isValid: false,
+            message: '',
+            touched: validation.firstName.touched,
+        };
+
+        if (formData.firstName) {
+            firstNameValidation.isValid = true;
+        } else if (validation.firstName.touched) {
+            firstNameValidation.message = t('register.firstNameRequired');
+        }
+
+        const lastNameValidation = {
+            isValid: false,
+            message: '',
+            touched: validation.lastName.touched,
+        };
+
+        if (formData.lastName) {
+            lastNameValidation.isValid = true;
+        } else if (validation.lastName.touched) {
+            lastNameValidation.message = t('register.lastNameRequired');
+        }
+
+        const phoneValidation = {
+            isValid: false,
+            message: '',
+            touched: validation.phoneNumber.touched,
+        };
+
+        if (formData.phoneNumber) {
+            const phoneRegex = /^\+[1-9]\d{6,14}$/;
+            if (!phoneRegex.test(formData.phoneNumber.trim())) {
+                phoneValidation.message = t('register.phoneFormat');
+            } else {
+                phoneValidation.isValid = true;
+            }
+        } else if (validation.phoneNumber.touched) {
+            phoneValidation.message = t('register.phoneRequired');
+        }
+
         // Username validation
         const usernameValidation = {
             isValid: false,
@@ -135,12 +182,24 @@ const Register = () => {
         }
 
         setValidation({
+            firstName: firstNameValidation,
+            lastName: lastNameValidation,
+            phoneNumber: phoneValidation,
             username: usernameValidation,
             email: emailValidation,
             password: passwordValidation,
             passwordConfirm: passwordConfirmValidation,
         });
-    }, [formData, validation.username.touched, validation.email.touched, validation.password.touched, validation.passwordConfirm.touched]);
+    }, [
+        formData,
+        validation.firstName.touched,
+        validation.lastName.touched,
+        validation.phoneNumber.touched,
+        validation.username.touched,
+        validation.email.touched,
+        validation.password.touched,
+        validation.passwordConfirm.touched,
+    ]);
 
     // Check if form is valid
     const isFormValid = () => {
@@ -194,6 +253,9 @@ const Register = () => {
 
         try {
             const result = await register({
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                phoneNumber: formData.phoneNumber.trim(),
                 username: formData.username,
                 email: formData.email,
                 password: formData.password,
@@ -249,6 +311,69 @@ const Register = () => {
 
                     {/* Registration form */}
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* First name */}
+                        <div>
+                            <label htmlFor="firstName" className="mb-1 block text-sm font-medium text-slate-700">
+                                {t('register.firstName')}
+                            </label>
+                            <input
+                                id="firstName"
+                                name="firstName"
+                                type="text"
+                                required
+                                value={formData.firstName}
+                                onChange={handleChange}
+                                onBlur={handleBlur}
+                                className={`block w-full rounded-lg border px-3 py-2 text-slate-700 focus:ring-teal-500 transition-all duration-200 ${getInputStatusClass('firstName')}`}
+                                placeholder="Aigerim"
+                            />
+                            {validation.firstName.touched && !validation.firstName.isValid && (
+                                <p className="mt-1 text-xs text-red-500">{validation.firstName.message}</p>
+                            )}
+                        </div>
+
+                        {/* Last name */}
+                        <div>
+                            <label htmlFor="lastName" className="mb-1 block text-sm font-medium text-slate-700">
+                                {t('register.lastName')}
+                            </label>
+                            <input
+                                id="lastName"
+                                name="lastName"
+                                type="text"
+                                required
+                                value={formData.lastName}
+                                onChange={handleChange}
+                                onBlur={handleBlur}
+                                className={`block w-full rounded-lg border px-3 py-2 text-slate-700 focus:ring-teal-500 transition-all duration-200 ${getInputStatusClass('lastName')}`}
+                                placeholder="Sultanova"
+                            />
+                            {validation.lastName.touched && !validation.lastName.isValid && (
+                                <p className="mt-1 text-xs text-red-500">{validation.lastName.message}</p>
+                            )}
+                        </div>
+
+                        {/* Phone */}
+                        <div>
+                            <label htmlFor="phoneNumber" className="mb-1 block text-sm font-medium text-slate-700">
+                                {t('register.phone')}
+                            </label>
+                            <input
+                                id="phoneNumber"
+                                name="phoneNumber"
+                                type="tel"
+                                required
+                                value={formData.phoneNumber}
+                                onChange={handleChange}
+                                onBlur={handleBlur}
+                                className={`block w-full rounded-lg border px-3 py-2 text-slate-700 focus:ring-teal-500 transition-all duration-200 ${getInputStatusClass('phoneNumber')}`}
+                                placeholder="+77051234567"
+                            />
+                            <p className="mt-1 text-xs text-slate-400">{t('register.phoneHint')}</p>
+                            {validation.phoneNumber.touched && !validation.phoneNumber.isValid && (
+                                <p className="mt-1 text-xs text-red-500">{validation.phoneNumber.message}</p>
+                            )}
+                        </div>
                         {/* Username */}
                         <div>
                             <label htmlFor="username" className="mb-1 block text-sm font-medium text-slate-700">

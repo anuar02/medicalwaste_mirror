@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  SafeAreaView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,21 +9,111 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useAuthStore } from '../../stores/authStore';
-import { colors, spacing, typography } from '../../theme';
 import { RootStackParamList } from '../../types/navigation';
 
-const passwordRule = 'At least 8 chars, upper, lower, number, special.';
+const BG = '#0f172a';
+const SURFACE = 'rgba(30, 41, 59, 0.8)';
+const BORDER = 'rgba(51, 65, 85, 0.5)';
+const BORDER_ACTIVE = 'rgba(13, 148, 136, 0.8)';
+const MUTED = '#64748b';
+const TEAL = '#0d9488';
+const TEXT_LIGHT = '#f1f5f9';
+
+/* ── Animated input with icon & focus glow ──────────────────────────── */
+
+interface GlowInputProps {
+  icon: string;
+  placeholder: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  secureTextEntry?: boolean;
+  keyboardType?: TextInput['props']['keyboardType'];
+  autoCapitalize?: TextInput['props']['autoCapitalize'];
+}
+
+function GlowInput({
+  icon,
+  placeholder,
+  value,
+  onChangeText,
+  secureTextEntry,
+  keyboardType,
+  autoCapitalize,
+}: GlowInputProps) {
+  const [focused, setFocused] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const focus = useSharedValue(0);
+
+  const borderStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(focus.value, [0, 1], [BORDER, BORDER_ACTIVE]),
+  }));
+
+  return (
+    <Animated.View style={[styles.inputRow, borderStyle, focused && styles.inputGlow]}>
+      <MaterialCommunityIcons
+        name={icon as any}
+        size={20}
+        color={focused ? TEAL : MUTED}
+        style={styles.inputIcon}
+      />
+      <TextInput
+        placeholder={placeholder}
+        placeholderTextColor={MUTED}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={() => {
+          setFocused(true);
+          focus.value = withTiming(1, { duration: 250 });
+        }}
+        onBlur={() => {
+          setFocused(false);
+          focus.value = withTiming(0, { duration: 250 });
+        }}
+        secureTextEntry={secureTextEntry && !visible}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={false}
+        style={styles.inputText}
+      />
+      {secureTextEntry ? (
+        <TouchableOpacity onPress={() => setVisible((v) => !v)} hitSlop={8}>
+          <MaterialCommunityIcons
+            name={visible ? 'eye-off-outline' : 'eye-outline'}
+            size={20}
+            color={MUTED}
+          />
+        </TouchableOpacity>
+      ) : null}
+    </Animated.View>
+  );
+}
+
+/* ── Register screen ────────────────────────────────────────────────── */
 
 export default function RegisterScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { register } = useAuthStore();
 
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'supervisor' | 'driver'>('supervisor');
@@ -38,218 +128,399 @@ export default function RegisterScreen() {
   const driverFieldsRequired = role === 'driver';
 
   const canSubmit = useMemo(() => {
-    if (!username || !email || !password || !passwordConfirm) return false;
+    if (!firstName || !lastName || !phoneNumber || !username || !email || !password || !passwordConfirm) {
+      return false;
+    }
     if (password !== passwordConfirm) return false;
     if (driverFieldsRequired) {
-      return Boolean(companyId && phoneNumber && vehiclePlate);
+      return Boolean(companyId && vehiclePlate);
     }
     return true;
-  }, [username, email, password, passwordConfirm, driverFieldsRequired, companyId, phoneNumber, vehiclePlate]);
+  }, [
+    firstName,
+    lastName,
+    phoneNumber,
+    username,
+    email,
+    password,
+    passwordConfirm,
+    driverFieldsRequired,
+    companyId,
+    vehiclePlate,
+  ]);
+
+  /* pulsing glow orb */
+  const pulse = useSharedValue(0.6);
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.6, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+  }, []);
+  const orbGlow = useAnimatedStyle(() => ({
+    opacity: pulse.value,
+    transform: [{ scale: 0.9 + pulse.value * 0.1 }],
+  }));
 
   const handleSubmit = async () => {
     setError(null);
     setIsSubmitting(true);
     try {
       await register({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         username: username.trim(),
         email: email.trim(),
         password,
         passwordConfirm,
         role,
         company: companyId.trim() || undefined,
-        phoneNumber: phoneNumber.trim() || undefined,
+        phoneNumber: phoneNumber.trim(),
         vehiclePlate: vehiclePlate.trim() || undefined,
       });
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Registration failed');
+      setError(err?.response?.data?.message || t('auth.registerFailed'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>{t('auth.register')}</Text>
-        <TextInput
-          placeholder={t('auth.username')}
-          style={styles.input}
-          value={username}
-          onChangeText={setUsername}
-        />
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          placeholder={t('auth.email')}
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-        />
-        <View style={styles.roleRow}>
+    <View style={styles.root}>
+      <View style={styles.bgBlob1} />
+      <View style={styles.bgBlob2} />
+
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* glow orb */}
+        <Animated.View entering={FadeIn.duration(800)} style={styles.orbWrapper}>
+          <Animated.View style={[styles.orbRings, orbGlow]}>
+            <View style={styles.ring3} />
+            <View style={styles.ring2} />
+            <View style={styles.ring1} />
+          </Animated.View>
+          <View style={styles.orbCore}>
+            <MaterialCommunityIcons name="account-plus-outline" size={28} color="#fff" />
+          </View>
+        </Animated.View>
+
+        {/* branding */}
+        <Animated.View entering={FadeInDown.delay(200).duration(600)}>
+          <Text style={styles.brand}>{t('auth.registerTitle')}</Text>
+          <Text style={styles.subtitle}>{t('auth.registerSubtitle')}</Text>
+        </Animated.View>
+
+        {/* form */}
+        <Animated.View entering={FadeInDown.delay(400).duration(600)}>
+          <GlowInput
+            icon="account-box-outline"
+            placeholder={t('auth.firstName')}
+            value={firstName}
+            onChangeText={setFirstName}
+          />
+          <GlowInput
+            icon="account-box"
+            placeholder={t('auth.lastName')}
+            value={lastName}
+            onChangeText={setLastName}
+          />
+          <GlowInput
+            icon="phone-outline"
+            placeholder={t('auth.phoneNumber')}
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            keyboardType="phone-pad"
+          />
+          <Text style={styles.hint}>{t('auth.phoneHint')}</Text>
+          <GlowInput
+            icon="account-outline"
+            placeholder={t('auth.username')}
+            value={username}
+            onChangeText={setUsername}
+          />
+          <GlowInput
+            icon="email-outline"
+            placeholder={t('auth.email')}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+
+          {/* role selector */}
           <Text style={styles.roleLabel}>{t('auth.role')}</Text>
-          <View style={styles.roleButtons}>
+          <View style={styles.roleRow}>
             <TouchableOpacity
-              style={role === 'supervisor' ? styles.roleButtonActive : styles.roleButton}
+              style={[styles.rolePill, role === 'supervisor' && styles.rolePillActive]}
               onPress={() => setRole('supervisor')}
+              activeOpacity={0.7}
             >
-              <Text style={role === 'supervisor' ? styles.roleTextActive : styles.roleText}>Supervisor</Text>
+              <MaterialCommunityIcons
+                name="clipboard-account-outline"
+                size={16}
+                color={role === 'supervisor' ? '#fff' : MUTED}
+              />
+              <Text style={[styles.rolePillText, role === 'supervisor' && styles.rolePillTextActive]}>
+                {t('roles.supervisor')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={role === 'driver' ? styles.roleButtonActive : styles.roleButton}
+              style={[styles.rolePill, role === 'driver' && styles.rolePillActive]}
               onPress={() => setRole('driver')}
+              activeOpacity={0.7}
             >
-              <Text style={role === 'driver' ? styles.roleTextActive : styles.roleText}>Driver</Text>
+              <MaterialCommunityIcons
+                name="truck-outline"
+                size={16}
+                color={role === 'driver' ? '#fff' : MUTED}
+              />
+              <Text style={[styles.rolePillText, role === 'driver' && styles.rolePillTextActive]}>
+                {t('roles.driver')}
+              </Text>
             </TouchableOpacity>
           </View>
-        </View>
-        <TextInput
-          placeholder={t('auth.companyId')}
-          style={styles.input}
-          value={companyId}
-          onChangeText={setCompanyId}
-        />
-        {driverFieldsRequired ? (
-          <>
-            <TextInput
-              placeholder={t('auth.phoneNumber')}
-              style={styles.input}
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-            />
-            <TextInput
-              placeholder={t('auth.vehiclePlate')}
-              style={styles.input}
-              value={vehiclePlate}
-              onChangeText={setVehiclePlate}
-            />
-          </>
-        ) : null}
-        <TextInput
-          placeholder={t('auth.password')}
-          style={styles.input}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-        <Text style={styles.helper}>{passwordRule}</Text>
-        <TextInput
-          placeholder={t('auth.confirmPassword')}
-          style={styles.input}
-          secureTextEntry
-          value={passwordConfirm}
-          onChangeText={setPasswordConfirm}
-        />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <TouchableOpacity
-          style={[styles.button, !canSubmit && styles.buttonDisabled]}
-          onPress={handleSubmit}
-          disabled={!canSubmit || isSubmitting}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color={colors.surface} />
+
+          {driverFieldsRequired ? (
+            <>
+              <GlowInput
+                icon="domain"
+                placeholder={t('auth.companyId')}
+                value={companyId}
+                onChangeText={setCompanyId}
+              />
+              <GlowInput
+                icon="car-outline"
+                placeholder={t('auth.vehiclePlate')}
+                value={vehiclePlate}
+                onChangeText={setVehiclePlate}
+                autoCapitalize="characters"
+              />
+            </>
           ) : (
-            <Text style={styles.buttonText}>{t('auth.register')}</Text>
+            <GlowInput
+              icon="domain"
+              placeholder={t('auth.companyId')}
+              value={companyId}
+              onChangeText={setCompanyId}
+            />
           )}
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate('Login')}>
-          <Text style={styles.linkText}>{t('auth.login')}</Text>
-        </TouchableOpacity>
+
+          <GlowInput
+            icon="lock-outline"
+            placeholder={t('auth.password')}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+          <Text style={styles.hint}>{t('auth.passwordHint')}</Text>
+
+          <GlowInput
+            icon="lock-check-outline"
+            placeholder={t('auth.confirmPassword')}
+            value={passwordConfirm}
+            onChangeText={setPasswordConfirm}
+            secureTextEntry
+          />
+        </Animated.View>
+
+        {error ? (
+          <Animated.View entering={FadeIn.duration(300)}>
+            <Text style={styles.error}>{error}</Text>
+          </Animated.View>
+        ) : null}
+
+        {/* button */}
+        <Animated.View entering={FadeInDown.delay(600).duration(600)}>
+          <TouchableOpacity
+            style={[styles.button, (!canSubmit || isSubmitting) && styles.buttonDisabled]}
+            onPress={handleSubmit}
+            disabled={!canSubmit || isSubmitting}
+            activeOpacity={0.8}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>{t('auth.register')}</Text>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* link to login */}
+        <Animated.View entering={FadeInDown.delay(700).duration(600)}>
+          <TouchableOpacity style={styles.link} onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.linkText}>
+              {t('auth.hasAccount')}{' '}
+              <Text style={styles.linkAccent}>{t('auth.signIn')}</Text>
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: { flex: 1, backgroundColor: BG },
+  container: { paddingHorizontal: 28, paddingTop: 60, paddingBottom: 40 },
+
+  /* ambient background blobs */
+  bgBlob1: {
+    position: 'absolute',
+    top: -60,
+    right: -60,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(13, 148, 136, 0.06)',
+  },
+  bgBlob2: {
+    position: 'absolute',
+    bottom: -80,
+    left: -80,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: 'rgba(59, 130, 246, 0.04)',
+  },
+
+  /* pulsing orb (compact for register) */
+  orbWrapper: {
+    alignSelf: 'center',
+    width: 110,
+    height: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  orbRings: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ring3: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(13, 148, 136, 0.06)',
+  },
+  ring2: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(13, 148, 136, 0.12)',
+  },
+  ring1: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(13, 148, 136, 0.22)',
+  },
+  orbCore: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: TEAL,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: TEAL,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+
+  /* branding */
+  brand: { fontSize: 24, fontWeight: '700', color: TEXT_LIGHT, textAlign: 'center' },
+  subtitle: {
+    fontSize: 14,
+    color: MUTED,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 28,
+  },
+
+  /* role selector */
+  roleLabel: { color: MUTED, fontSize: 13, marginBottom: 10 },
+  roleRow: { flexDirection: 'row', marginBottom: 16, gap: 10 },
+  rolePill: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  container: {
-    padding: spacing.xl,
-  },
-  title: {
-    ...typography.heading,
-    color: colors.textPrimary,
-    marginBottom: spacing.xl,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.lg,
-    color: colors.textPrimary,
-  },
-  helper: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: -spacing.md,
-    marginBottom: spacing.md,
-  },
-  error: {
-    color: colors.danger,
-    marginBottom: spacing.md,
-  },
-  button: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: colors.surface,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  linkButton: {
-    marginTop: spacing.lg,
-    alignItems: 'center',
-  },
-  linkText: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  roleRow: {
-    marginBottom: spacing.lg,
-  },
-  roleLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  roleButtons: {
     flexDirection: 'row',
-  },
-  roleButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    marginRight: spacing.sm,
+    borderColor: BORDER,
+    backgroundColor: SURFACE,
   },
-  roleButtonActive: {
+  rolePillActive: {
+    borderColor: TEAL,
+    backgroundColor: TEAL,
+    shadowColor: TEAL,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  rolePillText: { fontSize: 13, color: MUTED },
+  rolePillTextActive: { color: '#fff', fontWeight: '600' },
+
+  /* hint */
+  hint: { color: MUTED, fontSize: 12, marginTop: -8, marginBottom: 12 },
+
+  /* form inputs */
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: SURFACE,
     borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    marginRight: spacing.sm,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
+    marginBottom: 16,
   },
-  roleText: {
-    fontSize: 12,
-    color: colors.textPrimary,
+  inputGlow: {
+    shadowColor: TEAL,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  roleTextActive: {
-    fontSize: 12,
-    color: colors.surface,
-    fontWeight: '600',
+  inputIcon: { marginRight: 12 },
+  inputText: { flex: 1, fontSize: 15, color: TEXT_LIGHT },
+
+  /* error */
+  error: { color: '#f87171', fontSize: 13, textAlign: 'center', marginBottom: 12 },
+
+  /* button */
+  button: {
+    backgroundColor: TEAL,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: TEAL,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
+    marginTop: 8,
   },
+  buttonDisabled: { opacity: 0.5 },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  /* link */
+  link: { marginTop: 24, alignItems: 'center', marginBottom: 20 },
+  linkText: { color: MUTED, fontSize: 14 },
+  linkAccent: { color: TEAL, fontWeight: '600' },
 });

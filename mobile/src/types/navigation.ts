@@ -10,11 +10,24 @@ export type SupervisorTabParamList = {
 };
 
 export type DriverTabParamList = {
-  ActiveCollection: undefined;
-  DriverContainers: undefined;
-  DriverHandoffs: undefined;
+  DriverHome: undefined;
+  DriverSession: {
+    initialTab?: 'route' | 'handoffs';
+    focusHandoffId?: string;
+  };
+  DriverContainersStack: undefined;
+  DriverHistoryStack: undefined;
+  DriverProfile: undefined;
+};
+
+export type DriverHistoryStackParamList = {
   DriverHistory: undefined;
-  DriverSettings: undefined;
+  DriverSessionTimeline: { sessionId: string };
+};
+
+export type DriverContainersStackParamList = {
+  DriverContainers: undefined;
+  DriverContainerDetail: { containerId: string };
 };
 
 export type AdminTabParamList = {

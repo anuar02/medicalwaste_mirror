@@ -56,7 +56,8 @@ const CompanyDetails = () => {
         isLoading: isLoadingStats
     } = useQuery({
         queryKey: ['companyStats', id],
-        // queryFn: () => apiService.companies.getStats(id),
+        queryFn: () => apiService.companies.getStats(id),
+        enabled: !!id,
         select: (resp) => resp?.data?.data?.statistics || resp?.data?.statistics || {}
     });
 
@@ -609,7 +610,7 @@ const BinsTab = ({ bins, isLoading, companyId }) => {
                     <div
                         key={bin._id}
                         className="flex items-center justify-between rounded-lg border border-slate-200 p-4 hover:border-teal-300 transition-colors cursor-pointer"
-                        onClick={() => navigate(`/bins/${bin._id}`)}
+                        onClick={() => navigate(`/bins/${bin.binId || bin._id}`)}
                     >
                         <div className="flex items-center space-x-4">
                             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100">

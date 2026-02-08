@@ -12,15 +12,18 @@ import {
 interface AuthState {
   user: User | null;
   isLoading: boolean;
+  setUser: (user: User) => void;
   login: (email: string, password: string) => Promise<void>;
   register: (payload: {
     username: string;
+    firstName: string;
+    lastName: string;
     email: string;
     password: string;
     passwordConfirm: string;
     role: 'supervisor' | 'driver';
     company?: string;
-    phoneNumber?: string;
+    phoneNumber: string;
     vehiclePlate?: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
@@ -30,6 +33,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
+  setUser: (user: User) => set({ user }),
   login: async (email, password) => {
     const user = await loginService(email, password);
     set({ user });

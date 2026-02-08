@@ -1,17 +1,48 @@
 export type UserRole = 'user' | 'admin' | 'supervisor' | 'driver';
 
-export interface UserProfile {
-  fullName?: string;
-  phone?: string;
-  avatar?: string;
-}
-
 export interface User {
   _id: string;
   email: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
   role: UserRole;
-  company?: string;
-  profile?: UserProfile;
+  company?: string | { _id?: string; name?: string; contactInfo?: { phone?: string } };
+  phoneNumber?: string;
+  phoneNumberVerified?: boolean;
+  vehicleInfo?: { plateNumber?: string; vehicleType?: string; model?: string; year?: number };
+  verificationStatus?: 'pending' | 'approved' | 'rejected';
+  department?: string;
+  createdAt?: string;
+}
+
+export interface DriverProfile {
+  _id: string;
+  user?: string;
+  licenseNumber?: string;
+  licenseExpiry?: string;
+  medicalCompany?: { _id?: string; name?: string; licenseNumber?: string; contactInfo?: { phone?: string } };
+  vehicleInfo?: {
+    plateNumber?: string;
+    model?: string;
+    year?: number;
+    capacity?: number;
+  };
+  emergencyContact?: {
+    name?: string;
+    phone?: string;
+    relationship?: string;
+  };
+  certifications?: {
+    name?: string;
+    issuer?: string;
+    issueDate?: string;
+    expiryDate?: string;
+    certificateNumber?: string;
+  }[];
+  isVerified?: boolean;
+  isActive?: boolean;
+  createdAt?: string;
 }
 
 export interface WasteBin {
@@ -60,9 +91,24 @@ export interface HandoffParty {
 export interface HandoffContainer {
   container: string;
   binId?: string;
+  wasteClass?: string;
+  wasteType?: string;
+  fillLevel?: number;
   declaredWeight?: number;
   confirmedWeight?: number;
   bagCount?: number;
+  notes?: string;
+}
+
+export interface HandoffDispute {
+  raisedBy?: string;
+  role?: string;
+  reason?: string;
+  description?: string;
+  photos?: string[];
+  resolvedBy?: string;
+  resolution?: string;
+  resolvedAt?: string;
 }
 
 export interface Handoff {
@@ -78,8 +124,14 @@ export interface Handoff {
   sender?: HandoffParty;
   receiver?: HandoffParty;
   containers?: HandoffContainer[];
+  totalContainers?: number;
   totalDeclaredWeight?: number;
+  totalConfirmedWeight?: number;
   createdAt?: string;
+  completedAt?: string;
+  tokenExpiresAt?: string;
+  expiresAt?: string;
+  dispute?: HandoffDispute;
 }
 
 export interface IncinerationPlant {

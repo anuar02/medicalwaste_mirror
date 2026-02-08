@@ -33,6 +33,18 @@ const userSchema = new mongoose.Schema({
             message: 'Username can only contain alphanumeric characters, underscores and hyphens'
         }
     },
+    firstName: {
+        type: String,
+        required: [true, 'First name is required'],
+        trim: true,
+        maxlength: [50, 'First name cannot exceed 50 characters']
+    },
+    lastName: {
+        type: String,
+        required: [true, 'Last name is required'],
+        trim: true,
+        maxlength: [50, 'Last name cannot exceed 50 characters']
+    },
     email: {
         type: String,
         required: [true, 'Email is required'],
@@ -93,7 +105,14 @@ const userSchema = new mongoose.Schema({
     },
     phoneNumber: {
         type: String,
-        trim: true
+        required: [true, 'Phone number is required'],
+        trim: true,
+        validate: {
+            validator: function(v) {
+                return /^\+[1-9]\d{6,14}$/.test(v);
+            },
+            message: 'Phone number must be in E.164 format, e.g. +77051234567'
+        }
     },
     phoneNumberVerified: {
         type: Boolean,

@@ -6,13 +6,21 @@ import { formatDate, formatPercentage } from '../../utils/formatters';
 import BinStatusBadge from './BinStatusBadge';
 
 const BinCard = ({ bin, onClick }) => {
+    const lastUpdateValue = bin.lastUpdate || bin.updatedAt || bin.createdAt;
+    const lastUpdateDate = lastUpdateValue ? new Date(lastUpdateValue) : null;
+    const companyName = typeof bin.company === 'object' ? bin.company?.name : null;
+    const temperature = Number.isFinite(bin.temperature) ? bin.temperature : 0;
+    const weight = Number.isFinite(bin.weight) ? bin.weight : 0;
+
     // Check if bin needs attention (over threshold)
     const needsAttention = bin.fullness >= bin.alertThreshold;
 
     // Check if bin is online based on last update
     const isOnline = () => {
-        const lastUpdateTime = new Date(bin.lastUpdate);
-        const timeDiff = new Date() - lastUpdateTime;
+        if (!lastUpdateDate || Number.isNaN(lastUpdateDate.getTime())) {
+            return false;
+        }
+        const timeDiff = new Date() - lastUpdateDate;
         return timeDiff < 60000; // 1 minute
     };
 
@@ -47,10 +55,10 @@ const BinCard = ({ bin, onClick }) => {
                     </div>
                 </div>
                 {/* Company name - NEW */}
-                {bin.company && (
+                {companyName && (
                     <div className="mt-1 flex items-center space-x-1 text-xs text-slate-500">
                         <Building2 className="h-3 w-3" />
-                        <span className="font-medium">{bin.company.name}</span>
+                        <span className="font-medium">{companyName}</span>
                     </div>
                 )}
                 <p className="mt-0.5 truncate text-sm text-slate-500">
@@ -87,7 +95,7 @@ const BinCard = ({ bin, onClick }) => {
                             <span className="text-xs text-slate-700">Темп.</span>
                         </div>
                         <span className="text-xs font-medium text-slate-800">
-              {bin.temperature.toFixed(1)}°C
+              {temperature.toFixed(1)}°C
             </span>
                     </div>
 
@@ -97,7 +105,7 @@ const BinCard = ({ bin, onClick }) => {
                             <span className="text-xs text-slate-700">Вес</span>
                         </div>
                         <span className="text-xs font-medium text-slate-800">
-              {bin.weight.toFixed(1)} кг
+              {weight.toFixed(1)} кг
             </span>
                     </div>
                 </div>
@@ -108,7 +116,7 @@ const BinCard = ({ bin, onClick }) => {
                 <div className="flex items-center">
                     <Clock className="mr-1 h-3 w-3" />
                     <span>
-            {formatDate(bin.lastUpdate, false, true)}
+            {formatDate(lastUpdateValue, false, true)}
           </span>
                 </div>
                 <span>
@@ -126,14 +134,19 @@ BinCard.propTypes = {
         wasteType: PropTypes.string.isRequired,
         fullness: PropTypes.number.isRequired,
         alertThreshold: PropTypes.number.isRequired,
-        temperature: PropTypes.number.isRequired,
-        weight: PropTypes.number.isRequired,
+        temperature: PropTypes.number,
+        weight: PropTypes.number,
         status: PropTypes.string.isRequired,
-        lastUpdate: PropTypes.string.isRequired,
-        company: PropTypes.shape({
-            _id: PropTypes.string,
-            name: PropTypes.string,
-        }),
+        lastUpdate: PropTypes.string,
+        updatedAt: PropTypes.string,
+        createdAt: PropTypes.string,
+        company: PropTypes.oneOfType([
+            PropTypes.string,
+            PropTypes.shape({
+                _id: PropTypes.string,
+                name: PropTypes.string,
+            })
+        ]),
     }).isRequired,
     onClick: PropTypes.func,
 };

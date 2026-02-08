@@ -42,6 +42,7 @@ const updateProfileValidation = [
         .withMessage('Please provide a valid email')
         .normalizeEmail(),
     body('role')
+        .optional()
         .isIn(['user', 'admin', 'supervisor', 'driver'])
         .withMessage('Invalid role'),
     body('department')
@@ -57,7 +58,17 @@ const updateProfileValidation = [
             'Реанимация',
             '' // Allow empty for clearing
         ])
-        .withMessage('Invalid department selection')
+        .withMessage('Invalid department selection'),
+    body('phoneNumber')
+        .optional()
+        .trim()
+        .matches(/^\+[1-9]\d{6,14}$/)
+        .withMessage('Phone number must be in E.164 format, e.g. +77051234567'),
+    body('vehicleInfo.plateNumber')
+        .optional()
+        .trim()
+        .isLength({ min: 1, max: 20 })
+        .withMessage('Plate number must be between 1 and 20 characters')
 ];
 
 const phoneValidation = [

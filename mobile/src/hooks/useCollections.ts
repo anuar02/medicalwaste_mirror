@@ -4,6 +4,7 @@ import {
   fetchActiveCollection,
   fetchCollectionHistory,
   markCollectionVisited,
+  startCollection,
   stopCollection,
 } from '../services/collections';
 
@@ -11,6 +12,17 @@ export function useActiveCollection() {
   return useQuery({
     queryKey: ['collections', 'active'],
     queryFn: fetchActiveCollection,
+  });
+}
+
+export function useStartCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof startCollection>[0]) => startCollection(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['collections', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['waste-bins'] });
+    },
   });
 }
 

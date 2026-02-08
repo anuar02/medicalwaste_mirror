@@ -33,6 +33,8 @@ const getProfile = async (req, res, next) => {
                 _id: user._id,
                 id: user._id, // Include both for compatibility
                 username: user.username,
+                firstName: user.firstName,
+                lastName: user.lastName,
                 email: user.email,
                 role: user.role,
                 department: user.department || '',
@@ -83,7 +85,7 @@ const assignCompany = asyncHandler(async (req, res, next) => {
  * Update current user profile
  */
 const updateProfile = asyncHandler(async (req, res, next) => {
-    const { username, email, department } = req.body;
+    const { username, email, department, phoneNumber, vehicleInfo } = req.body;
 
     // Check if another user already has this username or email
     if (username) {
@@ -113,33 +115,31 @@ const updateProfile = asyncHandler(async (req, res, next) => {
     if (username) updatedFields.username = username;
     if (email) updatedFields.email = email;
     if (department) updatedFields.department = department;
+    if (phoneNumber !== undefined) updatedFields.phoneNumber = phoneNumber;
+    if (vehicleInfo) {
+        const existing = await User.findById(req.user._id).select('vehicleInfo');
+        updatedFields.vehicleInfo = { ...existing?.vehicleInfo?.toObject?.(), ...vehicleInfo };
+    }
 
     // Find and update user
     const user = await User.findByIdAndUpdate(
         req.user._id,
         updatedFields,
         {
-            new: true, // Return updated user
-            runValidators: true // Run validators on updated fields
+            new: true,
+            runValidators: true
         }
-    );
+    )
+        .select('-password -resetPasswordToken -resetPasswordExpires')
+        .populate('company', 'name contactInfo');
 
     if (!user) {
         return next(new AppError('User not found', 404));
     }
 
-    // Send updated user data
     res.status(200).json({
         status: 'success',
-        data: {
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                role: user.role,
-                department: user.department
-            }
-        }
+        data: { user }
     });
 });
 
@@ -405,7 +405,7 @@ const updateUserRole = asyncHandler(async (req, res, next) => {
  */
 const getAllUsers = asyncHandler(async (req, res) => {
     const users = await User.find()
-        .select('username email role department lastLogin active');
+        .select('firstName lastName phoneNumber username email role department lastLogin active');
 
     res.status(200).json({
         status: 'success',
@@ -426,7 +426,7 @@ const getAllDrivers = asyncHandler(async (req, res) => {
 
     const drivers = await User.find(query)
         .populate('company', 'name licenseNumber')
-        .select('username email phoneNumber vehicleInfo driverLicense verificationStatus active lastLogin')
+        .select('firstName lastName username email phoneNumber vehicleInfo driverLicense verificationStatus active lastLogin')
         .sort({ createdAt: -1 });
 
     res.status(200).json({

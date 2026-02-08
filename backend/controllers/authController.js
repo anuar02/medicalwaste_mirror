@@ -7,6 +7,30 @@ const AppError = require('../utils/appError');
 const { sendEmail } = require('../utils/email');
 const { asyncHandler } = require('../utils/asyncHandler');
 
+const normalizePhone = (value) => {
+    if (!value) return '';
+    return String(value).replace(/[^\d+]/g, '');
+};
+
+const generatePlaceholderPhone = () => {
+    const suffix = String(Math.floor(Math.random() * 1e9)).padStart(9, '0');
+    return `+7${suffix}`;
+};
+
+const splitName = (rawName) => {
+    const parts = String(rawName || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    if (parts.length >= 2) {
+        return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+    }
+    if (parts.length === 1) {
+        return { firstName: parts[0], lastName: 'User' };
+    }
+    return { firstName: 'User', lastName: 'User' };
+};
+
 /**
  * Generate JWT token
  * @param {string} userId - User ID to encode in the token
@@ -71,7 +95,7 @@ const googleClient = new OAuth2Client(
  * @param {number} statusCode - HTTP status code
  * @param {Object} res - Express response object
  */
-const createAndSendTokens = (user, statusCode, res) => {
+const createAndSendTokens = async (user, statusCode, res) => {
     const token = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
 
@@ -93,18 +117,19 @@ const createAndSendTokens = (user, statusCode, res) => {
         )
     });
 
+    // Fetch full user with populated company
+    const fullUser = await User.findById(user._id)
+        .select('-password -resetPasswordToken -resetPasswordExpires')
+        .populate('company', 'name contactInfo')
+        .lean();
+
     // Send response
     res.status(statusCode).json({
         status: 'success',
         token,
         refreshToken,
         data: {
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                role: user.role
-            }
+            user: fullUser
         }
     });
 };
@@ -114,6 +139,8 @@ const createAndSendTokens = (user, statusCode, res) => {
  */
 const register = asyncHandler(async (req, res, next) => {
     const {
+        firstName,
+        lastName,
         username,
         email,
         password,
@@ -142,12 +169,17 @@ const register = asyncHandler(async (req, res, next) => {
         }
     }
 
+    const normalizedPhoneNumber = normalizePhone(phoneNumber);
+
     // Build user data
     const userData = {
+        firstName,
+        lastName,
         username,
         email,
         password,
-        role: role || 'user'
+        role: role || 'user',
+        phoneNumber: normalizedPhoneNumber
     };
 
     // Add company if provided
@@ -163,13 +195,8 @@ const register = asyncHandler(async (req, res, next) => {
         if (!vehicleInfo || !vehicleInfo.plateNumber) {
             return next(new AppError('Vehicle plate number is required for drivers', 400));
         }
-        if (!phoneNumber) {
-            return next(new AppError('Phone number is required for drivers', 400));
-        }
-
         userData.vehicleInfo = vehicleInfo;
         userData.driverLicense = driverLicense;
-        userData.phoneNumber = phoneNumber;
         userData.verificationStatus = 'pending'; // Drivers need approval
     }
 
@@ -255,11 +282,16 @@ const googleCallback = asyncHandler(async (req, res, next) => {
             // Create new user
             // Generate a random password for Google users (they'll login with Google)
             const randomPassword = crypto.randomBytes(16).toString('hex');
+            const { firstName, lastName } = splitName(data.name || data.given_name || data.family_name);
+            const phoneNumber = generatePlaceholderPhone();
 
             user = await User.create({
                 username: data.name.replace(/\s+/g, '_').toLowerCase() + '_' + crypto.randomBytes(3).toString('hex'),
+                firstName,
+                lastName,
                 email: data.email,
                 password: randomPassword,
+                phoneNumber,
                 googleId: data.sub,
                 googleProfile: data,
                 active: true
@@ -352,11 +384,16 @@ const googleLogin = asyncHandler(async (req, res, next) => {
             console.log(`Creating new user for ${email}`);
             // Create new user
             const randomPassword = crypto.randomBytes(16).toString('hex');
+            const { firstName, lastName } = splitName(payload.name || name);
+            const phoneNumber = generatePlaceholderPhone();
 
             user = await User.create({
                 username: name.replace(/\s+/g, '_').toLowerCase() + '_' + crypto.randomBytes(3).toString('hex'),
+                firstName,
+                lastName,
                 email,
                 password: randomPassword,
+                phoneNumber,
                 googleId,
                 googleProfile: payload,
                 active: true
@@ -660,17 +697,15 @@ const changePassword = asyncHandler(async (req, res, next) => {
  * Verify token and return user info
  */
 const verifyToken = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id)
+        .select('-password -resetPasswordToken -resetPasswordExpires')
+        .populate('company', 'name contactInfo')
+        .lean();
+
     res.status(200).json({
         status: 'success',
         valid: true,
-        data: {
-            user: {
-                id: req.user._id,
-                username: req.user.username,
-                email: req.user.email,
-                role: req.user.role
-            }
-        }
+        data: { user }
     });
 });
 

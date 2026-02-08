@@ -4,13 +4,17 @@ import {
   confirmHandoff,
   createDriverToIncineratorHandoff,
   createFacilityToDriverHandoff,
+  disputeHandoff,
   fetchHandoffs,
+  resendHandoffNotification,
 } from '../services/handoffs';
 
-export function useHandoffs() {
+export function useHandoffs(options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery({
     queryKey: ['handoffs'],
     queryFn: fetchHandoffs,
+    enabled: options?.enabled,
+    refetchInterval: options?.refetchInterval,
   });
 }
 
@@ -43,6 +47,27 @@ export function useCreateFacilityHandoff() {
   return useMutation({
     mutationFn: (params: { receiverUserId: string; containerIds: string[] }) =>
       createFacilityToDriverHandoff(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['handoffs'] });
+    },
+  });
+}
+
+export function useDisputeHandoff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { handoffId: string; reason: string; description?: string }) =>
+      disputeHandoff(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['handoffs'] });
+    },
+  });
+}
+
+export function useResendHandoffNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (handoffId: string) => resendHandoffNotification(handoffId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['handoffs'] });
     },

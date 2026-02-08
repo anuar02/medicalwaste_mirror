@@ -72,7 +72,7 @@ const UserManagement = () => {
     const [search, setSearch] = useState('');
     const [userToDelete, setUserToDelete] = useState(null);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [sortBy, setSortBy] = useState('username');
+    const [sortBy, setSortBy] = useState('displayName');
     const [sortOrder, setSortOrder] = useState('asc');
     const navigate = useNavigate();
     const { user: currentUser, isAdmin } = useAuth();
@@ -150,14 +150,27 @@ const UserManagement = () => {
 
     // Filter and sort users
     const processedUsers = React.useMemo(() => {
+        const mappedUsers = users.map((user) => {
+            const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ')
+                || user.username
+                || user.email
+                || 'Без имени';
+            const initialsSource = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || user.email || '?';
+            const initials = initialsSource.slice(0, 2).toUpperCase();
+            return { ...user, displayName, initials };
+        });
+
         // First filter
-        const filteredUsers = users.filter(user => {
+        const filteredUsers = mappedUsers.filter(user => {
+            const searchLower = search.toLowerCase();
             const username = user.username || '';
             const email = user.email || '';
-            const searchLower = search.toLowerCase();
+            const phoneNumber = user.phoneNumber || '';
 
-            return username.toLowerCase().includes(searchLower) ||
-                email.toLowerCase().includes(searchLower);
+            return user.displayName.toLowerCase().includes(searchLower) ||
+                username.toLowerCase().includes(searchLower) ||
+                email.toLowerCase().includes(searchLower) ||
+                phoneNumber.toLowerCase().includes(searchLower);
         });
 
         // Then sort
@@ -301,11 +314,11 @@ const UserManagement = () => {
                             <tr>
                                 <th
                                     className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 cursor-pointer hover:bg-slate-100"
-                                    onClick={() => handleSort('username')}
+                                    onClick={() => handleSort('displayName')}
                                 >
                                     <div className="flex items-center">
                                         Пользователь
-                                        {getSortIcon('username')}
+                                        {getSortIcon('displayName')}
                                     </div>
                                 </th>
                                 <th
@@ -339,18 +352,21 @@ const UserManagement = () => {
                                         <td className="whitespace-nowrap px-6 py-4">
                                             <div className="flex items-center">
                                                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100 text-teal-700">
-                                                    {(user.username || '?').charAt(0).toUpperCase()}
+                                                    {user.initials}
                                                 </div>
                                                 <div className="ml-4">
-                                                    <div className="text-sm font-medium text-slate-900">{user.username || 'Без имени'}</div>
+                                                    <div className="text-sm font-medium text-slate-900">{user.displayName}</div>
                                                     <div className="flex items-center text-xs text-slate-500">
                                                             <span className={`inline-flex items-center rounded-full px-2 py-0.5 mr-2 ${
                                                                 user.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                                                             }`}>
                                                                 {user.active ? 'Активен' : 'Неактивен'}
                                                             </span>
-                                                        {user.department && <span>{user.department}</span>}
+                                                        {user.username && <span>{user.username}</span>}
                                                     </div>
+                                                    {user.phoneNumber && (
+                                                        <div className="mt-1 text-xs text-slate-400">{user.phoneNumber}</div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>
@@ -411,7 +427,7 @@ const UserManagement = () => {
                 isOpen={deleteModalOpen}
                 onClose={closeDeleteModal}
                 onConfirm={confirmDeleteUser}
-                userName={userToDelete?.username || 'этого пользователя'}
+                userName={userToDelete?.displayName || userToDelete?.username || 'этого пользователя'}
             />
         </div>
     );

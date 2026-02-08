@@ -13,9 +13,22 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.mobile",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We use your location to show nearby containers.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We use your location to track active collections."
+      }
     },
     "android": {
+      "package": "com.yourcompany.mobile",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -23,6 +36,10 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
+    "plugins": [
+      "expo-location",
+      "expo-dev-client"
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }

@@ -26,16 +26,20 @@ export async function login(email: string, password: string): Promise<User> {
 
 export async function register(payload: {
   username: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   passwordConfirm: string;
   role: 'supervisor' | 'driver';
   company?: string;
-  phoneNumber?: string;
+  phoneNumber: string;
   vehiclePlate?: string;
 }): Promise<User> {
   const response = await api.post<ApiSuccess<AuthResponseData>>('/api/auth/register', {
     username: payload.username,
+    firstName: payload.firstName,
+    lastName: payload.lastName,
     email: payload.email,
     password: payload.password,
     passwordConfirm: payload.passwordConfirm,
@@ -85,4 +89,26 @@ export async function verifySession(): Promise<User | null> {
     await logout();
     return null;
   }
+}
+
+export async function updateProfile(fields: {
+  username?: string;
+  phoneNumber?: string;
+  vehicleInfo?: { plateNumber?: string };
+}): Promise<User> {
+  const response = await api.patch<ApiSuccess<AuthResponseData>>('/api/users/profile', fields);
+  if (response.data.status !== 'success' || !response.data.data) {
+    throw new Error('Failed to update profile');
+  }
+  await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.data.data.user));
+  return response.data.data.user;
+}
+
+export async function fetchProfile(): Promise<User> {
+  const response = await api.get<ApiSuccess<AuthResponseData>>('/api/users/profile');
+  if (response.data.status !== 'success' || !response.data.data) {
+    throw new Error('Failed to fetch profile');
+  }
+  await AsyncStorage.setItem(USER_KEY, JSON.stringify(response.data.data.user));
+  return response.data.data.user;
 }

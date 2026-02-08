@@ -70,9 +70,17 @@
 		"title": "Register",
 		"subtitle": "Fill the form to create an account",
 		"username": "Username",
+		"firstName": "First name",
+		"lastName": "Last name",
+		"phone": "Phone number",
+		"phoneHint": "Use E.164 format, e.g. +77051234567",
+		"phoneFormat": "Phone number must be in E.164 format",
 		"usernameLength": "Username must be 3 to 30 characters",
 		"usernameChars": "Only letters, numbers, underscores and hyphens are allowed",
 		"usernameRequired": "Username is required",
+		"firstNameRequired": "First name is required",
+		"lastNameRequired": "Last name is required",
+		"phoneRequired": "Phone number is required",
 		"emailInvalid": "Please enter a valid email",
 		"emailRequired": "Email is required",
 		"password": "Password",
@@ -467,4 +475,3 @@
 		"resetFilters": "Reset filters"
 	}
 }
-

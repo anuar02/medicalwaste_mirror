@@ -18,6 +18,25 @@ const { validateRequest } = require('../middleware/validators');
 
 // Input validation for registration
 const registerValidation = [
+    body('firstName')
+        .trim()
+        .notEmpty()
+        .withMessage('First name is required')
+        .isLength({ max: 50 })
+        .withMessage('First name cannot exceed 50 characters'),
+    body('lastName')
+        .trim()
+        .notEmpty()
+        .withMessage('Last name is required')
+        .isLength({ max: 50 })
+        .withMessage('Last name cannot exceed 50 characters'),
+    body('phoneNumber')
+        .trim()
+        .notEmpty()
+        .withMessage('Phone number is required')
+        .customSanitizer((value) => value.replace(/[^\d+]/g, ''))
+        .matches(/^\+[1-9]\d{6,14}$/)
+        .withMessage('Phone number must be in E.164 format, e.g. +77051234567'),
     body('username')
         .trim()
         .isLength({ min: 3, max: 30 })
