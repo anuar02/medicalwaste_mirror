@@ -26,7 +26,20 @@ import toast from "react-hot-toast";
 
 const Reports = () => {
 
+    // Date range state — must be declared before any callback that uses it
+    const [dateRange, setDateRange] = useState({
+        from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        to: new Date().toISOString().split('T')[0],
+    });
+
+    // Report type state
+    const [reportType, setReportType] = useState('overview');
+
+    const [isExporting, setIsExporting] = useState(false);
+
     const handleExportData = useCallback(async (format = 'csv') => {
+        if (isExporting) return;
+        setIsExporting(true);
         try {
             const response = await apiService.wasteBins.exportData(format, {
                 startDate: new Date(dateRange.from).toISOString(),
@@ -52,16 +65,10 @@ const Reports = () => {
         } catch (error) {
             console.error('Export error:', error);
             toast.error(`Ошибка экспорта данных: ${error.message || 'Неизвестная ошибка'}`);
+        } finally {
+            setIsExporting(false);
         }
-    }, []);
-    // Date range state
-    const [dateRange, setDateRange] = useState({
-        from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days ago
-        to: new Date().toISOString().split('T')[0], // Today
-    });
-
-    // Report type state
-    const [reportType, setReportType] = useState('overview');
+    }, [dateRange, isExporting]);
 
     // Fetch statistics data
     const {
@@ -71,7 +78,8 @@ const Reports = () => {
         refetch,
         isFetching
     } = useQuery({
-        queryKey: ['statistics', dateRange, reportType],
+        // Use primitive values in query key to avoid cache misses from object reference changes
+        queryKey: ['statistics', dateRange.from, dateRange.to, reportType],
         queryFn: () => apiService.wasteBins.getStatistics(),
         refetchInterval: 300000, // 5 minutes
         staleTime: 60000, // 1 minute
@@ -93,16 +101,12 @@ const Reports = () => {
 
     // Generate PDF report
     const generateReport = () => {
-        // This would typically call a backend endpoint to generate and download a PDF report
-        // For now, we'll just show a toast notification
-        alert('Отчет успешно создан');
+        handleExportData('pdf');
     };
 
     // Export data to CSV
     const exportToCSV = () => {
-        // This would typically call a backend endpoint to generate and download a CSV file
-        // For now, we'll just show a toast notification
-        alert('Данные успешно экспортированы в CSV');
+        handleExportData('csv');
     };
 
     // Print report

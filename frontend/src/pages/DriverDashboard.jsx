@@ -1,6 +1,9 @@
 // frontend/src/pages/DriverDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import L from 'leaflet';
 import { useAuth } from '../contexts/AuthContext';
 import {
     Truck,
@@ -12,12 +15,341 @@ import {
     Activity,
     AlertCircle,
     TrendingUp,
-    Navigation as NavigationIcon
+    Navigation as NavigationIcon,
+    RefreshCw
 } from 'lucide-react';
 import apiService from "../services/api";
+import 'leaflet/dist/leaflet.css';
+
+// Fix default Leaflet marker icons (CRA breaks them)
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
+
+const activeDriverIcon = new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41],
+});
+
+const idleDriverIcon = new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41],
+});
+
+// Default map center — Almaty, Kazakhstan
+const DEFAULT_CENTER = [43.238949, 76.889709];
+
+// ─── Shared active-drivers hook ──────────────────────────────────────────────
+
+function useActiveDriverSessions(refetchInterval = 30000) {
+    const { data, isLoading, refetch, isFetching } = useQuery({
+        queryKey: ['active-driver-sessions'],
+        queryFn: () => apiService.collections.getActiveDrivers(),
+        refetchInterval,
+        staleTime: refetchInterval * 0.6,
+    });
+    // Backend returns: { data: { activeDrivers: [{ session, lastLocation }] } }
+    const driverSessions = data?.data?.data?.activeDrivers ?? [];
+    return { driverSessions, isLoading, refetch, isFetching };
+}
+
+function formatSessionDuration(startTime) {
+    const minutes = Math.floor((Date.now() - new Date(startTime).getTime()) / 60000);
+    if (minutes < 60) return `${minutes} мин`;
+    return `${Math.floor(minutes / 60)}ч ${minutes % 60}мин`;
+}
+
+// ─── Admin Driver Tracking Map ────────────────────────────────────────────────
+
+function AdminDriverTrackingView() {
+    const navigate = useNavigate();
+    const { driverSessions, isLoading, refetch, isFetching } = useActiveDriverSessions(15000);
+
+    return (
+        <div className="min-h-screen bg-slate-50">
+            {/* Header */}
+            <div className="border-b border-slate-200 bg-white px-6 py-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-800">Мониторинг Водителей</h1>
+                        <p className="text-sm text-slate-500 mt-0.5">
+                            Активных сессий: <span className="font-semibold text-teal-600">{driverSessions.length}</span>
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => refetch()}
+                        disabled={isFetching}
+                        className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                        <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                        Обновить
+                    </button>
+                </div>
+            </div>
+
+            <div className="flex h-[calc(100vh-73px)]">
+                {/* Sidebar — active sessions list */}
+                <div className="w-80 shrink-0 overflow-y-auto border-r border-slate-200 bg-white">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
+                        </div>
+                    ) : driverSessions.length === 0 ? (
+                        <div className="p-6 text-center text-slate-500">
+                            <Truck className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                            <p className="text-sm">Нет активных сессий</p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-100">
+                            {driverSessions.map(({ session, lastLocation }) => {
+                                const driver = session.driver || {};
+                                const visited = (session.selectedContainers || []).filter(c => c.visited).length;
+                                const total = (session.selectedContainers || []).length;
+                                return (
+                                    <div
+                                        key={session._id || session.sessionId}
+                                        className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
+                                        onClick={() => driver._id && navigate(`/admin/drivers/${driver._id}`)}
+                                    >
+                                        <div className="h-2.5 w-2.5 rounded-full shrink-0 bg-teal-500" />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-medium text-slate-800">
+                                                {driver.firstName || driver.username || driver.email || '—'}
+                                                {driver.lastName ? ` ${driver.lastName}` : ''}
+                                            </p>
+                                            <p className="truncate text-xs text-slate-500">
+                                                {driver.vehicleInfo?.plateNumber ?? '—'}
+                                                {' · '}{visited}/{total} контейнеров
+                                            </p>
+                                        </div>
+                                        {lastLocation && (
+                                            <MapPin className="h-3.5 w-3.5 shrink-0 text-teal-500" />
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Map */}
+                <div className="flex-1 relative">
+                    <MapContainer
+                        center={DEFAULT_CENTER}
+                        zoom={11}
+                        style={{ height: '100%', width: '100%' }}
+                        zoomControl={true}
+                    >
+                        <TileLayer
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                        {driverSessions.map(({ session, lastLocation }) => {
+                            const driver = session.driver || {};
+                            const lat = lastLocation?.coordinates?.[1];
+                            const lng = lastLocation?.coordinates?.[0];
+                            if (!lat || !lng) return null;
+                            const visited = (session.selectedContainers || []).filter(c => c.visited).length;
+                            const total = (session.selectedContainers || []).length;
+                            return (
+                                <React.Fragment key={session._id || session.sessionId}>
+                                    <Marker
+                                        position={[lat, lng]}
+                                        icon={activeDriverIcon}
+                                    >
+                                        <Popup>
+                                            <div className="text-sm">
+                                                <p className="font-semibold">
+                                                    {driver.firstName || driver.username || driver.email || '—'}
+                                                    {driver.lastName ? ` ${driver.lastName}` : ''}
+                                                </p>
+                                                <p className="text-slate-500">{driver.vehicleInfo?.plateNumber ?? '—'}</p>
+                                                <p className="text-teal-600">В работе</p>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    Посещено: {visited} / {total}
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    Время: {formatSessionDuration(session.startTime)}
+                                                </p>
+                                                {driver._id && (
+                                                    <button
+                                                        className="mt-2 text-teal-600 hover:text-teal-700 text-xs underline"
+                                                        onClick={() => navigate(`/admin/drivers/${driver._id}`)}
+                                                    >
+                                                        Подробнее →
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </Popup>
+                                    </Marker>
+                                    <Circle
+                                        center={[lat, lng]}
+                                        radius={300}
+                                        pathOptions={{ color: '#0d9488', fillColor: '#0d9488', fillOpacity: 0.08, weight: 1 }}
+                                    />
+                                </React.Fragment>
+                            );
+                        })}
+                    </MapContainer>
+
+                    {/* Legend */}
+                    <div className="absolute bottom-4 right-4 rounded-lg bg-white shadow-lg border border-slate-200 p-3 text-xs space-y-1.5 z-[1000]">
+                        <div className="flex items-center gap-2">
+                            <div className="h-2.5 w-2.5 rounded-full bg-teal-500" />
+                            <span className="text-slate-600">Активный водитель</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <MapPin className="h-3 w-3 text-teal-500" />
+                            <span className="text-slate-600">GPS активен</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Supervisor Session Monitor ───────────────────────────────────────────────
+
+function SupervisorSessionMonitorView() {
+    const navigate = useNavigate();
+    const { driverSessions, isLoading, refetch, isFetching } = useActiveDriverSessions(30000);
+
+    return (
+        <div className="min-h-screen bg-slate-50">
+            {/* Header */}
+            <div className="border-b border-slate-200 bg-white px-6 py-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-800">Активные Сессии</h1>
+                        <p className="text-sm text-slate-500 mt-0.5">
+                            Водителей в работе: <span className="font-semibold text-teal-600">{driverSessions.length}</span>
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => refetch()}
+                        disabled={isFetching}
+                        className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                        <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                        Обновить
+                    </button>
+                </div>
+            </div>
+
+            <div className="p-6">
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-16">
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
+                    </div>
+                ) : driverSessions.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                        <Truck className="h-14 w-14 mb-3 text-slate-300" />
+                        <p className="text-lg font-medium text-slate-600">Нет активных сессий</p>
+                        <p className="text-sm mt-1">Водители ещё не начали сбор</p>
+                    </div>
+                ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {driverSessions.map(({ session, lastLocation }) => {
+                            const driver = session.driver || {};
+                            const containers = session.selectedContainers || [];
+                            const visited = containers.filter(c => c.visited).length;
+                            const total = containers.length;
+                            const progress = total > 0 ? Math.round((visited / total) * 100) : 0;
+                            const driverName = driver.firstName
+                                ? `${driver.firstName}${driver.lastName ? ` ${driver.lastName}` : ''}`
+                                : (driver.username || driver.email || '—');
+
+                            return (
+                                <div
+                                    key={session._id || session.sessionId}
+                                    className="rounded-xl bg-white border border-slate-200 shadow-sm p-5 flex flex-col gap-3"
+                                >
+                                    {/* Driver header */}
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-50">
+                                                <Truck className="h-4 w-4 text-teal-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-800 leading-tight">
+                                                    {driverName}
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    {driver.vehicleInfo?.plateNumber ?? '—'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-medium text-teal-700">
+                                            В работе
+                                        </span>
+                                    </div>
+
+                                    {/* Progress bar */}
+                                    <div>
+                                        <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5">
+                                            <span>Контейнеры</span>
+                                            <span className="font-medium text-slate-700">{visited} / {total}</span>
+                                        </div>
+                                        <div className="h-2 w-full rounded-full bg-slate-100">
+                                            <div
+                                                className="h-2 rounded-full bg-teal-500 transition-all duration-500"
+                                                style={{ width: `${progress}%` }}
+                                            />
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-400 text-right">{progress}%</p>
+                                    </div>
+
+                                    {/* Meta row */}
+                                    <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-2">
+                                        <span className="flex items-center gap-1.5">
+                                            <Clock className="h-3.5 w-3.5" />
+                                            {formatSessionDuration(session.startTime)}
+                                        </span>
+                                        {lastLocation ? (
+                                            <span className="flex items-center gap-1 text-teal-600 font-medium">
+                                                <MapPin className="h-3.5 w-3.5" />
+                                                GPS активен
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-300">GPS недоступен</span>
+                                        )}
+                                    </div>
+
+                                    {/* Link */}
+                                    {driver._id && (
+                                        <button
+                                            onClick={() => navigate(`/admin/drivers/${driver._id}`)}
+                                            className="mt-auto text-xs font-medium text-teal-600 hover:text-teal-700 text-left underline"
+                                        >
+                                            Подробнее о водителе →
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ─── Driver Dashboard ─────────────────────────────────────────────────────────
 
 const DriverDashboard = () => {
-    const { user, isAdmin } = useAuth();
+    const { user, isAdmin, isSupervisor } = useAuth();
     const navigate = useNavigate();
     const [activeSession, setActiveSession] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -31,8 +363,8 @@ const DriverDashboard = () => {
     const isApprovedDriver = isDriver && user?.verificationStatus === 'approved';
 
     useEffect(() => {
-        // Allow both drivers and admins to access this page
-        if (!isDriver && !isAdmin) {
+        // Allow drivers, admins, and supervisors to access this page
+        if (!isDriver && !isAdmin && !isSupervisor) {
             navigate('/');
             return;
         }
@@ -43,7 +375,7 @@ const DriverDashboard = () => {
         }
 
         setLoading(false);
-    }, [user, navigate, isDriver, isAdmin]);
+    }, [user, navigate, isDriver, isAdmin, isSupervisor]);
 
     const fetchActiveSession = async () => {
         try {
@@ -88,33 +420,14 @@ const DriverDashboard = () => {
         );
     }
 
-    // Admin view - show all drivers tracking
+    // Admin view — live driver tracking map with GPS
     if (isAdmin && !isDriver) {
-        return (
-            <div className="min-h-screen bg-slate-50 p-4">
-                <div className="mx-auto max-w-7xl">
-                    <div className="mb-6">
-                        <h1 className="text-3xl font-bold text-slate-800">
-                            Мониторинг Водителей
-                        </h1>
-                        <p className="mt-1 text-sm text-slate-500">
-                            Отслеживание всех активных водителей
-                        </p>
-                    </div>
+        return <AdminDriverTrackingView />;
+    }
 
-                    {/* TODO: Add admin driver tracking view */}
-                    <div className="rounded-lg bg-white p-8 shadow-sm text-center">
-                        <NavigationIcon className="h-16 w-16 text-slate-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-slate-800 mb-2">
-                            Мониторинг водителей в разработке
-                        </h3>
-                        <p className="text-slate-600">
-                            Здесь будет карта с отслеживанием всех активных водителей
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
+    // Supervisor view — active session progress cards
+    if (isSupervisor && !isDriver) {
+        return <SupervisorSessionMonitorView />;
     }
 
     // Driver view

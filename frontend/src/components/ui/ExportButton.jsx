@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Download, FileText, FileSpreadsheet, File, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const ExportButton = ({ t }) => {
     const [isExporting, setIsExporting] = useState(false);
@@ -56,12 +57,11 @@ const ExportButton = ({ t }) => {
             document.body.removeChild(link);
             window.URL.revokeObjectURL(downloadUrl);
 
-            // Success notification
-            console.log(`${format.toUpperCase()} report downloaded successfully`);
+            toast.success(`${format.toUpperCase()} report downloaded successfully`);
 
         } catch (error) {
             console.error('Export error:', error);
-            alert(`Failed to export ${format.toUpperCase()} report: ${error.message}`);
+            toast.error(`Failed to export ${format.toUpperCase()} report: ${error.message}`);
         } finally {
             setIsExporting(false);
             setExportFormat(null);

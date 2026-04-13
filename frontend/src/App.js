@@ -11,6 +11,7 @@ import {ThemeProvider} from './contexts/ThemeContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import AuthLayout from './layouts/AuthLayout';
 import UserManagement from "./pages/admin/UserManagement";
+import AdminRegisterUser from "./pages/admin/AdminRegisterUser";
 import BinManagement from "./pages/admin/BinManagement";
 import DeviceManagement from "./pages/admin/DeviceManagement";
 import DriverRegistration from "./components/DriverRegistration";
@@ -73,10 +74,23 @@ const LoadingScreen = () => (
 
 // Protected Route wrapper
 const ProtectedRoute = ({children}) => {
-    // Get auth status from context
     const token = localStorage.getItem('token');
 
     if (!token) {
+        return <Navigate to="/login" replace/>;
+    }
+
+    // Validate token is not expired (client-side check)
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(window.atob(base64));
+        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+            localStorage.removeItem('token');
+            return <Navigate to="/login" replace/>;
+        }
+    } catch {
+        localStorage.removeItem('token');
         return <Navigate to="/login" replace/>;
     }
 
@@ -221,7 +235,9 @@ const App = () => {
                                             path="/bins"
                                             element={
                                                 <ProtectedRoute>
-                                                    <BinList/>
+                                                    <ErrorBoundary>
+                                                        <BinList/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -229,7 +245,9 @@ const App = () => {
                                             path="/bins/:binId"
                                             element={
                                                 <ProtectedRoute>
-                                                    <BinDetails/>
+                                                    <ErrorBoundary>
+                                                        <BinDetails/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -237,7 +255,9 @@ const App = () => {
                                             path="/drivers"
                                             element={
                                                 <ProtectedRoute>
-                                                    <DriverTracking/>
+                                                    <ErrorBoundary>
+                                                        <DriverTracking/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -245,7 +265,9 @@ const App = () => {
                                             path="/map"
                                             element={
                                                 <ProtectedRoute>
-                                                    <BinMap/>
+                                                    <ErrorBoundary>
+                                                        <BinMap/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -253,7 +275,9 @@ const App = () => {
                                             path="/reports"
                                             element={
                                                 <ProtectedRoute>
-                                                    <Reports/>
+                                                    <ErrorBoundary>
+                                                        <Reports/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -261,7 +285,9 @@ const App = () => {
                                             path="/routes"
                                             element={
                                                 <ProtectedRoute>
-                                                    <RouteManagement/>
+                                                    <ErrorBoundary>
+                                                        <RouteManagement/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -269,7 +295,9 @@ const App = () => {
                                             path="/routes/create"
                                             element={
                                                 <ProtectedRoute>
-                                                    <RouteCreate/>
+                                                    <ErrorBoundary>
+                                                        <RouteCreate/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -277,7 +305,9 @@ const App = () => {
                                             path="/routes/:id"
                                             element={
                                                 <ProtectedRoute>
-                                                    <RouteDetail/>
+                                                    <ErrorBoundary>
+                                                        <RouteDetail/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -285,7 +315,9 @@ const App = () => {
                                             path="/handoffs"
                                             element={
                                                 <ProtectedRoute>
-                                                    <HandoffManagement/>
+                                                    <ErrorBoundary>
+                                                        <HandoffManagement/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -301,7 +333,9 @@ const App = () => {
                                             path="/admin/devices"
                                             element={
                                                 <ProtectedRoute>
-                                                    <DeviceManagement/>
+                                                    <ErrorBoundary>
+                                                        <DeviceManagement/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -309,7 +343,9 @@ const App = () => {
                                             path="/admin/incineration-plants"
                                             element={
                                                 <ProtectedRoute>
-                                                    <IncinerationPlantManagement/>
+                                                    <ErrorBoundary>
+                                                        <IncinerationPlantManagement/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -317,7 +353,9 @@ const App = () => {
                                             path="/admin/bins"
                                             element={
                                                 <ProtectedRoute>
-                                                    <BinManagement/>
+                                                    <ErrorBoundary>
+                                                        <BinManagement/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />
@@ -336,6 +374,16 @@ const App = () => {
                                             element={
                                                 <ProtectedRoute>
                                                     <UserManagement/>
+                                                </ProtectedRoute>
+                                            }
+                                        />
+                                        <Route
+                                            path="/admin/register-user"
+                                            element={
+                                                <ProtectedRoute>
+                                                    <ErrorBoundary>
+                                                        <AdminRegisterUser/>
+                                                    </ErrorBoundary>
                                                 </ProtectedRoute>
                                             }
                                         />

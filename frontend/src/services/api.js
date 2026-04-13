@@ -470,6 +470,8 @@ const apiService = {
         getAllDevices: createCompatibleMethod(() => api.get('/tracking/devices')),
         getDeviceLocation: createCompatibleMethod((deviceId) => api.get(`/tracking/devices/${deviceId}`)),
         getDeviceHistory: createCompatibleMethod((deviceId, params) => api.get(`/tracking/history/${deviceId}`, { params })),
+        // Alias used by DeviceTracking.jsx — GPS history records (backend marks some with isCheckpoint: true)
+        getDeviceCheckpoints: createCompatibleMethod((deviceId, params) => api.get(`/tracking/history/${deviceId}`, { params })),
         getCollectionPoints: createCompatibleMethod((params) => api.get('/tracking/collection-points', { params })),
         getDriverStats: createCompatibleMethod((driverId, params) => api.get(`/tracking/driver-stats/${driverId}`, { params })),
         sendCommand: createCompatibleMethod((data) => api.post('/tracking/send-command', data))

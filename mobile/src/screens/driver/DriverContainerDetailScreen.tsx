@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Platform,
   SafeAreaView,
@@ -10,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { RouteProp, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import MapView, { Marker } from 'react-native-maps';
@@ -23,10 +24,12 @@ import { DriverContainersStackParamList } from '../../types/navigation';
 import { WasteBin } from '../../types/models';
 import { getUrgencyColor } from '../../utils/urgency';
 import { formatRelativeTime, getDataFreshness } from '../../utils/formatTime';
+import { toValidCoordinate } from '../../utils/coordinates';
 import PulsingDot from '../../components/shared/PulsingDot';
 
 export default function DriverContainerDetailScreen() {
   const { t } = useTranslation();
+  const navigation = useNavigation();
   const route = useRoute<RouteProp<DriverContainersStackParamList, 'DriverContainerDetail'>>();
   const { containerId } = route.params;
 
@@ -36,7 +39,7 @@ export default function DriverContainerDetailScreen() {
 
   const sessionEntry = useMemo(() => {
     return session?.selectedContainers?.find(
-      (entry) => entry.container._id === containerId,
+      (entry) => entry?.container?._id === containerId,
     );
   }, [session, containerId]);
 
@@ -50,28 +53,67 @@ export default function DriverContainerDetailScreen() {
 
   const fullness = container?.fullness ?? 0;
   const fullnessColor = getUrgencyColor(container?.fullness);
-  const coords = container?.location?.coordinates;
-  const hasLocation = coords && coords.length === 2;
+  const coordinate = toValidCoordinate(container?.location?.coordinates);
+  const hasLocation = Boolean(coordinate);
   const freshness = getDataFreshness(container?.lastUpdate);
 
   const handleMarkVisited = () => {
     if (!session?.sessionId || !containerId || markVisitedMutation.isPending) return;
-    markVisitedMutation.mutate({ sessionId: session.sessionId, containerId });
+
+    Alert.alert(
+      t('driver.route.collectWeightTitle'),
+      t('driver.route.collectWeightMessage'),
+      [
+        {
+          text: t('driver.route.skipWeight'),
+          style: 'cancel',
+          onPress: () => {
+            markVisitedMutation.mutate({ sessionId: session.sessionId, containerId });
+          },
+        },
+        {
+          text: t('driver.route.enterWeight'),
+          onPress: () => {
+            Alert.prompt(
+              t('driver.route.collectWeightTitle'),
+              t('driver.route.collectWeightPrompt'),
+              [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                  text: t('common.confirm'),
+                  onPress: (weightStr: string | undefined) => {
+                    const weight = parseFloat(weightStr ?? '');
+                    markVisitedMutation.mutate({
+                      sessionId: session.sessionId,
+                      containerId,
+                      ...(Number.isFinite(weight) && weight > 0 ? { collectedWeight: weight } : {}),
+                    });
+                  },
+                },
+              ],
+              'plain-text',
+              '',
+              'decimal-pad',
+            );
+          },
+        },
+      ],
+    );
   };
 
   const handleOpen2Gis = () => {
-    if (!hasLocation) return;
-    const lat = coords[1];
-    const lng = coords[0];
+    if (!coordinate) return;
+    const lat = coordinate.latitude;
+    const lng = coordinate.longitude;
     const appUrl = `dgis://2gis.ru/routeSearch/rsType/car/to/${lat},${lng}`;
     const webUrl = `https://2gis.com/routeSearch/rsType/car/to/${lat},${lng}`;
     Linking.openURL(appUrl).catch(() => Linking.openURL(webUrl));
   };
 
   const handleOpenAppleMaps = () => {
-    if (!hasLocation) return;
-    const lat = coords[1];
-    const lng = coords[0];
+    if (!coordinate) return;
+    const lat = coordinate.latitude;
+    const lng = coordinate.longitude;
     const url = Platform.select({
       ios: `http://maps.apple.com/?daddr=${lat},${lng}`,
       android: `geo:${lat},${lng}?q=${lat},${lng}`,
@@ -91,6 +133,14 @@ export default function DriverContainerDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Back button */}
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.backButton}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <MaterialCommunityIcons name="arrow-left" size={22} color={dark.text} />
+      </TouchableOpacity>
       <ScrollView contentContainerStyle={styles.container}>
         {/* Ambient glow */}
         <View style={styles.glowTop} />
@@ -163,8 +213,8 @@ export default function DriverContainerDetailScreen() {
                 <MapView
                   style={styles.map}
                   initialRegion={{
-                    latitude: coords[1],
-                    longitude: coords[0],
+                    latitude: coordinate!.latitude,
+                    longitude: coordinate!.longitude,
                     latitudeDelta: 0.005,
                     longitudeDelta: 0.005,
                   }}
@@ -172,7 +222,7 @@ export default function DriverContainerDetailScreen() {
                   zoomEnabled={false}
                 >
                   <Marker
-                    coordinate={{ latitude: coords[1], longitude: coords[0] }}
+                    coordinate={coordinate!}
                     pinColor={dark.teal}
                   />
                 </MapView>
@@ -204,6 +254,12 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: dark.bg,
+  },
+  backButton: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    alignSelf: 'flex-start',
   },
   container: {
     padding: spacing.xl,

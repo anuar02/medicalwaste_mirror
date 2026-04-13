@@ -35,17 +35,19 @@
   },
   "common": {
     "loading": "Loading...",
-    "logout": "Logout"
+    "logout": "Logout",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
   },
   "driver": {
     "tabs": {
       "home": "Home",
       "session": "Session",
-    "containers": "Containers",
-    "history": "History",
-    "registration": "Registration",
-    "profile": "Profile"
-  },
+      "containers": "Containers",
+      "history": "History",
+      "registration": "Registration",
+      "profile": "Profile"
+    },
     "home": {
       "title": "Driver Dashboard",
       "subtitle": "Start a session to see your route and handoffs.",
@@ -224,7 +226,13 @@
       "openDetails": "Details",
       "locationPermission": "Location permission is required to show the map.",
       "locationError": "Unable to read location.",
-      "you": "You"
+      "you": "You",
+      "selectAtLeastOne": "Please select at least one container to start a session",
+      "collectWeightTitle": "Record Collected Weight",
+      "collectWeightMessage": "Do you want to record the collected weight for this container?",
+      "collectWeightPrompt": "Enter weight in kg (e.g. 12.5)",
+      "skipWeight": "Skip",
+      "enterWeight": "Enter Weight"
     },
     "history": {
       "title": "Session History",
@@ -237,7 +245,10 @@
       "statusActive": "In progress",
       "statusDisputed": "Disputed",
       "previewFacility": "Facility: {{name}}",
-      "previewIncineration": "Incineration"
+      "previewIncineration": "Incineration",
+      "kmDriven": "{{value}} km",
+      "weightTotal": "{{value}} kg",
+      "timePerBin": "{{value}} min/bin"
     },
     "containers": {
       "title": "Containers",
@@ -317,7 +328,8 @@
       "copyLink": "Copy link",
       "copied": "Copied",
       "linkExpires": "Link valid until {{time}}",
-      "regenerateLink": "Create new link"
+      "regenerateLink": "Create new link",
+      "openInBrowser": "Open in Browser"
     },
     "incineration": {
       "readyTitle": "All facility handoffs confirmed.",
@@ -331,7 +343,9 @@
       "confirmTitle": "Create incineration handoff?",
       "confirmBody": "{{count}} containers · {{weight}} kg → {{plant}}",
       "confirmCancel": "Cancel",
-      "confirmOk": "Create"
+      "confirmOk": "Create",
+      "searchPlants": "Search plants...",
+      "noSearchResults": "No plants match your search"
     },
     "confirm": {
       "title": "Confirm reception?",

@@ -3,7 +3,9 @@ const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const MedicalCompany = require('../models/MedicalCompany');
 const AppError = require('../utils/appError');
+const { logger } = require('../middleware/loggers');
 const { sendEmail } = require('../utils/email');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { startPhoneVerification, checkPhoneVerification } = require('../services/twilioVerifyService');
@@ -280,7 +282,7 @@ const getGoogleAuthURL = asyncHandler(async (req, res) => {
 const googleCallback = asyncHandler(async (req, res, next) => {
     const { code } = req.body;
 
-    console.log('Received Google OAuth code:', code);
+    logger.info('Received Google OAuth callback');
 
     if (!code) {
         return next(new AppError('Authorization code is required', 400));
@@ -296,7 +298,7 @@ const googleCallback = asyncHandler(async (req, res, next) => {
         );
 
         // Exchange code for tokens
-        console.log('Exchanging code for tokens...');
+        logger.info('Exchanging Google OAuth code for tokens');
         const { tokens } = await googleClient.getToken(code);
         googleClient.setCredentials(tokens);
 
@@ -403,7 +405,7 @@ const googleLogin = asyncHandler(async (req, res, next) => {
         const email = payload.email;
         const name = payload.name || email.split('@')[0];
 
-        console.log(`Google user verified: ${email}`);
+        logger.info('Google ID token verified successfully');
 
         // Check if user exists
         let user = await User.findOne({
@@ -414,7 +416,7 @@ const googleLogin = asyncHandler(async (req, res, next) => {
         });
 
         if (!user) {
-            console.log(`Creating new user for ${email}`);
+            logger.info('Creating new user from Google ID token flow');
             // Create new user
             const randomPassword = crypto.randomBytes(16).toString('hex');
             const { firstName, lastName } = splitName(payload.name || name);
@@ -432,7 +434,7 @@ const googleLogin = asyncHandler(async (req, res, next) => {
                 active: true
             });
         } else if (!user.googleId) {
-            console.log(`Linking Google account to existing user: ${email}`);
+            logger.info('Linking Google ID token to existing user account');
             // Link Google account to existing user
             user.googleId = googleId;
             user.googleProfile = payload;

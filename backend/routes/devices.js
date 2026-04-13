@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { auth, restrictTo } = require('../middleware/auth');
+const { auth, restrictTo, apiKeyAuth } = require('../middleware/auth');
 const { getPendingDevices, configureDevice, updateDeviceData } = require('../controllers/deviceController');
 
-// Public endpoint for device data reporting
-router.post('/report', updateDeviceData);
+// Device data reporting — requires valid API key from IoT device
+router.post('/report', apiKeyAuth, updateDeviceData);
 
 // Protected routes - admin only
 router.use(auth);

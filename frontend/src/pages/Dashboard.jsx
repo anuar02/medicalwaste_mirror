@@ -902,7 +902,7 @@ const Dashboard = () => {
                             >
                                 <Download className="h-4 w-4" />
                             </button>
-                            <Link to="/analytics" className="text-teal-600 hover:text-teal-700">
+                            <Link to="/reports" className="text-teal-600 hover:text-teal-700">
                                 {t('dashboard.moreAnalytics', 'Подробная аналитика')}
                             </Link>
                         </div>
@@ -929,7 +929,7 @@ const Dashboard = () => {
                                 >
                                     {preferences.compactView ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
                                 </button>
-                                <Link to="/departments" className="text-teal-600 hover:text-teal-700">
+                                <Link to="/bins" className="text-teal-600 hover:text-teal-700">
                                     {t('dashboard.details', 'Подробнее')}
                                 </Link>
                             </div>

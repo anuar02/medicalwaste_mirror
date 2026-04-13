@@ -67,9 +67,11 @@ export default function DriverSessionScreen() {
     }),
   ).current;
 
+  // Poll for handoffs whenever a session is active, regardless of tab focus.
+  // This ensures drivers don't miss new facility handoffs while on other tabs.
   const { data: handoffs, isLoading, refetch, isFetching } = useHandoffs({
-    enabled: Boolean(session) && isFocused,
-    refetchInterval: isFocused ? HANDOFF_POLL_INTERVAL : false,
+    enabled: Boolean(session),
+    refetchInterval: session ? HANDOFF_POLL_INTERVAL : false,
   });
 
   const sessionHandoffs = useMemo(

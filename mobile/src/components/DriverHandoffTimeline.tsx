@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Pressable,
   RefreshControl,
@@ -168,6 +169,7 @@ export default function DriverHandoffTimeline({
   } = useIncinerationPlants();
 
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
+  const [plantSearch, setPlantSearch] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [resendError, setResendError] = useState<string | null>(null);
@@ -211,7 +213,9 @@ export default function DriverHandoffTimeline({
 
   const hasHandoffs = facilityHandoffs.length > 0 || Boolean(incinerationHandoff);
 
-  const visitedContainers = session.selectedContainers?.filter((item) => item.visited) ?? [];
+  const visitedContainers = session.selectedContainers?.filter(
+    (item) => item.visited && Boolean(item?.container?._id),
+  ) ?? [];
   const totalVisitedWeight = visitedContainers.reduce(
     (sum, item) => sum + (item.collectedWeight ?? 0),
     0,
@@ -364,7 +368,9 @@ export default function DriverHandoffTimeline({
         {
           text: t('handoff.incineration.confirmOk'),
           onPress: () => {
-            const containerIds = visitedContainers.map((item) => item.container._id);
+            const containerIds = visitedContainers
+              .map((item) => item.container?._id)
+              .filter((id): id is string => typeof id === 'string' && id.length > 0);
             createMutation.mutate(
               {
                 sessionId: session.sessionId,
@@ -579,32 +585,53 @@ export default function DriverHandoffTimeline({
                     {plantsError instanceof Error ? plantsError.message : t('handoff.errors.plants')}
                   </Text>
                 ) : (plants ?? []).length ? (
-                  <View style={styles.plantList}>
-                    {plants?.map((plant) => (
-                      <TouchableOpacity
-                        key={plant._id}
-                        style={
-                          selectedPlantId === plant._id
-                            ? styles.plantButtonSelected
-                            : styles.plantButton
-                        }
-                        onPress={() => {
-                          setSelectedPlantId(plant._id);
-                          setCreateError(null);
-                        }}
-                      >
-                        <Text
-                          style={
-                            selectedPlantId === plant._id
-                              ? styles.plantButtonTextSelected
-                              : styles.plantButtonText
-                          }
-                        >
-                          {plant.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  <>
+                    <TextInput
+                      style={styles.plantSearchInput}
+                      value={plantSearch}
+                      onChangeText={setPlantSearch}
+                      placeholder={t('handoff.incineration.searchPlants')}
+                      placeholderTextColor={dark.muted}
+                    />
+                    <View style={styles.plantList}>
+                      {plants
+                        ?.filter((plant) =>
+                          plant.name.toLowerCase().includes(plantSearch.toLowerCase()),
+                        )
+                        .map((plant) => (
+                          <TouchableOpacity
+                            key={plant._id}
+                            style={
+                              selectedPlantId === plant._id
+                                ? styles.plantButtonSelected
+                                : styles.plantButton
+                            }
+                            onPress={() => {
+                              setSelectedPlantId(plant._id);
+                              setCreateError(null);
+                            }}
+                          >
+                            <Text
+                              style={
+                                selectedPlantId === plant._id
+                                  ? styles.plantButtonTextSelected
+                                  : styles.plantButtonText
+                              }
+                            >
+                              {plant.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      {plantSearch.length > 0 &&
+                        !plants?.some((p) =>
+                          p.name.toLowerCase().includes(plantSearch.toLowerCase()),
+                        ) && (
+                          <Text style={styles.emptyText}>
+                            {t('handoff.incineration.noSearchResults')}
+                          </Text>
+                        )}
+                    </View>
+                  </>
                 ) : (
                   <Text style={styles.emptyText}>{t('handoff.incineration.noPlants')}</Text>
                 )}
@@ -695,12 +722,23 @@ export default function DriverHandoffTimeline({
             {confirmationUrl ? (
               <View style={styles.linkCard}>
                 <Text style={styles.sectionSubtitle}>{t('handoff.card.confirmationLink')}</Text>
-                <Text style={styles.linkText}>{confirmationUrl}</Text>
-                <TouchableOpacity style={styles.copyButton} onPress={handleCopyLink}>
-                  <Text style={styles.copyButtonText}>
-                    {copied ? t('handoff.card.copied') : t('handoff.card.copyLink')}
-                  </Text>
-                </TouchableOpacity>
+                <Text style={styles.linkText} numberOfLines={2} selectable>{confirmationUrl}</Text>
+                <View style={styles.linkActions}>
+                  <TouchableOpacity
+                    style={styles.copyButton}
+                    onPress={handleCopyLink}
+                  >
+                    <Text style={styles.copyButtonText}>
+                      {copied ? t('handoff.card.copied') : t('handoff.card.copyLink')}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.copyButton, styles.openButton]}
+                    onPress={() => Linking.openURL(confirmationUrl)}
+                  >
+                    <Text style={styles.copyButtonText}>{t('handoff.card.openInBrowser')}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : null}
             {incinerationHandoff.tokenExpiresAt ? (
@@ -1064,6 +1102,11 @@ const styles = StyleSheet.create({
     color: dark.text,
     marginTop: spacing.xs,
   },
+  linkActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
   copyButton: {
     marginTop: spacing.sm,
     alignSelf: 'flex-start',
@@ -1071,6 +1114,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: 8,
     backgroundColor: dark.teal,
+  },
+  openButton: {
+    backgroundColor: dark.surface,
+    borderWidth: 1,
+    borderColor: dark.teal,
   },
   copyButtonText: {
     color: dark.text,
@@ -1088,6 +1136,17 @@ const styles = StyleSheet.create({
   outlineButtonText: {
     color: dark.teal,
     fontWeight: '600',
+  },
+  plantSearchInput: {
+    backgroundColor: dark.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: dark.border,
+    color: dark.text,
+    fontSize: 14,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
   },
   plantList: {
     flexDirection: 'row',

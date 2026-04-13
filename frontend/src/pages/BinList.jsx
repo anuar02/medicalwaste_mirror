@@ -72,7 +72,8 @@ const BinList = () => {
         refetch,
         isFetching
     } = useQuery({
-        queryKey: ['bins', queryParams],
+        // Use primitive values to avoid React Query cache misses from object reference changes
+        queryKey: ['bins', department, wasteType, status, filter],
         queryFn: () => apiService.wasteBins.getAll(queryParams),
         refetchInterval: 60000, // 1 minute
         staleTime: 30000, // 30 seconds

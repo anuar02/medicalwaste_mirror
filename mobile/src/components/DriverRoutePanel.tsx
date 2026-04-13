@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   StyleSheet,
   Text,
@@ -28,6 +29,8 @@ import { haversineDistance, formatDistance } from '../utils/distance';
 import ContainerCard from './shared/ContainerCard';
 import AnimatedProgressBar from './shared/AnimatedProgressBar';
 import { getUrgencyColor } from '../utils/urgency';
+import { toValidCoordinate } from '../utils/coordinates';
+import { CollectionContainer, WasteBin } from '../types/models';
 
 interface DriverRoutePanelProps {
   showTitle?: boolean;
@@ -97,9 +100,7 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     const routePoints = sessionRouteQuery.data?.route ?? [];
     const path = routePoints
       .map((point) => {
-        const coords = point.location?.coordinates;
-        if (!coords || coords.length !== 2) return null;
-        return { latitude: coords[1], longitude: coords[0] };
+        return toValidCoordinate(point.location?.coordinates);
       })
       .filter((point): point is { latitude: number; longitude: number } => Boolean(point));
     return path.length > 1 ? path : [];
@@ -107,17 +108,24 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
 
   const snapPoints = useMemo(() => ['12%', '50%', '85%'], []);
   const sheetRef = useRef<BottomSheet>(null);
+  const [sheetIndex, setSheetIndex] = useState(0);
+
+  const sessionItems = useMemo(() => (
+    data?.selectedContainers?.filter((entry) => (
+      Boolean(entry?.container && typeof entry.container._id === 'string' && entry.container._id.length > 0)
+    )) ?? []
+  ), [data?.selectedContainers]);
 
   const containerMarkers = useMemo(() => (
-    data?.selectedContainers
-      ?.map((entry) => {
-        const coords = entry.container.location?.coordinates;
-        if (!coords || coords.length !== 2) return null;
+    sessionItems
+      .map((entry) => {
+        const coordinate = toValidCoordinate(entry.container.location?.coordinates);
+        if (!coordinate) return null;
         return {
           id: entry.container._id,
           title: entry.container.binId ?? t('driver.route.container'),
-          latitude: coords[1],
-          longitude: coords[0],
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
           visited: entry.visited,
           fullness: entry.container.fullness,
           temperature: entry.container.temperature,
@@ -126,8 +134,8 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
           binId: entry.container.binId,
         };
       })
-      .filter((marker): marker is NonNullable<typeof marker> => Boolean(marker)) ?? []
-  ), [data?.selectedContainers, t]);
+      .filter((marker): marker is NonNullable<typeof marker> => Boolean(marker))
+  ), [sessionItems, t]);
 
   const unvisitedMarkers = useMemo(
     () => containerMarkers.filter((m) => !m.visited),
@@ -137,13 +145,13 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
   const availableMarkers = useMemo(() => (
     bins
       ?.map((bin) => {
-        const coords = bin.location?.coordinates;
-        if (!coords || coords.length !== 2) return null;
+        const coordinate = toValidCoordinate(bin.location?.coordinates);
+        if (!coordinate) return null;
         return {
           id: bin._id,
           title: bin.binId ?? t('driver.route.container'),
-          latitude: coords[1],
-          longitude: coords[0],
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
         };
       })
       .filter((marker): marker is NonNullable<typeof marker> => Boolean(marker)) ?? []
@@ -177,8 +185,8 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     return unvisitedMarkers[0];
   }, [unvisitedMarkers, waypointOrder, currentLocation, containerDistances]);
 
-  const visitedCount = data?.selectedContainers?.filter((e) => e.visited).length ?? 0;
-  const totalCount = data?.selectedContainers?.length ?? 0;
+  const visitedCount = sessionItems.filter((e) => e.visited).length;
+  const totalCount = sessionItems.length;
 
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
@@ -235,12 +243,23 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
 
   const mapRegion = useMemo(() => {
     if (currentLocation) {
-      return {
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
-        latitudeDelta: 0.02,
-        longitudeDelta: 0.02,
-      };
+      const latitude = Number(currentLocation.coords.latitude);
+      const longitude = Number(currentLocation.coords.longitude);
+      if (
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude) &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180
+      ) {
+        return {
+          latitude,
+          longitude,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        };
+      }
     }
     if (containerMarkers.length) {
       return {
@@ -261,6 +280,15 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     return null;
   }, [currentLocation, containerMarkers, data, availableMarkers]);
 
+  const currentMarkerCoordinate = useMemo(() => {
+    if (!currentLocation) return null;
+    const latitude = Number(currentLocation.coords.latitude);
+    const longitude = Number(currentLocation.coords.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+    return { latitude, longitude };
+  }, [currentLocation]);
+
   const handleStop = () => {
     if (!data?.sessionId || stopMutation.isPending) return;
     stopMutation.mutate(data.sessionId, {
@@ -272,7 +300,52 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
 
   const handleMarkVisited = (containerId?: string) => {
     if (!containerId || !data?.sessionId || markVisitedMutation.isPending) return;
-    markVisitedMutation.mutate({ sessionId: data.sessionId, containerId });
+
+    // Ensure the sheet is expanded enough to see the result
+    if (sheetIndex < 1) {
+      sheetRef.current?.snapToIndex(1);
+    }
+
+    // Prompt for collected weight before marking visited
+    Alert.alert(
+      t('driver.route.collectWeightTitle'),
+      t('driver.route.collectWeightMessage'),
+      [
+        {
+          text: t('driver.route.skipWeight'),
+          style: 'cancel',
+          onPress: () => {
+            markVisitedMutation.mutate({ sessionId: data.sessionId, containerId });
+          },
+        },
+        {
+          text: t('driver.route.enterWeight'),
+          onPress: () => {
+            Alert.prompt(
+              t('driver.route.collectWeightTitle'),
+              t('driver.route.collectWeightPrompt'),
+              [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                  text: t('common.confirm'),
+                  onPress: (weightStr: string | undefined) => {
+                    const weight = parseFloat(weightStr ?? '');
+                    markVisitedMutation.mutate({
+                      sessionId: data.sessionId,
+                      containerId,
+                      ...(Number.isFinite(weight) && weight > 0 ? { collectedWeight: weight } : {}),
+                    });
+                  },
+                },
+              ],
+              'plain-text',
+              '',
+              'decimal-pad',
+            );
+          },
+        },
+      ],
+    );
   };
 
   const toggleContainer = (containerId: string) => {
@@ -321,7 +394,15 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
         const route = payload.routes[0];
         const points = route.overview_polyline?.points;
         if (points) {
-          setRouteCoords(decodePolyline(points));
+          const decoded = decodePolyline(points).filter((point) => (
+            Number.isFinite(point.latitude) &&
+            Number.isFinite(point.longitude) &&
+            point.latitude >= -90 &&
+            point.latitude <= 90 &&
+            point.longitude >= -180 &&
+            point.longitude <= 180
+          ));
+          setRouteCoords(decoded);
         }
 
         // Parse total distance & duration across all legs
@@ -386,9 +467,14 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
       console.warn('Unable to get start location', error);
     }
 
+    if (selectedContainers.length === 0) {
+      Alert.alert(t('driver.route.selectAtLeastOne'));
+      return;
+    }
+
     startMutation.mutate(
       {
-        containerIds: selectedContainers.length ? selectedContainers : undefined,
+        containerIds: selectedContainers,
         startLocation,
       },
       {
@@ -441,7 +527,6 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     );
   }
 
-  const sessionItems = data?.selectedContainers ?? [];
   const isNextStop = (id: string) => nextStopMarker?.id === id;
 
   return (
@@ -449,12 +534,9 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
       {showTitle ? <Text style={styles.title}>{t('driver.route.title')}</Text> : null}
       {mapRegion ? (
         <MapView style={styles.map} region={mapRegion}>
-          {currentLocation ? (
+          {currentMarkerCoordinate ? (
             <Marker
-              coordinate={{
-                latitude: currentLocation.coords.latitude,
-                longitude: currentLocation.coords.longitude,
-              }}
+              coordinate={currentMarkerCoordinate}
               title={t('driver.route.you')}
               pinColor={dark.teal}
             />
@@ -520,11 +602,13 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
         index={0}
         backgroundStyle={styles.sheetBg}
         handleIndicatorStyle={styles.sheetHandle}
+        onChange={setSheetIndex}
+        enableContentPanningGesture={false}
       >
         {data ? (
           <BottomSheetFlatList
             data={sessionItems}
-            keyExtractor={(item) => item.container._id}
+            keyExtractor={(item: CollectionContainer) => item.container._id}
             contentContainerStyle={styles.sheetContent}
             refreshControl={
               <RefreshControl
@@ -586,7 +670,7 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
                 <Text style={styles.sectionTitle}>{t('driver.route.containersTitle')}</Text>
               </>
             }
-            renderItem={({ item: entry, index }) => (
+            renderItem={({ item: entry, index }: { item: CollectionContainer; index: number }) => (
               <ContainerCard
                 binId={entry.container.binId}
                 fullness={entry.container.fullness}
@@ -621,7 +705,7 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
         ) : (
           <BottomSheetFlatList
             data={bins ?? []}
-            keyExtractor={(item) => item._id}
+            keyExtractor={(item: WasteBin) => item._id}
             contentContainerStyle={styles.sheetContent}
             refreshControl={
               <RefreshControl
@@ -646,7 +730,7 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
                 </View>
               </>
             }
-            renderItem={({ item: bin }) => {
+            renderItem={({ item: bin }: { item: WasteBin }) => {
               const isSelected = selectedContainers.includes(bin._id);
               return (
                 <TouchableOpacity

@@ -42,7 +42,10 @@ export default function DriverContainersScreen() {
 
   const sortedSessionContainers = useMemo(() => {
     if (!data?.selectedContainers?.length) return [];
-    return [...data.selectedContainers].sort((a, b) =>
+    const validEntries = data.selectedContainers.filter(
+      (entry) => Boolean(entry?.container && typeof entry.container._id === 'string' && entry.container._id.length > 0),
+    );
+    return [...validEntries].sort((a, b) =>
       sortFn(a.container, b.container),
     );
   }, [data?.selectedContainers, sortFn]);
@@ -52,8 +55,8 @@ export default function DriverContainersScreen() {
     return [...bins].sort(sortFn);
   }, [bins, sortFn]);
 
-  const visitedCount = data?.selectedContainers?.filter((e) => e.visited).length ?? 0;
-  const totalCount = data?.selectedContainers?.length ?? 0;
+  const visitedCount = sortedSessionContainers.filter((e) => e.visited).length;
+  const totalCount = sortedSessionContainers.length;
 
   const lastUpdate = dataUpdatedAt || binsUpdatedAt;
   const lastUpdateText = lastUpdate

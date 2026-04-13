@@ -2,9 +2,19 @@ const express = require('express');
 const router = express.Router();
 const GpsData = require('../models/gpsData');
 const { logger } = require('../middleware/loggers');
+const { auth, adminAuth, apiKeyAuth } = require('../middleware/auth');
 
-// POST - Receive GPS data from ESP32
-router.post('/data', async (req, res) => {
+const MAX_LIMIT = 200;
+
+// Sanitize a string to prevent NoSQL operator injection
+const sanitizeString = (value) => {
+    if (typeof value !== 'string') return null;
+    // Strip anything that isn't alphanumeric, underscore, hyphen or dot
+    return value.replace(/[^a-zA-Z0-9_.\-]/g, '').slice(0, 64) || null;
+};
+
+// POST - Receive GPS data from ESP32 (IoT device, requires API key)
+router.post('/data', apiKeyAuth, async (req, res) => {
     try {
         const gpsData = new GpsData({
             latitude: parseFloat(req.body.latitude),
@@ -35,11 +45,10 @@ router.post('/data', async (req, res) => {
         if (!gpsData.latitude || !gpsData.longitude) {
             return res.status(400).json({
                 success: false,
-                error: 'Latitude and longitude are required'
+                message: 'Latitude and longitude are required'
             });
         }
 
-        // Save to database
         const savedData = await gpsData.save();
 
         logger.info(`GPS data received: ${savedData.latitude}, ${savedData.longitude} from ${savedData.deviceInfo.chipId || 'unknown'}`);
@@ -47,22 +56,20 @@ router.post('/data', async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'GPS data saved successfully',
-            id: savedData._id,
-            isValidFix: savedData.isValidFix()
+            data: { id: savedData._id, isValidFix: savedData.isValidFix() }
         });
 
     } catch (error) {
         logger.error(`Error saving GPS data: ${error.message}`);
         res.status(500).json({
             success: false,
-            error: 'Failed to save GPS data',
-            details: error.message
+            message: 'Failed to save GPS data'
         });
     }
 });
 
-// GET - Retrieve GPS data with pagination and filtering
-router.get('/data', async (req, res) => {
+// GET - Retrieve GPS data with pagination and filtering (authenticated users)
+router.get('/data', auth, async (req, res) => {
     try {
         const {
             page = 1,
@@ -74,17 +81,28 @@ router.get('/data', async (req, res) => {
             minSatellites
         } = req.query;
 
-        // Build filter query
+        const safeLimit = Math.min(parseInt(limit) || 50, MAX_LIMIT);
+        const safePage = Math.max(parseInt(page) || 1, 1);
+
+        // Build filter query — sanitize all user-supplied string inputs
         const filter = {};
 
         if (chipId) {
-            filter['deviceInfo.chipId'] = chipId;
+            const safeChipId = sanitizeString(chipId);
+            if (safeChipId) filter['deviceInfo.chipId'] = safeChipId;
         }
 
         if (startDate || endDate) {
             filter.gpsTime = {};
-            if (startDate) filter.gpsTime.$gte = new Date(startDate);
-            if (endDate) filter.gpsTime.$lte = new Date(endDate);
+            if (startDate) {
+                const d = new Date(startDate);
+                if (!isNaN(d)) filter.gpsTime.$gte = d;
+            }
+            if (endDate) {
+                const d = new Date(endDate);
+                if (!isNaN(d)) filter.gpsTime.$lte = d;
+            }
+            if (Object.keys(filter.gpsTime).length === 0) delete filter.gpsTime;
         }
 
         if (validOnly === 'true') {
@@ -94,17 +112,17 @@ router.get('/data', async (req, res) => {
         }
 
         if (minSatellites) {
-            filter['satellites.used'] = { $gte: parseInt(minSatellites) };
+            const minSats = parseInt(minSatellites);
+            if (!isNaN(minSats)) filter['satellites.used'] = { $gte: minSats };
         }
 
-        // Execute query with pagination
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const skip = (safePage - 1) * safeLimit;
         const [data, total] = await Promise.all([
             GpsData.find(filter)
                 .sort({ gpsTime: -1 })
                 .skip(skip)
-                .limit(parseInt(limit))
-                .select('-rawNmea'), // Exclude raw NMEA to reduce payload size
+                .limit(safeLimit)
+                .select('-rawNmea'),
             GpsData.countDocuments(filter)
         ]);
 
@@ -113,9 +131,9 @@ router.get('/data', async (req, res) => {
             data,
             pagination: {
                 total,
-                page: parseInt(page),
-                pages: Math.ceil(total / parseInt(limit)),
-                limit: parseInt(limit)
+                page: safePage,
+                pages: Math.ceil(total / safeLimit),
+                limit: safeLimit
             }
         });
 
@@ -123,17 +141,17 @@ router.get('/data', async (req, res) => {
         logger.error(`Error retrieving GPS data: ${error.message}`);
         res.status(500).json({
             success: false,
-            error: 'Failed to retrieve GPS data',
-            details: error.message
+            message: 'Failed to retrieve GPS data'
         });
     }
 });
 
 // GET - Get latest GPS position for a specific device
-router.get('/latest/:chipId?', async (req, res) => {
+router.get('/latest/:chipId?', auth, async (req, res) => {
     try {
         const { chipId } = req.params;
-        const filter = chipId ? { 'deviceInfo.chipId': chipId } : {};
+        const safeChipId = chipId ? sanitizeString(chipId) : null;
+        const filter = safeChipId ? { 'deviceInfo.chipId': safeChipId } : {};
 
         const latestData = await GpsData.findOne(filter)
             .sort({ gpsTime: -1 })
@@ -142,38 +160,48 @@ router.get('/latest/:chipId?', async (req, res) => {
         if (!latestData) {
             return res.status(404).json({
                 success: false,
-                error: 'No GPS data found'
+                message: 'No GPS data found'
             });
         }
 
         res.json({
             success: true,
-            data: latestData,
-            isValidFix: latestData.isValidFix()
+            data: { ...latestData.toObject(), isValidFix: latestData.isValidFix() }
         });
 
     } catch (error) {
         logger.error(`Error retrieving latest GPS data: ${error.message}`);
         res.status(500).json({
             success: false,
-            error: 'Failed to retrieve latest GPS data',
-            details: error.message
+            message: 'Failed to retrieve latest GPS data'
         });
     }
 });
 
 // GET - Get GPS track/route for a device within time range
-router.get('/track/:chipId', async (req, res) => {
+router.get('/track/:chipId', auth, async (req, res) => {
     try {
         const { chipId } = req.params;
         const { startDate, endDate, validOnly = true } = req.query;
 
-        const filter = { 'deviceInfo.chipId': chipId };
+        const safeChipId = sanitizeString(chipId);
+        if (!safeChipId) {
+            return res.status(400).json({ success: false, message: 'Invalid chipId' });
+        }
+
+        const filter = { 'deviceInfo.chipId': safeChipId };
 
         if (startDate || endDate) {
             filter.gpsTime = {};
-            if (startDate) filter.gpsTime.$gte = new Date(startDate);
-            if (endDate) filter.gpsTime.$lte = new Date(endDate);
+            if (startDate) {
+                const d = new Date(startDate);
+                if (!isNaN(d)) filter.gpsTime.$gte = d;
+            }
+            if (endDate) {
+                const d = new Date(endDate);
+                if (!isNaN(d)) filter.gpsTime.$lte = d;
+            }
+            if (Object.keys(filter.gpsTime).length === 0) delete filter.gpsTime;
         }
 
         if (validOnly === 'true') {
@@ -185,7 +213,6 @@ router.get('/track/:chipId', async (req, res) => {
             .select('latitude longitude altitude gpsTime speed course satellites.used')
             .lean();
 
-        // Convert to GeoJSON LineString format
         const geoJsonTrack = {
             type: 'Feature',
             geometry: {
@@ -193,7 +220,7 @@ router.get('/track/:chipId', async (req, res) => {
                 coordinates: track.map(point => [point.longitude, point.latitude, point.altitude || 0])
             },
             properties: {
-                chipId,
+                chipId: safeChipId,
                 startTime: track[0]?.gpsTime,
                 endTime: track[track.length - 1]?.gpsTime,
                 totalPoints: track.length
@@ -202,31 +229,31 @@ router.get('/track/:chipId', async (req, res) => {
 
         res.json({
             success: true,
-            data: geoJsonTrack,
-            rawPoints: track
+            data: { geoJson: geoJsonTrack, rawPoints: track }
         });
 
     } catch (error) {
         logger.error(`Error retrieving GPS track: ${error.message}`);
         res.status(500).json({
             success: false,
-            error: 'Failed to retrieve GPS track',
-            details: error.message
+            message: 'Failed to retrieve GPS track'
         });
     }
 });
 
 // GET - Get statistics
-router.get('/stats', async (req, res) => {
+router.get('/stats', auth, async (req, res) => {
     try {
         const { chipId, hours = 24 } = req.query;
 
+        const safeHours = Math.min(parseInt(hours) || 24, 720); // cap at 30 days
         const timeFilter = {
-            gpsTime: { $gte: new Date(Date.now() - parseInt(hours) * 60 * 60 * 1000) }
+            gpsTime: { $gte: new Date(Date.now() - safeHours * 60 * 60 * 1000) }
         };
 
         if (chipId) {
-            timeFilter['deviceInfo.chipId'] = chipId;
+            const safeChipId = sanitizeString(chipId);
+            if (safeChipId) timeFilter['deviceInfo.chipId'] = safeChipId;
         }
 
         const [totalPoints, validPoints, deviceCount, avgSatellites] = await Promise.all([
@@ -241,12 +268,12 @@ router.get('/stats', async (req, res) => {
 
         res.json({
             success: true,
-            stats: {
+            data: {
                 totalPoints,
                 validPoints,
                 activeDevices: deviceCount,
                 averageSatellites: avgSatellites[0]?.avgSats || 0,
-                timeRange: `${hours} hours`
+                timeRange: `${safeHours} hours`
             }
         });
 
@@ -254,17 +281,16 @@ router.get('/stats', async (req, res) => {
         logger.error(`Error retrieving GPS stats: ${error.message}`);
         res.status(500).json({
             success: false,
-            error: 'Failed to retrieve GPS statistics',
-            details: error.message
+            message: 'Failed to retrieve GPS statistics'
         });
     }
 });
 
-// DELETE - Clear old GPS data (maintenance endpoint)
-router.delete('/cleanup', async (req, res) => {
+// DELETE - Clear old GPS data (admin only)
+router.delete('/cleanup', adminAuth, async (req, res) => {
     try {
-        const { olderThan = 30 } = req.query; // days
-        const cutoffDate = new Date(Date.now() - parseInt(olderThan) * 24 * 60 * 60 * 1000);
+        const olderThan = Math.min(parseInt(req.query.olderThan) || 30, 365); // cap at 1 year
+        const cutoffDate = new Date(Date.now() - olderThan * 24 * 60 * 60 * 1000);
 
         const result = await GpsData.deleteMany({
             gpsTime: { $lt: cutoffDate }
@@ -272,15 +298,15 @@ router.delete('/cleanup', async (req, res) => {
 
         res.json({
             success: true,
-            message: `Deleted ${result.deletedCount} GPS records older than ${olderThan} days`
+            message: `Deleted ${result.deletedCount} GPS records older than ${olderThan} days`,
+            data: { deletedCount: result.deletedCount }
         });
 
     } catch (error) {
         logger.error(`Error cleaning up GPS data: ${error.message}`);
         res.status(500).json({
             success: false,
-            error: 'Failed to cleanup GPS data',
-            details: error.message
+            message: 'Failed to cleanup GPS data'
         });
     }
 });

@@ -1,5 +1,6 @@
 // controllers/userController.js
 const User = require('../models/User');
+const MedicalCompany = require('../models/MedicalCompany');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { startPhoneVerification, checkPhoneVerification } = require('../services/twilioVerifyService');

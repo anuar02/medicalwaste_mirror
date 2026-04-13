@@ -94,10 +94,12 @@ function buildRouteStopsFromCluster(cluster) {
 }
 
 async function findDuplicateSuggestion(companyId, clusterContainerIds) {
+    // Check all open suggested routes — not just last 6h — so the scheduler
+    // never creates a second route for the same container set until the
+    // existing suggestion is approved, archived, or deleted.
     const suggestions = await Route.find({
         company: companyId,
         status: 'suggested',
-        createdAt: { $gte: new Date(Date.now() - 6 * 60 * 60 * 1000) }
     }).select('_id stops.containers');
 
     const target = [...clusterContainerIds].map(String).sort().join(',');

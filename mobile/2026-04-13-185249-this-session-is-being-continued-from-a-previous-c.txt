@@ -1,0 +1,23 @@
+ ▐▛███▜▌   Claude Code v2.1.101
+▝▜█████▛▘  Sonnet 4.6 · API Usage Billing
+  ▘▘ ▝▝    ~/WebstormProjects/trashBin_gitlab/mobile
+
+✻ Conversation compacted (ctrl+o for history)
+
+  ⎿  Read src/screens/driver/DriverContainerDetailScreen.tsx (443 lines)
+  ⎿  Referenced file ../frontend/src/services/api.js
+  ⎿  Read ../backend/services/smartScheduler.js (161 lines)
+  ⎿  Referenced file src/components/DriverRoutePanel.tsx
+  ⎿  Read src/screens/driver/DriverHistoryScreen.tsx (377 lines)
+  ⎿  Credit balance too low · Add funds: 
+
+✻ Sautéed for 1m 52s
+
+❯ how to use claude account, not the credit balance                             
+  ⎿  Credit balance too low · Add funds: 
+
+❯ claude config list                                                            
+  ⎿  Credit balance too low · Add funds: 
+
+❯ /export                                                                       
+  ⎿  Conversation copied to clipboard

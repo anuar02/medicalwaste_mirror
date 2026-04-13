@@ -35,17 +35,19 @@
   },
   "common": {
     "loading": "Загрузка...",
-    "logout": "Выйти"
+    "logout": "Выйти",
+    "cancel": "Отмена",
+    "confirm": "Подтвердить"
   },
   "driver": {
     "tabs": {
       "home": "Главная",
       "session": "Сессия",
-    "containers": "Контейнеры",
-    "history": "История",
-    "registration": "Регистрация",
-    "profile": "Профиль"
-  },
+      "containers": "Контейнеры",
+      "history": "История",
+      "registration": "Регистрация",
+      "profile": "Профиль"
+    },
     "home": {
       "title": "Панель водителя",
       "subtitle": "Начните сессию, чтобы увидеть маршрут и передачи.",
@@ -224,7 +226,13 @@
       "openDetails": "Детали",
       "locationPermission": "Нужно разрешение на доступ к геолокации.",
       "locationError": "Не удалось получить местоположение.",
-      "you": "Вы"
+      "you": "Вы",
+      "selectAtLeastOne": "Выберите хотя бы один контейнер для начала сессии",
+      "collectWeightTitle": "Указать вес сбора",
+      "collectWeightMessage": "Укажите вес собранных отходов для этого контейнера?",
+      "collectWeightPrompt": "Введите вес в кг (например 12.5)",
+      "skipWeight": "Пропустить",
+      "enterWeight": "Указать вес"
     },
     "history": {
       "title": "История сессий",
@@ -237,7 +245,10 @@
       "statusActive": "В процессе",
       "statusDisputed": "Оспорено",
       "previewFacility": "Учреждение: {{name}}",
-      "previewIncineration": "Утилизация"
+      "previewIncineration": "Утилизация",
+      "kmDriven": "{{value}} км",
+      "weightTotal": "{{value}} кг",
+      "timePerBin": "{{value}} мин/конт."
     },
     "containers": {
       "title": "Контейнеры",
@@ -317,7 +328,8 @@
       "copyLink": "Скопировать ссылку",
       "copied": "Скопировано",
       "linkExpires": "Ссылка действительна до {{time}}",
-      "regenerateLink": "Создать новую ссылку"
+      "regenerateLink": "Создать новую ссылку",
+      "openInBrowser": "Открыть в браузере"
     },
     "incineration": {
       "readyTitle": "Все передачи от учреждений подтверждены.",
@@ -331,7 +343,9 @@
       "confirmTitle": "Создать передачу на утилизацию?",
       "confirmBody": "{{count}} конт. · {{weight}} кг → {{plant}}",
       "confirmCancel": "Отмена",
-      "confirmOk": "Создать"
+      "confirmOk": "Создать",
+      "searchPlants": "Поиск объектов...",
+      "noSearchResults": "Объекты не найдены"
     },
     "confirm": {
       "title": "Подтвердить прием?",

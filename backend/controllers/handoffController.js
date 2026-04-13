@@ -169,9 +169,20 @@ const createHandoff = asyncHandler(async (req, res, next) => {
         }
     }
 
-    if (req.user.role === 'supervisor' && req.body.company && req.user.company &&
-        String(req.body.company) !== String(req.user.company)) {
-        return next(new AppError('Company does not match supervisor scope', 403));
+    // Supervisors are strictly scoped to their own company.
+    // If a session is provided, the session's company takes precedence.
+    // Without a session, we require the company to be either provided or derivable
+    // from the supervisor's profile — we never allow cross-company creation.
+    if (req.user.role === 'supervisor') {
+        const requestedCompany = req.body.company || session?.company;
+        if (requestedCompany && req.user.company &&
+            String(requestedCompany) !== String(req.user.company)) {
+            return next(new AppError('Company does not match supervisor scope', 403));
+        }
+        // Enforce company is always set for supervisors
+        if (!requestedCompany && !req.user.company) {
+            return next(new AppError('Company context is required to create a handoff', 400));
+        }
     }
 
     let companyId = session?.company || req.user.company || req.body.company;

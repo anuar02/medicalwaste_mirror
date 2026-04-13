@@ -79,18 +79,39 @@ export default function DriverHistoryScreen() {
 
       const containerCount = session.selectedContainers?.length ?? 0;
       const duration = formatDuration(session.startTime, session.endTime);
+      const sessionId = typeof session.sessionId === 'string' && session.sessionId.length > 0
+        ? session.sessionId
+        : null;
+
+      // Performance metrics (set by backend on session completion)
+      const kmDriven = session.totalDistance != null && session.totalDistance > 0
+        ? session.totalDistance
+        : null;
+      const weightCollected = session.totalWeightCollected != null && session.totalWeightCollected > 0
+        ? session.totalWeightCollected
+        // Fallback: sum collectedWeight from individual containers
+        : session.selectedContainers?.reduce((sum, c) => sum + (c.collectedWeight ?? 0), 0) || null;
+      const containersVisited = session.containersCollected ?? session.selectedContainers?.filter(c => c.visited).length ?? 0;
+      const timePerBin = session.totalDuration && containersVisited > 0
+        ? Math.round(session.totalDuration / containersVisited)
+        : null;
+      const hasMetrics = kmDriven != null || weightCollected != null || timePerBin != null;
 
       return (
         <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
           <TouchableOpacity
             style={styles.card}
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('DriverSessionTimeline', { sessionId: session.sessionId })}
+            disabled={!sessionId}
+            onPress={() => {
+              if (!sessionId) return;
+              navigation.navigate('DriverSessionTimeline', { sessionId });
+            }}
           >
             {/* Header: ID + status chip */}
             <View style={styles.cardHeader}>
               <Text style={styles.sessionId} numberOfLines={1}>
-                #{session.sessionId}
+                #{sessionId ?? '—'}
               </Text>
               <View style={[styles.chip, chipBg]}>
                 <Text style={[styles.chipText, { color: chipTextColor }]}>{chipLabel}</Text>
@@ -115,6 +136,33 @@ export default function DriverHistoryScreen() {
                 </>
               )}
             </View>
+
+            {/* Performance metrics */}
+            {hasMetrics && (
+              <View style={styles.metricsRow}>
+                {kmDriven != null && (
+                  <View style={styles.metricBadge}>
+                    <Text style={styles.metricBadgeText}>
+                      {t('driver.history.kmDriven', { value: kmDriven.toFixed(1) })}
+                    </Text>
+                  </View>
+                )}
+                {weightCollected != null && (
+                  <View style={styles.metricBadge}>
+                    <Text style={styles.metricBadgeText}>
+                      {t('driver.history.weightTotal', { value: weightCollected.toFixed(1) })}
+                    </Text>
+                  </View>
+                )}
+                {timePerBin != null && (
+                  <View style={styles.metricBadge}>
+                    <Text style={styles.metricBadgeText}>
+                      {t('driver.history.timePerBin', { value: timePerBin })}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Handoff previews */}
             {sHandoffs.length > 0 && (
@@ -265,6 +313,24 @@ const styles = StyleSheet.create({
   containerCount: {
     ...typography.caption,
     color: dark.muted,
+  },
+  /* Performance metrics row */
+  metricsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  metricBadge: {
+    backgroundColor: 'rgba(13, 148, 136, 0.12)',
+    borderRadius: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  metricBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: dark.teal,
   },
   /* Handoff previews */
   previews: {

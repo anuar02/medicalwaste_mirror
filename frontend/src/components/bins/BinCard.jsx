@@ -1,11 +1,13 @@
 // components/bins/BinCard.jsx
 import React from 'react';
 import PropTypes from 'prop-types';
+import { useTranslation } from 'react-i18next';
 import { Thermometer, Weight, Clock, AlertTriangle, Wifi, WifiOff, Building2 } from 'lucide-react';
 import { formatDate, formatPercentage } from '../../utils/formatters';
 import BinStatusBadge from './BinStatusBadge';
 
 const BinCard = ({ bin, onClick }) => {
+    const { t } = useTranslation();
     const lastUpdateValue = bin.lastUpdate || bin.updatedAt || bin.createdAt;
     const lastUpdateDate = lastUpdateValue ? new Date(lastUpdateValue) : null;
     const companyName = typeof bin.company === 'object' ? bin.company?.name : null;
@@ -70,7 +72,7 @@ const BinCard = ({ bin, onClick }) => {
             <div className="p-4">
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-slate-700">Заполненность</span>
+                        <span className="text-sm font-medium text-slate-700">{t('binVisualization.currentFullness')}</span>
                         <span className={`text-sm font-semibold ${
                             bin.fullness > 80 ? 'text-red-600' : bin.fullness > 60 ? 'text-amber-600' : 'text-teal-600'
                         }`}>

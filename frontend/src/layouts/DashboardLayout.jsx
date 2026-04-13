@@ -22,6 +22,7 @@ import {
     Heart,
     Route as RouteIcon,
     ClipboardCheck,
+    Activity,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -140,6 +141,18 @@ const buildNavItems = (t, hasActiveSession) => ([
         path: '/handoffs',
         supervisorOnly: true,
         bottomNav: true,
+    },
+    {
+        icon: <Activity className="h-5 w-5" />,
+        label: 'Активные Сессии',
+        path: '/driver/dashboard',
+        supervisorOnly: true,
+    },
+    {
+        icon: <Activity className="h-5 w-5" />,
+        label: 'Мониторинг Водителей',
+        path: '/driver/dashboard',
+        adminOnly: true,
     },
     {
         icon: <UserCheck className="h-5 w-5" />,

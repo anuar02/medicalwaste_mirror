@@ -81,7 +81,7 @@ const phoneValidation = [
 
 router.get('/drivers', restrictTo('admin', 'supervisor'), getAllDrivers);
 router.get('/drivers/pending', restrictTo('admin', 'supervisor'), getPendingDrivers);
-router.get('/drivers/:driverId', getDriverDetails);
+router.get('/drivers/:driverId', restrictTo('admin', 'supervisor'), getDriverDetails);
 router.patch('/drivers/:driverId', updateDriverDetails);
 router.post('/drivers/verify', restrictTo('admin', 'supervisor'), verifyDriver);
 router.post('/assign-company', restrictTo('admin'), assignCompany);

@@ -74,7 +74,18 @@ export interface CollectionSession {
   status: 'active' | 'completed';
   startTime?: string;
   endTime?: string;
+  startLocation?: {
+    coordinates?: [number, number];
+  };
+  endLocation?: {
+    coordinates?: [number, number];
+  };
   selectedContainers?: CollectionContainer[];
+  // Computed on session completion
+  totalDistance?: number;       // km
+  totalDuration?: number;       // minutes
+  containersCollected?: number; // count of visited containers
+  totalWeightCollected?: number; // kg
 }
 
 export interface DriverLocation {
