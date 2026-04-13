@@ -4,6 +4,7 @@ const WasteBin = require('../models/WasteBin');
 const Device = require('../models/Device'); // Use your existing Device model
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { logger } = require('../middleware/loggers');
 
 // Simple in-memory command queue for testing (will be lost on server restart)
 // In production, you would use a database
@@ -65,13 +66,11 @@ const recordLocation = asyncHandler(async (req, res) => {
             }
         );
     } catch (error) {
-        console.log('Device update error (non-critical):', error.message);
+        logger.warn(`Device update error (non-critical): ${error.message}`);
     }
 
     // Process if this is a collection checkpoint
     if (isCheckpoint) {
-        console.log(`Collection checkpoint recorded for device ${deviceId} at coordinates [${longitude}, ${latitude}]`);
-
         // Find nearby bins if this is a collection checkpoint
         try {
             const nearbyBins = await WasteBin.find({
@@ -86,8 +85,6 @@ const recordLocation = asyncHandler(async (req, res) => {
                 }
             });
 
-            console.log(`Found ${nearbyBins.length} bins near checkpoint [${longitude}, ${latitude}]`);
-
             // Update bins as collected
             if (nearbyBins && nearbyBins.length > 0) {
                 for (const bin of nearbyBins) {
@@ -101,11 +98,9 @@ const recordLocation = asyncHandler(async (req, res) => {
                     });
                     await bin.save();
                 }
-
-                console.log(`Updated ${nearbyBins.length} bins as collected by ${deviceId}`);
             }
         } catch (error) {
-            console.log('Error updating bins:', error.message);
+            logger.error(`Error updating bins: ${error.message}`);
         }
     }
 
@@ -129,8 +124,6 @@ const checkCommands = asyncHandler(async (req, res) => {
             message: 'Device ID is required'
         });
     }
-
-    console.log(`Command check from device: ${deviceId}`);
 
     // Testing mode - Send test command based on query params
     if (req.query.test === 'true') {
@@ -177,8 +170,6 @@ const confirmCommand = asyncHandler(async (req, res) => {
         });
     }
 
-    console.log(`Command confirmation received: ${commandId} for ${deviceId} - Status: ${status || 'executed'}`);
-
     res.status(200).json({
         status: 'success',
         message: 'Command confirmation received'
@@ -213,8 +204,6 @@ const sendCommand = asyncHandler(async (req, res) => {
         data: data || {},
         created: new Date()
     });
-
-    console.log(`Command queued for ${deviceId}: ${command}`);
 
     res.status(201).json({
         status: 'success',

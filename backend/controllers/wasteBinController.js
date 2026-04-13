@@ -886,25 +886,15 @@ const updateBin = asyncHandler(async (req, res, next) => {
                 });
 
                 await History.bulkWrite(bulkUpdates);
-                console.log(`Updated ${bulkUpdates.length} recent history records for bin ${updatedBin.binId}`);
             }
         } catch (historyUpdateError) {
-            console.error('Failed to update history records:', historyUpdateError);
+            logger.error(`Failed to update history records: ${historyUpdateError.message}`);
             // Don't fail the main operation
         }
     }
 
     // Convert to JSON to ensure virtual fields are included
     const binData = updatedBin.toJSON();
-
-    // Log the update for debugging
-    console.log('Bin update:', {
-        binId: binData.binId,
-        updatedFields: Object.keys(filteredData),
-        containerHeight: binData.containerHeight,
-        distance: binData.distance,
-        calculatedFullness: binData.fullness
-    });
 
     res.status(200).json({
         status: 'success',
@@ -1170,7 +1160,7 @@ const getBinHistory = asyncHandler(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('History query error:', error);
+        logger.error(`History query error: ${error.message}`);
         return next(new AppError('Failed to retrieve bin history', 500));
     }
 });
@@ -1541,7 +1531,7 @@ const registerDevice = asyncHandler(async (req, res) => {
             }
         });
     } catch (error) {
-        console.error("Error registering device:", error);
+        logger.error(`Error registering device: ${error.message}`);
         res.status(500).json({
             status: 'error',
             message: error.message || 'Error registering device'

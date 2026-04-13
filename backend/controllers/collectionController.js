@@ -179,14 +179,6 @@ const recordDriverLocation = asyncHandler(async (req, res, next) => {
 
     const driverId = req.user.id;
 
-    console.log('📍 Received location from driver:', {
-        driverId,
-        latitude,
-        longitude,
-        accuracy,
-        timestamp
-    });
-
     if (latitude == null || longitude == null) {
         return next(new AppError('Location coordinates are required', 400));
     }
@@ -198,11 +190,8 @@ const recordDriverLocation = asyncHandler(async (req, res, next) => {
     });
 
     if (!session) {
-        console.warn('⚠️ No active session found for driver:', driverId);
         return next(new AppError('No active collection session', 404));
     }
-
-    console.log('✅ Found active session:', session.sessionId);
 
     // Create location record
     const location = await DriverLocation.create({
@@ -220,13 +209,8 @@ const recordDriverLocation = asyncHandler(async (req, res, next) => {
         timestamp: timestamp ? new Date(timestamp) : new Date()
     });
 
-    console.log('✅ Location saved:', location._id);
-
-    // ИСПРАВЛЕНИЕ: Всегда добавляем новую локацию в маршрут
     session.route.push(location._id);
     await session.save();
-
-    console.log('✅ Location added to route. Total points:', session.route.length);
 
     // Check if driver is near any selected containers
     await checkProximityToContainers(session, latitude, longitude);
@@ -419,8 +403,6 @@ const getCollectionHistory = asyncHandler(async (req, res, next) => {
         if (to) query.startTime.$lte = new Date(to);
     }
 
-    console.log('🔍 History query:', query);
-
     const sessions = await CollectionSession.find(query)
         .populate('selectedContainers.container')
         .populate('driver', 'username email phoneNumber')
@@ -429,8 +411,6 @@ const getCollectionHistory = asyncHandler(async (req, res, next) => {
         .skip((parseInt(page) - 1) * parseInt(limit));
 
     const total = await CollectionSession.countDocuments(query);
-
-    console.log('✅ Found sessions:', sessions.length);
 
     res.status(200).json({
         status: 'success',
@@ -453,21 +433,15 @@ const getActiveDrivers = asyncHandler(async (req, res) => {
         query.company = req.user.company;
     }
 
-    console.log('🔍 Looking for active drivers with query:', query);
-
     const sessions = await CollectionSession.find(query)
         .populate('driver', 'username email phoneNumber vehicleInfo')
         .populate('selectedContainers.container')
         .sort({ startTime: -1 });
 
-    console.log('✅ Found active sessions:', sessions.length);
-
     // Get last location for each driver
     const driversWithLocations = await Promise.all(sessions.map(async (session) => {
         const lastLocation = await DriverLocation.findOne({ session: session._id })
             .sort({ timestamp: -1 });
-
-        console.log(`📍 Session ${session.sessionId} last location:`, lastLocation ? 'found' : 'not found');
 
         return {
             session,
@@ -515,12 +489,6 @@ const getSessionRoute = asyncHandler(async (req, res, next) => {
 
     // Also expose the route inside the session payload for frontend consumers.
     session.route = locations;
-
-    console.log(`📊 Session ${session.sessionId} route points:`, {
-        routeArrayLength: session.route.length,
-        locationsFound: locations.length,
-        sessionId: session._id
-    });
 
     return res.status(200).json({
         status: 'success',
