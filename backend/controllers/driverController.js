@@ -78,9 +78,14 @@ const registerDriver = asyncHandler(async (req, res, next) => {
  * Get all pending driver verifications (admin only)
  */
 const getPendingVerifications = asyncHandler(async (req, res) => {
-    const pendingDrivers = await Driver.find({
-        isVerified: false
-    })
+    const filter = { isVerified: false };
+    if (req.user.role === 'supervisor') {
+        if (!req.user.company) {
+            return res.status(200).json({ status: 'success', results: 0, data: { drivers: [] } });
+        }
+        filter.medicalCompany = req.user.company;
+    }
+    const pendingDrivers = await Driver.find(filter)
         .populate('user', 'username email createdAt')
         .populate('medicalCompany', 'name licenseNumber contactInfo')
         .sort({ createdAt: -1 });
@@ -168,7 +173,15 @@ const getAllDrivers = asyncHandler(async (req, res) => {
         filter.isVerified = true;
         filter.isActive = true;
     }
-    if (company) filter.medicalCompany = company;
+    // Supervisors are scoped to their own company; admins can filter freely
+    if (req.user.role === 'supervisor') {
+        if (!req.user.company) {
+            return res.status(200).json({ status: 'success', results: 0, data: { drivers: [] } });
+        }
+        filter.medicalCompany = req.user.company;
+    } else if (company) {
+        filter.medicalCompany = company;
+    }
 
     const drivers = await Driver.find(filter)
         .populate('user', 'username email lastLogin')

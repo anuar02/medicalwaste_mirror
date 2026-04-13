@@ -16,7 +16,6 @@ export interface StartLocation {
 }
 
 export interface StartCollectionPayload {
-  containerIds?: string[];
   startLocation?: StartLocation;
   routeId?: string;
 }

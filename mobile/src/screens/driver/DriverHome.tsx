@@ -217,13 +217,8 @@ export default function DriverHome() {
         >
           {!session ? (
             <>
-              <Text style={styles.sessionTitle}>{t('driver.home.noSession')}</Text>
-              <TouchableOpacity
-                style={styles.sessionButton}
-                onPress={() => navigation.navigate('DriverSession', { initialTab: 'route' })}
-              >
-                <Text style={styles.sessionButtonText}>{t('driver.home.startSession')}</Text>
-              </TouchableOpacity>
+              <Text style={styles.sessionTitle}>{t('driver.route.waitingTitle')}</Text>
+              <Text style={styles.sessionMeta}>{t('driver.route.waitingBody')}</Text>
             </>
           ) : (
             <>

@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import * as Location from 'expo-location';
 import {
-  ActivityIndicator,
-  Alert,
   Linking,
   Platform,
   SafeAreaView,
@@ -18,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import MapView, { Marker } from 'react-native-maps';
 import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
 
-import { useActiveCollection, useMarkVisited } from '../../hooks/useCollections';
+import { useActiveCollection } from '../../hooks/useCollections';
 import { useWasteBins } from '../../hooks/useWasteBins';
 import { dark, spacing, typography } from '../../theme';
 import { DriverContainersStackParamList } from '../../types/navigation';
@@ -37,7 +35,6 @@ export default function DriverContainerDetailScreen() {
 
   const { data: session } = useActiveCollection();
   const { data: bins } = useWasteBins();
-  const markVisitedMutation = useMarkVisited();
 
   const sessionEntry = useMemo(() => {
     return session?.selectedContainers?.find(
@@ -50,8 +47,7 @@ export default function DriverContainerDetailScreen() {
     return bins?.find((bin) => bin._id === containerId);
   }, [sessionEntry, bins, containerId]);
 
-  const isInSession = Boolean(sessionEntry);
-  const isUnvisited = isInSession && !sessionEntry?.visited;
+  const isVisited = Boolean(sessionEntry?.visited);
 
   const fullness = container?.fullness ?? 0;
   const fullnessColor = getUrgencyColor(container?.fullness);
@@ -81,59 +77,6 @@ export default function DriverContainerDetailScreen() {
     if (!driverCoords || !coordinate) return null;
     return haversineDistance(driverCoords.lat, driverCoords.lon, coordinate.latitude, coordinate.longitude);
   }, [driverCoords, coordinate]);
-
-  const handleMarkVisited = () => {
-    if (!session?.sessionId || !containerId || markVisitedMutation.isPending) return;
-
-    const sessionId = session.sessionId;
-    const submit = (weightStr?: string) => {
-      const weight = parseFloat(weightStr ?? '');
-      markVisitedMutation.mutate({
-        sessionId,
-        containerId,
-        ...(Number.isFinite(weight) && weight > 0 ? { collectedWeight: weight } : {}),
-      });
-    };
-
-    if (Platform.OS === 'ios') {
-      Alert.prompt(
-        t('driver.route.collectWeightTitle'),
-        t('driver.route.collectWeightPrompt'),
-        [
-          { text: t('driver.route.skipWeight'), style: 'cancel', onPress: () => submit() },
-          { text: t('common.confirm'), onPress: (weightStr?: string) => submit(weightStr) },
-        ],
-        'plain-text',
-        '',
-        'decimal-pad',
-      );
-    } else {
-      Alert.alert(
-        t('driver.route.collectWeightTitle'),
-        t('driver.route.collectWeightMessage'),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          { text: t('driver.route.skipWeight'), onPress: () => submit() },
-          {
-            text: t('driver.route.enterWeight'),
-            onPress: () => {
-              Alert.prompt(
-                t('driver.route.collectWeightTitle'),
-                t('driver.route.collectWeightPrompt'),
-                [
-                  { text: t('common.cancel'), style: 'cancel' },
-                  { text: t('common.confirm'), onPress: (w?: string) => submit(w) },
-                ],
-                'plain-text',
-                '',
-                'decimal-pad',
-              );
-            },
-          },
-        ],
-      );
-    }
-  };
 
   const handleOpen2Gis = () => {
     if (!coordinate) return;
@@ -229,19 +172,11 @@ export default function DriverContainerDetailScreen() {
           </View>
         </Animated.View>
 
-        {/* Mark Visited button */}
-        {isUnvisited && (
-          <Animated.View entering={FadeInUp.delay(200).springify()}>
-            <TouchableOpacity style={styles.markVisitedButton} onPress={handleMarkVisited}>
-              {markVisitedMutation.isPending ? (
-                <ActivityIndicator color={dark.text} />
-              ) : (
-                <>
-                  <MaterialCommunityIcons name="check-circle-outline" size={18} color={dark.text} />
-                  <Text style={styles.markVisitedText}>{t('driver.containerDetail.markVisited')}</Text>
-                </>
-              )}
-            </TouchableOpacity>
+        {/* Visited status (set automatically by handoff completion) */}
+        {isVisited && (
+          <Animated.View entering={FadeInUp.delay(200).springify()} style={styles.visitedBadge}>
+            <MaterialCommunityIcons name="check-circle" size={18} color={dark.successText} />
+            <Text style={styles.visitedText}>{t('driver.containerDetail.visited')}</Text>
           </Animated.View>
         )}
 
@@ -390,21 +325,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  markVisitedButton: {
+  visitedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: dark.teal,
+    backgroundColor: dark.success,
     borderRadius: 12,
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
     gap: spacing.sm,
-    shadowColor: dark.teal,
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
   },
-  markVisitedText: {
-    color: dark.text,
+  visitedText: {
+    color: dark.successText,
     fontWeight: '700',
   },
   locationCard: {

@@ -17,12 +17,13 @@ import { useTranslation } from 'react-i18next';
 
 import {
   useActiveCollection,
-  useMarkVisited,
   useSessionRoute,
   useStartCollection,
   useStopCollection,
 } from '../hooks/useCollections';
+import { useHandoffs } from '../hooks/useHandoffs';
 import { useWasteBins } from '../hooks/useWasteBins';
+import { useAuthStore } from '../stores/authStore';
 import { dark, spacing, typography } from '../theme';
 import { googleDirectionsApiKey } from '../utils/env';
 import { haversineDistance, formatDistance } from '../utils/distance';
@@ -74,17 +75,45 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
   const { t } = useTranslation();
   const { data, isLoading, refetch, isFetching } = useActiveCollection();
   const stopMutation = useStopCollection();
-  const markVisitedMutation = useMarkVisited();
   const startMutation = useStartCollection();
   const {
     data: bins,
-    isLoading: binsLoading,
     isFetching: binsFetching,
     refetch: refetchBins,
   } = useWasteBins();
+  const currentUser = useAuthStore((s) => s.user);
+  const currentUserId = String(
+    (currentUser as any)?._id || (currentUser as any)?.id || '',
+  );
+  const handoffsQuery = useHandoffs({
+    enabled: !data,
+    refetchInterval: !data ? 15000 : false,
+  });
+  const openHandoff = useMemo(() => {
+    if (data) return null;
+    const list = handoffsQuery.data ?? [];
+    const openStatuses = new Set([
+      'created',
+      'pending',
+      'confirmedBySender',
+      'confirmed_by_sender',
+    ]);
+    return (
+      list.find((h) => {
+        if (h.type !== 'facility_to_driver') return false;
+        if (!openStatuses.has(String(h.status))) return false;
+        const receiver: any = h.receiver?.user;
+        const receiverId = String(receiver?._id || receiver?.id || receiver || '');
+        // If receiver.user is missing (supervisor targeted by role not driver id),
+        // still accept: backend already scoped the list to this driver's identity.
+        if (!receiverId) return true;
+        if (!currentUserId) return true;
+        return receiverId === currentUserId;
+      }) ?? null
+    );
+  }, [data, handoffsQuery.data, currentUserId]);
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [selectedContainers, setSelectedContainers] = useState<string[]>([]);
   const [routeCoords, setRouteCoords] = useState<Array<{ latitude: number; longitude: number }>>([]);
   const [routeMeta, setRouteMeta] = useState<{ distance?: string; duration?: string } | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
@@ -298,63 +327,7 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     });
   };
 
-  const handleMarkVisited = (containerId?: string) => {
-    if (!containerId || !data?.sessionId || markVisitedMutation.isPending) return;
-
-    // Ensure the sheet is expanded enough to see the result
-    if (sheetIndex < 1) {
-      sheetRef.current?.snapToIndex(1);
-    }
-
-    // Prompt for collected weight before marking visited
-    Alert.alert(
-      t('driver.route.collectWeightTitle'),
-      t('driver.route.collectWeightMessage'),
-      [
-        {
-          text: t('driver.route.skipWeight'),
-          style: 'cancel',
-          onPress: () => {
-            markVisitedMutation.mutate({ sessionId: data.sessionId, containerId });
-          },
-        },
-        {
-          text: t('driver.route.enterWeight'),
-          onPress: () => {
-            Alert.prompt(
-              t('driver.route.collectWeightTitle'),
-              t('driver.route.collectWeightPrompt'),
-              [
-                { text: t('common.cancel'), style: 'cancel' },
-                {
-                  text: t('common.confirm'),
-                  onPress: (weightStr: string | undefined) => {
-                    const weight = parseFloat(weightStr ?? '');
-                    markVisitedMutation.mutate({
-                      sessionId: data.sessionId,
-                      containerId,
-                      ...(Number.isFinite(weight) && weight > 0 ? { collectedWeight: weight } : {}),
-                    });
-                  },
-                },
-              ],
-              'plain-text',
-              '',
-              'decimal-pad',
-            );
-          },
-        },
-      ],
-    );
-  };
-
-  const toggleContainer = (containerId: string) => {
-    setSelectedContainers((prev) => (
-      prev.includes(containerId)
-        ? prev.filter((id) => id !== containerId)
-        : [...prev, containerId]
-    ));
-  };
+  // Visited state is driven by handoff completion; driver has no manual override.
 
   // Multi-stop route: origin = driver, waypoints = all unvisited (max 8), optimizeWaypoints
   useEffect(() => {
@@ -430,60 +403,34 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     fetchRoute();
   }, [currentLocation, data, unvisitedMarkers, t]);
 
-  const selectNearby = () => {
-    if (!currentLocation) return;
-    const radiusMeters = 500;
+  // Auto-start a session as soon as supervisor dispatches an open handoff.
+  // Containers come from the handoff itself — driver cannot pick ad-hoc.
+  useEffect(() => {
+    if (data || !openHandoff || startMutation.isPending) return;
 
-    const nearbyIds = availableMarkers
-      .filter((marker) => (
-        haversineDistance(
-          currentLocation.coords.latitude,
-          currentLocation.coords.longitude,
-          marker.latitude,
-          marker.longitude,
-        ) <= radiusMeters
-      ))
-      .map((marker) => marker.id);
-
-    if (!nearbyIds.length) return;
-    setSelectedContainers((prev) => Array.from(new Set([...prev, ...nearbyIds])));
-  };
-
-  const handleStart = async () => {
-    if (startMutation.isPending) return;
-
-    let startLocation: { type: 'Point'; coordinates: [number, number] } | undefined;
-
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status === 'granted') {
-        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        startLocation = {
-          type: 'Point',
-          coordinates: [position.coords.longitude, position.coords.latitude],
-        };
+    let cancelled = false;
+    (async () => {
+      let startLocation: { type: 'Point'; coordinates: [number, number] } | undefined;
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status === 'granted') {
+          const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          startLocation = {
+            type: 'Point',
+            coordinates: [position.coords.longitude, position.coords.latitude],
+          };
+        }
+      } catch {
+        // fall through — backend accepts sessions without a start location
       }
-    } catch (error) {
-      console.warn('Unable to get start location', error);
-    }
+      if (cancelled) return;
+      startMutation.mutate({ startLocation });
+    })();
 
-    if (selectedContainers.length === 0) {
-      Alert.alert(t('driver.route.selectAtLeastOne'));
-      return;
-    }
-
-    startMutation.mutate(
-      {
-        containerIds: selectedContainers,
-        startLocation,
-      },
-      {
-        onSuccess: () => {
-          setSelectedContainers([]);
-        },
-      },
-    );
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [data, openHandoff, startMutation]);
 
   const handleOpen2Gis = (targetLat?: number, targetLng?: number) => {
     if (!currentLocation || targetLat == null || targetLng == null) return;
@@ -566,26 +513,19 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
               lineDashPattern={[6, 6]}
             />
           ) : null}
-          {(data ? containerMarkers : availableMarkers).map((marker) => {
+          {containerMarkers.map((marker) => {
             const stopNum = markerStopNumbers[marker.id];
-            const isVisited = 'visited' in marker && marker.visited;
+            const isVisited = marker.visited;
             return (
               <Marker
                 key={marker.id}
                 coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
                 title={stopNum ? `#${stopNum} ${marker.title}` : marker.title}
                 pinColor={
-                  data
-                    ? (isNextStop(marker.id)
-                      ? dark.teal
-                      : (isVisited ? dark.muted : dark.successText))
-                    : (selectedContainers.includes(marker.id) ? dark.teal : dark.muted)
+                  isNextStop(marker.id)
+                    ? dark.teal
+                    : (isVisited ? dark.muted : dark.successText)
                 }
-                onPress={() => {
-                  if (!data) {
-                    toggleContainer(marker.id);
-                  }
-                }}
               />
             );
           })}
@@ -647,13 +587,6 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
                     <View style={styles.peekBarWrap}>
                       <AnimatedProgressBar fullness={nextStopMarker.fullness ?? 0} color={getUrgencyColor(nextStopMarker.fullness)} height={4} />
                     </View>
-                    <TouchableOpacity
-                      style={styles.peekVisitBtn}
-                      onPress={() => handleMarkVisited(nextStopMarker.id)}
-                    >
-                      <MaterialCommunityIcons name="check-circle-outline" size={14} color={dark.teal} />
-                      <Text style={styles.peekVisitText}>{t('driver.route.markVisited')}</Text>
-                    </TouchableOpacity>
                   </View>
                 )}
                 {/* Route progress */}
@@ -684,9 +617,6 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
                     : undefined
                 }
                 index={index}
-                onPress={() => {
-                  if (!entry.visited) handleMarkVisited(entry.container._id);
-                }}
               />
             )}
             ListFooterComponent={
@@ -703,73 +633,36 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
             }
           />
         ) : (
-          <BottomSheetFlatList
-            data={bins ?? []}
-            keyExtractor={(item: WasteBin) => item._id}
-            contentContainerStyle={styles.sheetContent}
-            refreshControl={
-              <RefreshControl
-                refreshing={isFetching || binsFetching}
-                onRefresh={() => {
-                  refetch();
-                  refetchBins();
-                }}
-              />
-            }
-            ListHeaderComponent={
+          <View style={styles.waitingContainer}>
+            {startMutation.isPending ? (
               <>
-                <Text style={styles.sectionTitle}>{t('driver.route.startTitle')}</Text>
-                <Text style={styles.emptyText}>{t('driver.route.startBody')}</Text>
-                <View style={styles.selectHeader}>
-                  <Text style={styles.selectHeaderText}>
-                    {t('driver.route.selectedCount', { count: selectedContainers.length })}
-                  </Text>
-                  <TouchableOpacity style={styles.selectNearbyBtn} onPress={selectNearby}>
-                    <Text style={styles.selectNearbyText}>{t('driver.route.selectNearby')}</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            }
-            renderItem={({ item: bin }: { item: WasteBin }) => {
-              const isSelected = selectedContainers.includes(bin._id);
-              return (
-                <TouchableOpacity
-                  style={styles.selectRow}
-                  onPress={() => toggleContainer(bin._id)}
-                >
-                  <View style={styles.selectIcon}>
-                    <MaterialCommunityIcons
-                      name={isSelected ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                      size={20}
-                      color={isSelected ? dark.teal : dark.muted}
-                    />
-                  </View>
-                  <View style={styles.selectText}>
-                    <Text style={styles.itemTitle}>{bin.binId ?? t('driver.route.container')}</Text>
-                    <Text style={styles.itemSubtitle}>
-                      {t('driver.route.fill')}: {bin.fullness ?? 'n/a'}%
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
-            ListFooterComponent={
-              <TouchableOpacity style={styles.button} onPress={handleStart}>
-                {startMutation.isPending ? (
-                  <ActivityIndicator color={dark.text} />
-                ) : (
-                  <Text style={styles.buttonText}>{t('driver.route.startSession')}</Text>
-                )}
-              </TouchableOpacity>
-            }
-            ListEmptyComponent={
-              binsLoading ? (
                 <ActivityIndicator color={dark.teal} />
-              ) : (
-                <Text style={styles.emptyText}>{t('driver.route.noCompanyContainers')}</Text>
-              )
-            }
-          />
+                <Text style={styles.waitingTitle}>{t('driver.route.starting')}</Text>
+              </>
+            ) : openHandoff ? (
+              <>
+                <MaterialCommunityIcons name="truck-fast-outline" size={40} color={dark.teal} />
+                <Text style={styles.waitingTitle}>{t('driver.route.dispatchReceived')}</Text>
+                <Text style={styles.waitingBody}>{t('driver.route.dispatchReceivedBody')}</Text>
+              </>
+            ) : (
+              <>
+                <MaterialCommunityIcons name="clock-outline" size={40} color={dark.muted} />
+                <Text style={styles.waitingTitle}>{t('driver.route.waitingTitle')}</Text>
+                <Text style={styles.waitingBody}>{t('driver.route.waitingBody')}</Text>
+                <TouchableOpacity
+                  style={styles.refreshButton}
+                  onPress={() => {
+                    handoffsQuery.refetch();
+                    refetchBins();
+                  }}
+                >
+                  <MaterialCommunityIcons name="refresh" size={16} color={dark.text} />
+                  <Text style={styles.refreshButtonText}>{t('common.refresh')}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         )}
       </BottomSheet>
 
@@ -966,5 +859,39 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: dark.danger,
     color: dark.dangerText,
+  },
+  waitingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    gap: spacing.md,
+  },
+  waitingTitle: {
+    ...typography.title,
+    color: dark.text,
+    textAlign: 'center',
+  },
+  waitingBody: {
+    ...typography.body,
+    color: dark.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: dark.surface,
+    borderRadius: 10,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: dark.border,
+  },
+  refreshButtonText: {
+    ...typography.body,
+    color: dark.text,
+    fontWeight: '600',
   },
 });

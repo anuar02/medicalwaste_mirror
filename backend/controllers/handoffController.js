@@ -82,19 +82,17 @@ async function ensureHandoffChain(session, type) {
     }
 
     if (type === 'facility_to_driver') {
-        const existing = await Handoff.findOne({
+        // Multiple facility_to_driver handoffs per session are allowed:
+        // a supervisor may dispatch additional containers mid-session.
+        const priorCount = await Handoff.countDocuments({
             session: session._id,
-            type: 'facility_to_driver',
-            status: { $ne: HANDOFF_STATUS.EXPIRED }
-        }).select('_id status');
-        if (existing) {
-            throw new AppError('Facility-to-driver handoff already exists for this session', 400);
-        }
+            type: 'facility_to_driver'
+        });
         session.handoffState = {
             stage: 'facility_to_driver',
             updatedAt: new Date()
         };
-        return { chainId, sequence: 1 };
+        return { chainId, sequence: priorCount + 1 };
     }
 
     const step1 = await Handoff.findOne({
@@ -149,6 +147,19 @@ const createHandoff = asyncHandler(async (req, res, next) => {
 
         if (req.user.role === 'driver' && String(session.driver) !== String(req.user.id)) {
             return next(new AppError('You can only create handoffs for your own session', 403));
+        }
+    }
+
+    // If no session was provided but we're creating a facility_to_driver handoff,
+    // attach it to the receiver driver's active session (if any) so the containers
+    // are appended live rather than waiting for the driver to start a new one.
+    if (!session && type === 'facility_to_driver') {
+        const receiverUserId = req.body.receiver?.user;
+        if (receiverUserId) {
+            session = await CollectionSession.findOne({
+                driver: receiverUserId,
+                status: 'active'
+            });
         }
     }
 
@@ -322,19 +333,41 @@ const createHandoff = asyncHandler(async (req, res, next) => {
     const handoff = await Handoff.create(handoffPayload);
 
     if (session?._id) {
-        await CollectionSession.updateOne(
-            { _id: session._id },
-            {
-                $addToSet: { handoffs: handoff._id },
-                $set: {
-                    handoffChainId: session.handoffChainId || chainId,
-                    handoffState: session.handoffState || {
-                        stage: type === 'facility_to_driver' ? 'facility_to_driver' : 'driver_to_incinerator',
-                        updatedAt: new Date()
-                    }
+        const update = {
+            $addToSet: { handoffs: handoff._id },
+            $set: {
+                handoffChainId: session.handoffChainId || chainId,
+                handoffState: session.handoffState || {
+                    stage: type === 'facility_to_driver' ? 'facility_to_driver' : 'driver_to_incinerator',
+                    updatedAt: new Date()
                 }
             }
-        );
+        };
+        await CollectionSession.updateOne({ _id: session._id }, update);
+
+        // For facility_to_driver, append any new containers from this handoff
+        // into the session's selectedContainers so the driver's UI picks them up.
+        if (type === 'facility_to_driver') {
+            const existing = await CollectionSession.findById(session._id)
+                .select('selectedContainers');
+            const existingIds = new Set(
+                (existing?.selectedContainers || []).map((c) => String(c.container))
+            );
+            const toAppend = containers
+                .map((c) => String(c.container))
+                .filter((id) => !existingIds.has(id))
+                .map((id) => ({
+                    container: new mongoose.Types.ObjectId(id),
+                    selected: true,
+                    visited: false
+                }));
+            if (toAppend.length > 0) {
+                await CollectionSession.updateOne(
+                    { _id: session._id },
+                    { $push: { selectedContainers: { $each: toAppend } } }
+                );
+            }
+        }
     }
 
     if (type === 'driver_to_incinerator' && rawToken && receiverPayload.phone) {
@@ -365,10 +398,12 @@ const createHandoff = asyncHandler(async (req, res, next) => {
 const getHandoffs = asyncHandler(async (req, res) => {
     const query = {};
 
-    if (req.user.role === 'supervisor' || req.user.role === 'driver') {
+    if (req.user.role === 'supervisor') {
         query.company = req.user.company;
     }
 
+    // Drivers see handoffs they participate in (as sender or receiver),
+    // regardless of company scoping — the identity check is authoritative.
     if (req.user.role === 'driver') {
         query.$or = [
             { 'sender.user': req.user.id },
@@ -399,7 +434,7 @@ const getHandoffById = asyncHandler(async (req, res, next) => {
 
     const query = isObjectId ? { _id: handoffId } : { handoffId };
 
-    if (req.user.role === 'supervisor' || req.user.role === 'driver') {
+    if (req.user.role === 'supervisor') {
         query.company = req.user.company;
     }
 
@@ -431,9 +466,10 @@ const confirmHandoff = asyncHandler(async (req, res, next) => {
 
     const query = isObjectId ? { _id: handoffId } : { handoffId };
 
-    if (req.user.role === 'supervisor' || req.user.role === 'driver') {
+    if (req.user.role === 'supervisor') {
         query.company = req.user.company;
     }
+    // Drivers are authorized by identity check below (isSender/isReceiver).
 
     const handoff = await Handoff.findOne(query);
     if (!handoff) {
@@ -483,13 +519,16 @@ const confirmHandoff = asyncHandler(async (req, res, next) => {
     await handoff.save();
 
     if (handoff.status === HANDOFF_STATUS.COMPLETED && handoff.session) {
-        const nextStage = handoff.sequence === 1
+        const nextStage = handoff.type === 'facility_to_driver'
             ? 'driver_to_incinerator'
             : 'completed';
         await CollectionSession.updateOne(
             { _id: handoff.session },
             { $set: { handoffState: { stage: nextStage, updatedAt: new Date() } } }
         );
+        if (handoff.type === 'facility_to_driver') {
+            await markSessionContainersFromHandoff(handoff);
+        }
     }
 
     res.status(200).json({
@@ -497,6 +536,34 @@ const confirmHandoff = asyncHandler(async (req, res, next) => {
         data: { handoff }
     });
 });
+
+/**
+ * When a facility_to_driver handoff completes, mark the matching containers
+ * in the linked session as visited. The handoff is the source of truth for
+ * collection events — drivers no longer mark visits manually.
+ */
+async function markSessionContainersFromHandoff(handoff) {
+    if (!handoff?.session || !Array.isArray(handoff.containers)) return;
+    const now = handoff.completedAt || new Date();
+    for (const item of handoff.containers) {
+        if (!item.container) continue;
+        await CollectionSession.updateOne(
+            {
+                _id: handoff.session,
+                'selectedContainers.container': item.container,
+                'selectedContainers.visited': false
+            },
+            {
+                $set: {
+                    'selectedContainers.$.visited': true,
+                    'selectedContainers.$.visitedAt': now,
+                    'selectedContainers.$.collectedWeight':
+                        item.confirmedWeight ?? item.declaredWeight ?? null
+                }
+            }
+        );
+    }
+}
 
 const confirmHandoffByToken = asyncHandler(async (req, res, next) => {
     const { token } = req.params;
@@ -572,9 +639,10 @@ const disputeHandoff = asyncHandler(async (req, res, next) => {
     const isObjectId = mongoose.isValidObjectId(handoffId);
     const query = isObjectId ? { _id: handoffId } : { handoffId };
 
-    if (req.user.role === 'supervisor' || req.user.role === 'driver') {
+    if (req.user.role === 'supervisor') {
         query.company = req.user.company;
     }
+    // Drivers authorized via identity check below.
 
     const handoff = await Handoff.findOne(query);
     if (!handoff) {

@@ -95,16 +95,12 @@ router.patch('/profile', [
     body('certifications').optional().isArray()
 ], validateRequest, updateDriverProfile);
 
-// Admin-only routes
-router.use(adminAuth);
+// Admin + supervisor routes (supervisor scoped to own company in controller)
+router.get('/', restrictTo('admin', 'supervisor'), getAllDrivers);
 
-// Get all drivers with optional filtering
-router.get('/', getAllDrivers);
+router.get('/pending', restrictTo('admin', 'supervisor'), getPendingVerifications);
 
-// Get pending driver verifications
-router.get('/pending', getPendingVerifications);
-
-// Verify/reject driver application
-router.patch('/verify/:driverId', driverVerificationValidation, validateRequest, verifyDriver);
+// Admin-only: verify/reject driver application
+router.patch('/verify/:driverId', restrictTo('admin'), driverVerificationValidation, validateRequest, verifyDriver);
 
 module.exports = router;

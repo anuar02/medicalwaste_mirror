@@ -37,7 +37,8 @@
     "loading": "Загрузка...",
     "logout": "Выйти",
     "cancel": "Отмена",
-    "confirm": "Подтвердить"
+    "confirm": "Подтвердить",
+    "refresh": "Обновить"
   },
   "driver": {
     "tabs": {
@@ -232,7 +233,12 @@
       "collectWeightMessage": "Укажите вес собранных отходов для этого контейнера?",
       "collectWeightPrompt": "Введите вес в кг (например 12.5)",
       "skipWeight": "Пропустить",
-      "enterWeight": "Указать вес"
+      "enterWeight": "Указать вес",
+      "waitingTitle": "Ожидание назначения",
+      "waitingBody": "Супервайзер назначит контейнеры через акт приёмки. Сессия начнётся автоматически.",
+      "dispatchReceived": "Назначение получено",
+      "dispatchReceivedBody": "Запускаем сессию…",
+      "starting": "Запуск сессии…"
     },
     "history": {
       "title": "История сессий",
@@ -278,7 +284,7 @@
       "location": "Местоположение",
       "navigate": "Открыть в картах",
       "noLocation": "Данные о местоположении недоступны.",
-      "markVisited": "Отметить посещение",
+      "visited": "Собрано",
       "actions": "Действия",
       "open2gis": "Открыть 2ГИС",
       "openApple": "Apple Maps",

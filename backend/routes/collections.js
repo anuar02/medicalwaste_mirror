@@ -23,8 +23,6 @@ router.use(auth);
 router.post('/start',
     restrictTo('driver'),
     [
-        body('containerIds').optional().isArray({ min: 1 }).withMessage('containerIds must be a non-empty array'),
-        body('containerIds.*').customSanitizer(v => (v == null ? v : String(v).trim())),
         body('routeId').optional().isMongoId().withMessage('routeId must be a valid ID'),
         body('startLocation.coordinates').optional().isArray({ min: 2, max: 2 }).withMessage('Invalid coordinates'),
     ],
@@ -54,8 +52,9 @@ router.post('/location',
     recordDriverLocation
 );
 
+// Supervisor/admin override: containers normally flow through handoffs.
 router.post('/add-container',
-    restrictTo('driver'),
+    restrictTo('admin', 'supervisor'),
     [
         body('containerId').isMongoId().withMessage('Valid container ID is required')
     ],
@@ -63,8 +62,9 @@ router.post('/add-container',
     addContainerToSession
 );
 
+// Supervisor/admin override only: visits are normally set by handoff completion.
 router.post('/mark-visited',
-    restrictTo('driver'),
+    restrictTo('admin', 'supervisor'),
     [
         body('sessionId').trim().notEmpty().withMessage('Session ID is required'),
         body('containerId').isMongoId().withMessage('Valid container ID is required'),

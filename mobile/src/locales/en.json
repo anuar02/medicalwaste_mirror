@@ -37,7 +37,8 @@
     "loading": "Loading...",
     "logout": "Logout",
     "cancel": "Cancel",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "refresh": "Refresh"
   },
   "driver": {
     "tabs": {
@@ -232,7 +233,12 @@
       "collectWeightMessage": "Do you want to record the collected weight for this container?",
       "collectWeightPrompt": "Enter weight in kg (e.g. 12.5)",
       "skipWeight": "Skip",
-      "enterWeight": "Enter Weight"
+      "enterWeight": "Enter Weight",
+      "waitingTitle": "Waiting for dispatch",
+      "waitingBody": "Your supervisor will assign containers via a handoff. A session will start automatically.",
+      "dispatchReceived": "Dispatch received",
+      "dispatchReceivedBody": "Starting your session…",
+      "starting": "Starting session…"
     },
     "history": {
       "title": "Session History",
@@ -278,7 +284,7 @@
       "location": "Location",
       "navigate": "Open in Maps",
       "noLocation": "No location data available.",
-      "markVisited": "Mark Visited",
+      "visited": "Collected",
       "actions": "Actions",
       "open2gis": "Open 2GIS",
       "openApple": "Apple Maps",

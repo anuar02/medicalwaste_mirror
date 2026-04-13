@@ -4,15 +4,23 @@ const DriverLocation = require('../models/DriverLocation');
 const WasteBin = require('../models/WasteBin');
 const User = require('../models/User');
 const Route = require('../models/Route');
+const Handoff = require('../models/Handoff');
+const { STATUSES: HANDOFF_STATUS } = require('../services/handoffStateMachine');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
 const mongoose = require('mongoose');
+
+const OPEN_FACILITY_HANDOFF_STATUSES = [
+    HANDOFF_STATUS.CREATED,
+    HANDOFF_STATUS.PENDING,
+    HANDOFF_STATUS.CONFIRMED_BY_SENDER
+];
 
 /**
  * Start a new collection session
  */
 const startCollection = asyncHandler(async (req, res, next) => {
-    const { containerIds = [], startLocation, routeId } = req.body;
+    const { startLocation, routeId } = req.body;
     const driverId = req.user.id;
 
     // 1️⃣ Validate driver role and status
@@ -30,26 +38,33 @@ const startCollection = asyncHandler(async (req, res, next) => {
         return next(new AppError('You already have an active collection session', 400));
     }
 
-    // 3️⃣ Find containers by _id, scoped to driver's company
-    let selected = [];
-    let skippedNotFound = [];
+    // 3️⃣ Require an open facility_to_driver handoff assigned to this driver.
+    // Handoffs are the single source of truth for what a driver picks up.
+    const openHandoffs = await Handoff.find({
+        type: 'facility_to_driver',
+        'receiver.user': driverId,
+        status: { $in: OPEN_FACILITY_HANDOFF_STATUSES },
+        session: null
+    }).select('_id containers company');
 
-    if (Array.isArray(containerIds) && containerIds.length > 0) {
-        const containerQuery = { _id: { $in: containerIds } };
-        if (req.user.company) {
-            containerQuery.company = req.user.company;
-        }
-        const containers = await WasteBin.find(containerQuery).select('_id binId');
-        const foundIds = new Set(containers.map(c => String(c._id)));
-
-        skippedNotFound = containerIds.filter(id => !foundIds.has(String(id)));
-
-        selected = containers.map(c => ({
-            container: c._id,
-            selected: true,
-            visited: false
-        }));
+    if (openHandoffs.length === 0) {
+        return next(new AppError('No open handoff assigned. Ask supervisor to create one.', 400));
     }
+
+    // Containers come from the handoff(s) — driver cannot pick ad-hoc.
+    const containerIdSet = new Set();
+    for (const h of openHandoffs) {
+        for (const c of h.containers || []) {
+            if (c.container) containerIdSet.add(String(c.container));
+        }
+    }
+
+    const selected = Array.from(containerIdSet).map((id) => ({
+        container: new mongoose.Types.ObjectId(id),
+        selected: true,
+        visited: false
+    }));
+    const skippedNotFound = [];
 
     // 4️⃣ Validate planned route if provided
     let plannedRoute = null;
@@ -106,7 +121,16 @@ const startCollection = asyncHandler(async (req, res, next) => {
         await session.save();
     }
 
-    // 7️⃣ Populate session containers
+    // 7️⃣ Link open handoffs to the new session
+    const handoffIds = openHandoffs.map((h) => h._id);
+    await Handoff.updateMany(
+        { _id: { $in: handoffIds } },
+        { $set: { session: session._id } }
+    );
+    session.handoffs = [...(session.handoffs || []), ...handoffIds];
+    await session.save();
+
+    // 8️⃣ Populate session containers
     await session.populate('selectedContainers.container');
 
     // 8️⃣ Return response
@@ -212,9 +236,6 @@ const recordDriverLocation = asyncHandler(async (req, res, next) => {
     session.route.push(location._id);
     await session.save();
 
-    // Check if driver is near any selected containers
-    await checkProximityToContainers(session, latitude, longitude);
-
     res.status(201).json({
         status: 'success',
         data: {
@@ -223,48 +244,6 @@ const recordDriverLocation = asyncHandler(async (req, res, next) => {
         }
     });
 });
-
-/**
- * Check if driver is near selected containers and mark as visited
- */
-async function checkProximityToContainers(session, latitude, longitude) {
-    const PROXIMITY_THRESHOLD = 50; // meters
-
-    for (const containerItem of session.selectedContainers) {
-        if (!containerItem.visited && containerItem.selected) {
-            const container = await WasteBin.findById(containerItem.container);
-
-            if (container && container.location && container.location.coordinates) {
-                const [containerLon, containerLat] = container.location.coordinates;
-                const distance = calculateDistance(latitude, longitude, containerLat, containerLon);
-
-                if (distance <= PROXIMITY_THRESHOLD) {
-                    await session.markContainerVisited(container._id);
-                }
-            }
-        }
-    }
-}
-
-/**
- * Calculate distance between two coordinates (Haversine formula)
- */
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // Radius of Earth in meters
-    const dLat = toRadians(lat2 - lat1);
-    const dLon = toRadians(lon2 - lon1);
-
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Distance in meters
-}
-
-function toRadians(degrees) {
-    return degrees * (Math.PI / 180);
-}
 
 /**
  * Add container to active session
