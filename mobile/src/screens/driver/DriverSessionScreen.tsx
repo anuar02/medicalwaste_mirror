@@ -142,7 +142,6 @@ export default function DriverSessionScreen() {
   useEffect(() => {
     if (!session) return;
     if (pendingCount > 0 && lastPendingCount.current === 0) {
-      setActiveTab('handoffs');
       setFocusId(pendingFacilityHandoffId ?? (canCreateIncineration ? 'incineration' : undefined));
     }
     lastPendingCount.current = pendingCount;
@@ -186,18 +185,33 @@ export default function DriverSessionScreen() {
           <View style={styles.progressStrip} {...tabPanResponder.panHandlers}>
             <View style={styles.progressRow}>
               <View style={styles.progressSteps}>
-                {SESSION_STEPS.map((step, i) => (
-                  <React.Fragment key={step}>
-                    <View style={[styles.progressDot, i <= currentStep && styles.progressDotActive]}>
-                      <Text style={[styles.progressDotText, i <= currentStep && styles.progressDotTextActive]}>
-                        {i + 1}
-                      </Text>
-                    </View>
-                    {i < SESSION_STEPS.length - 1 && (
-                      <View style={[styles.progressLine, i < currentStep && styles.progressLineActive]} />
-                    )}
-                  </React.Fragment>
-                ))}
+                {SESSION_STEPS.map((step, i) => {
+                  const isDone = i < currentStep;
+                  const isCurrent = i === currentStep;
+                  return (
+                    <React.Fragment key={step}>
+                      <View
+                        style={[
+                          styles.progressDot,
+                          isDone && styles.progressDotDone,
+                          isCurrent && styles.progressDotCurrent,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.progressDotText,
+                            (isDone || isCurrent) && styles.progressDotTextActive,
+                          ]}
+                        >
+                          {i + 1}
+                        </Text>
+                      </View>
+                      {i < SESSION_STEPS.length - 1 && (
+                        <View style={[styles.progressLine, isDone && styles.progressLineActive]} />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </View>
               {/* Page indicator */}
               <View style={styles.pageIndicator}>
@@ -359,8 +373,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  progressDotActive: {
+  progressDotDone: {
     backgroundColor: 'rgba(13, 148, 136, 0.2)',
+    borderColor: dark.teal,
+  },
+  progressDotCurrent: {
+    backgroundColor: dark.teal,
     borderColor: dark.teal,
   },
   progressDotText: {

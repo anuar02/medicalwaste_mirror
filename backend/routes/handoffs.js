@@ -31,7 +31,7 @@ router.get(
     '/public/:token',
     tokenLimiter,
     [
-        param('token').notEmpty().withMessage('Token is required')
+        param('token').trim().isLength({ min: 16, max: 128 }).matches(/^[A-Za-z0-9_-]+$/).withMessage('Invalid token')
     ],
     validateRequest,
     getPublicHandoff
@@ -41,7 +41,7 @@ router.post(
     '/confirm/:token',
     tokenLimiter,
     [
-        param('token').notEmpty().withMessage('Token is required')
+        param('token').trim().isLength({ min: 16, max: 128 }).matches(/^[A-Za-z0-9_-]+$/).withMessage('Invalid token')
     ],
     validateRequest,
     confirmHandoffByToken
@@ -75,7 +75,7 @@ router.get(
     '/:handoffId',
     restrictTo('admin', 'supervisor', 'driver'),
     [
-        param('handoffId').notEmpty().withMessage('Handoff ID is required')
+        param('handoffId').isMongoId().withMessage('Invalid handoff ID')
     ],
     validateRequest,
     getHandoffById
@@ -85,7 +85,7 @@ router.patch(
     '/:handoffId/confirm',
     restrictTo('admin', 'supervisor', 'driver'),
     [
-        param('handoffId').notEmpty().withMessage('Handoff ID is required')
+        param('handoffId').isMongoId().withMessage('Invalid handoff ID')
     ],
     validateRequest,
     confirmHandoff
@@ -95,10 +95,10 @@ router.patch(
     '/:handoffId/dispute',
     restrictTo('admin', 'supervisor', 'driver'),
     [
-        param('handoffId').notEmpty().withMessage('Handoff ID is required'),
-        body('reason').optional().isString().withMessage('Invalid reason'),
-        body('description').optional().isString().withMessage('Invalid description'),
-        body('photos').optional().isArray().withMessage('photos must be an array')
+        param('handoffId').isMongoId().withMessage('Invalid handoff ID'),
+        body('reason').optional().isString().isLength({ max: 500 }).withMessage('Invalid reason'),
+        body('description').optional().isString().isLength({ max: 2000 }).withMessage('Invalid description'),
+        body('photos').optional().isArray({ max: 20 }).withMessage('photos must be an array')
     ],
     validateRequest,
     disputeHandoff
@@ -108,8 +108,8 @@ router.patch(
     '/:handoffId/resolve',
     restrictTo('admin', 'supervisor'),
     [
-        param('handoffId').notEmpty().withMessage('Handoff ID is required'),
-        body('resolution').optional().isString().withMessage('Invalid resolution')
+        param('handoffId').isMongoId().withMessage('Invalid handoff ID'),
+        body('resolution').optional().isString().isLength({ max: 2000 }).withMessage('Invalid resolution')
     ],
     validateRequest,
     resolveHandoff
@@ -119,7 +119,7 @@ router.post(
     '/:handoffId/resend-notification',
     restrictTo('admin', 'supervisor'),
     [
-        param('handoffId').notEmpty().withMessage('Handoff ID is required')
+        param('handoffId').isMongoId().withMessage('Invalid handoff ID')
     ],
     validateRequest,
     resendHandoffNotification

@@ -30,12 +30,16 @@ const startCollection = asyncHandler(async (req, res, next) => {
         return next(new AppError('You already have an active collection session', 400));
     }
 
-    // 3️⃣ Find containers by _id (no company restriction)
+    // 3️⃣ Find containers by _id, scoped to driver's company
     let selected = [];
     let skippedNotFound = [];
 
     if (Array.isArray(containerIds) && containerIds.length > 0) {
-        const containers = await WasteBin.find({ _id: { $in: containerIds } }).select('_id binId');
+        const containerQuery = { _id: { $in: containerIds } };
+        if (req.user.company) {
+            containerQuery.company = req.user.company;
+        }
+        const containers = await WasteBin.find(containerQuery).select('_id binId');
         const foundIds = new Set(containers.map(c => String(c._id)));
 
         skippedNotFound = containerIds.filter(id => !foundIds.has(String(id)));
@@ -296,8 +300,12 @@ const addContainerToSession = asyncHandler(async (req, res, next) => {
         return next(new AppError('No active session found', 404));
     }
 
-    // 2️⃣ Find container (no company restriction)
-    const container = await WasteBin.findById(containerId).select('_id binId');
+    // 2️⃣ Find container, scoped to driver's company
+    const containerQuery = { _id: containerId };
+    if (req.user.company) {
+        containerQuery.company = req.user.company;
+    }
+    const container = await WasteBin.findOne(containerQuery).select('_id binId');
     if (!container) {
         return next(new AppError('Container not found', 404));
     }

@@ -192,6 +192,17 @@ const register = asyncHandler(async (req, res, next) => {
         return next(new AppError('Passwords do not match', 400));
     }
 
+    // SECURITY: never trust client-supplied role on public registration.
+    // Admin/supervisor accounts must be created through admin-only endpoints.
+    // Self-registration is limited to 'user' or 'driver' (driver still requires
+    // admin approval via verificationStatus='pending').
+    const ALLOWED_SELF_REGISTER_ROLES = ['user', 'driver'];
+    const requestedRole = role || 'user';
+    if (!ALLOWED_SELF_REGISTER_ROLES.includes(requestedRole)) {
+        logger.warn(`Blocked attempt to self-register with role '${requestedRole}' from email=${email}`);
+        return next(new AppError('Cannot self-register with this role', 403));
+    }
+
     // Validate company if provided
     if (company) {
         const companyExists = await MedicalCompany.findById(company);
@@ -213,7 +224,7 @@ const register = asyncHandler(async (req, res, next) => {
         username: resolvedUsername,
         email,
         password,
-        role: role || 'user',
+        role: requestedRole,
         phoneNumber: normalizedPhoneNumber
     };
 
@@ -239,7 +250,7 @@ const register = asyncHandler(async (req, res, next) => {
     const user = await User.create(userData);
 
     // Generate token
-    const token = signToken(user._id);
+    const token = generateToken(user._id);
 
     // Remove password from output
     user.password = undefined;
@@ -303,17 +314,17 @@ const googleCallback = asyncHandler(async (req, res, next) => {
         googleClient.setCredentials(tokens);
 
         // Get user info
-        console.log('Getting user info from Google...');
+        logger.info('Getting user info from Google...');
         const { data } = await googleClient.request({
             url: 'https://www.googleapis.com/oauth2/v3/userinfo'
         });
-        console.log('Google user info received:', data.email);
+        logger.info(`Google user info received: ${data.email}`);
 
         // Check if user exists
         let user = await User.findOne({ email: data.email });
 
         if (!user) {
-            console.log('Creating new user from Google data...');
+            logger.info('Creating new user from Google data...');
             // Create new user
             // Generate a random password for Google users (they'll login with Google)
             const randomPassword = crypto.randomBytes(16).toString('hex');
@@ -332,7 +343,7 @@ const googleCallback = asyncHandler(async (req, res, next) => {
                 active: true
             });
         } else if (!user.googleId) {
-            console.log('Linking existing user to Google account...');
+            logger.info('Linking existing user to Google account...');
             // Link Google account to existing user
             user.googleId = data.sub;
             user.googleProfile = data;
@@ -368,16 +379,10 @@ const googleCallback = asyncHandler(async (req, res, next) => {
             }
         });
     } catch (error) {
-        console.error('Google OAuth error:', error);
+        logger.error(`Google OAuth error: ${error.message}`);
         return next(new AppError('Failed to authenticate with Google: ' + error.message, 401));
     }
 });
-
-const signToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d'
-    });
-};
 
 /**
  * Login with Google ID token (for client-side Google Sign-In)
@@ -394,7 +399,7 @@ const googleLogin = asyncHandler(async (req, res, next) => {
         const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
         // Verify ID token
-        console.log('Verifying Google ID token...');
+        logger.info('Verifying Google ID token...');
         const ticket = await googleClient.verifyIdToken({
             idToken,
             audience: process.env.GOOGLE_CLIENT_ID
@@ -470,7 +475,7 @@ const googleLogin = asyncHandler(async (req, res, next) => {
             }
         });
     } catch (error) {
-        console.error('Google login error:', error);
+        logger.error(`Google login error: ${error.message}`);
         return next(new AppError(`Failed to authenticate with Google: ${error.message}`, 401));
     }
 });
@@ -523,7 +528,7 @@ const login = asyncHandler(async (req, res, next) => {
     await user.resetLoginAttempts();
 
     // Generate token
-    const token = signToken(user._id);
+    const token = generateToken(user._id);
 
     // Remove password from output
     user.password = undefined;

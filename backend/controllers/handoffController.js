@@ -9,34 +9,17 @@ const IncinerationPlant = require('../models/IncinerationPlant');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { generateConfirmationToken, hashToken } = require('../services/handoffTokenService');
-const { sendSMS } = require('../services/smsService');
-const { sendWhatsAppMessage } = require('../services/whatsappService');
+const { notify } = require('../services/notificationService');
+const {
+    STATUSES: HANDOFF_STATUS,
+    applyConfirmation,
+    assertTransition,
+    canBeConfirmed,
+    canBeDisputed,
+    isTerminal
+} = require('../services/handoffStateMachine');
 
 const CONFIRMATION_BASE_URL = process.env.PUBLIC_CONFIRM_BASE_URL || 'https://medicalwaste.kz/confirm';
-
-async function logNotification({ handoff, recipient, channel, message, result, error }) {
-    const success = result?.success || false;
-    const failureReason = result?.error || error?.message || null;
-
-    try {
-        await NotificationLog.create({
-            handoff: handoff._id,
-            recipient: {
-                user: recipient.user || null,
-                phone: recipient.phone,
-                name: recipient.name || ''
-            },
-            channel,
-            status: success ? 'sent' : 'failed',
-            messageId: result?.messageId || null,
-            content: message,
-            sentAt: new Date(),
-            failureReason
-        });
-    } catch (logError) {
-        console.error(`Failed to log ${channel} notification:`, logError);
-    }
-}
 
 function buildHandoffIdSequence(date = new Date()) {
     const year = date.getFullYear();
@@ -102,7 +85,7 @@ async function ensureHandoffChain(session, type) {
         const existing = await Handoff.findOne({
             session: session._id,
             type: 'facility_to_driver',
-            status: { $ne: 'expired' }
+            status: { $ne: HANDOFF_STATUS.EXPIRED }
         }).select('_id status');
         if (existing) {
             throw new AppError('Facility-to-driver handoff already exists for this session', 400);
@@ -117,7 +100,7 @@ async function ensureHandoffChain(session, type) {
     const step1 = await Handoff.findOne({
         session: session._id,
         type: 'facility_to_driver',
-        status: 'completed'
+        status: HANDOFF_STATUS.COMPLETED
     }).select('_id');
     if (!step1) {
         throw new AppError('Facility-to-driver handoff must be completed before incineration', 400);
@@ -126,7 +109,7 @@ async function ensureHandoffChain(session, type) {
     const existing = await Handoff.findOne({
         session: session._id,
         type: 'driver_to_incinerator',
-        status: { $ne: 'expired' }
+        status: { $ne: HANDOFF_STATUS.EXPIRED }
     }).select('_id status');
     if (existing) {
         throw new AppError('Incineration handoff already exists for this session', 400);
@@ -327,7 +310,7 @@ const createHandoff = asyncHandler(async (req, res, next) => {
         },
         receiver: receiverPayload,
         containers,
-        status: 'confirmed_by_sender',
+        status: HANDOFF_STATUS.CONFIRMED_BY_SENDER,
         expiresAt: expiresAt ? new Date(expiresAt) : undefined
     };
 
@@ -357,50 +340,17 @@ const createHandoff = asyncHandler(async (req, res, next) => {
     if (type === 'driver_to_incinerator' && rawToken && receiverPayload.phone) {
         const confirmationUrl = `${CONFIRMATION_BASE_URL}/${rawToken}`;
         const message = `MedWaste: подтвердите прием отходов. Акт ${handoff.handoffId || handoff._id}. ${confirmationUrl}`;
-        const recipient = {
-            user: handoff.receiver?.user || null,
-            phone: receiverPayload.phone,
-            name: receiverPayload.name || ''
-        };
-        try {
-            const result = await sendSMS(receiverPayload.phone, message);
-            await logNotification({
-                handoff,
-                recipient,
-                channel: 'sms',
-                message,
-                result
-            });
-        } catch (error) {
-            console.error('Failed to send incineration confirmation SMS:', error);
-            await logNotification({
-                handoff,
-                recipient,
-                channel: 'sms',
-                message,
-                error
-            });
-        }
-
-        try {
-            const result = await sendWhatsAppMessage(receiverPayload.phone, message);
-            await logNotification({
-                handoff,
-                recipient,
-                channel: 'whatsapp',
-                message,
-                result
-            });
-        } catch (error) {
-            console.error('Failed to send incineration confirmation WhatsApp:', error);
-            await logNotification({
-                handoff,
-                recipient,
-                channel: 'whatsapp',
-                message,
-                error
-            });
-        }
+        await notify({
+            handoff,
+            recipient: {
+                user: handoff.receiver?.user || null,
+                phone: receiverPayload.phone,
+                name: receiverPayload.name || ''
+            },
+            message,
+            channels: ['whatsapp', 'sms'],
+            fallback: true
+        });
     }
 
     res.status(201).json({
@@ -475,29 +425,6 @@ const getHandoffById = asyncHandler(async (req, res, next) => {
     });
 });
 
-function applyConfirmationStatus(handoff) {
-    const senderConfirmed = !!handoff.sender?.confirmedAt;
-    const receiverConfirmed = !!handoff.receiver?.confirmedAt;
-
-    if (senderConfirmed && receiverConfirmed) {
-        handoff.status = 'completed';
-        handoff.completedAt = handoff.completedAt || new Date();
-        return;
-    }
-
-    if (senderConfirmed) {
-        handoff.status = 'confirmed_by_sender';
-        return;
-    }
-
-    if (receiverConfirmed) {
-        handoff.status = 'confirmed_by_receiver';
-        return;
-    }
-
-    handoff.status = 'pending';
-}
-
 const confirmHandoff = asyncHandler(async (req, res, next) => {
     const { handoffId } = req.params;
     const isObjectId = mongoose.isValidObjectId(handoffId);
@@ -513,11 +440,8 @@ const confirmHandoff = asyncHandler(async (req, res, next) => {
         return next(new AppError('Handoff not found', 404));
     }
 
-    if (handoff.status === 'completed') {
-        return next(new AppError('Handoff already confirmed', 400));
-    }
-    if (['disputed', 'resolved', 'expired'].includes(handoff.status)) {
-        return next(new AppError('Handoff cannot be confirmed in current status', 400));
+    if (!canBeConfirmed(handoff)) {
+        return next(new AppError(`Handoff cannot be confirmed in status '${handoff.status}'`, 409));
     }
 
     const isSender = handoff.sender?.user && String(handoff.sender.user) === String(req.user.id);
@@ -555,10 +479,10 @@ const confirmHandoff = asyncHandler(async (req, res, next) => {
         };
     }
 
-    applyConfirmationStatus(handoff);
+    applyConfirmation(handoff);
     await handoff.save();
 
-    if (handoff.status === 'completed' && handoff.session) {
+    if (handoff.status === HANDOFF_STATUS.COMPLETED && handoff.session) {
         const nextStage = handoff.sequence === 1
             ? 'driver_to_incinerator'
             : 'completed';
@@ -590,11 +514,8 @@ const confirmHandoffByToken = asyncHandler(async (req, res, next) => {
         return next(new AppError('Handoff not found or token expired', 404));
     }
 
-    if (handoff.status === 'completed') {
-        return next(new AppError('Handoff already confirmed', 400));
-    }
-    if (['disputed', 'resolved', 'expired'].includes(handoff.status)) {
-        return next(new AppError('Handoff cannot be confirmed in current status', 400));
+    if (!canBeConfirmed(handoff)) {
+        return next(new AppError(`Handoff cannot be confirmed in status '${handoff.status}'`, 409));
     }
 
     handoff.receiver = {
@@ -603,12 +524,12 @@ const confirmHandoffByToken = asyncHandler(async (req, res, next) => {
         confirmedAt: new Date()
     };
 
-    applyConfirmationStatus(handoff);
+    applyConfirmation(handoff);
     handoff.confirmationToken = undefined;
     handoff.tokenExpiresAt = undefined;
     await handoff.save();
 
-    if (handoff.status === 'completed' && handoff.session) {
+    if (handoff.status === HANDOFF_STATUS.COMPLETED && handoff.session) {
         await CollectionSession.updateOne(
             { _id: handoff.session },
             { $set: { handoffState: { stage: 'completed', updatedAt: new Date() } } }
@@ -660,8 +581,8 @@ const disputeHandoff = asyncHandler(async (req, res, next) => {
         return next(new AppError('Handoff not found', 404));
     }
 
-    if (handoff.status === 'completed') {
-        return next(new AppError('Cannot dispute completed handoff', 400));
+    if (!canBeDisputed(handoff)) {
+        return next(new AppError(`Cannot dispute handoff in status '${handoff.status}'`, 409));
     }
 
     const isSender = handoff.sender?.user && String(handoff.sender.user) === String(req.user.id);
@@ -670,7 +591,8 @@ const disputeHandoff = asyncHandler(async (req, res, next) => {
         return next(new AppError('Not authorized for this handoff', 403));
     }
 
-    handoff.status = 'disputed';
+    assertTransition(handoff, HANDOFF_STATUS.DISPUTED);
+    handoff.status = HANDOFF_STATUS.DISPUTED;
     handoff.dispute = {
         raisedBy: req.user.id,
         role: req.user.role,
@@ -704,11 +626,12 @@ const resolveHandoff = asyncHandler(async (req, res, next) => {
         return next(new AppError('Handoff not found', 404));
     }
 
-    if (handoff.status !== 'disputed') {
-        return next(new AppError('Handoff is not disputed', 400));
+    if (handoff.status !== HANDOFF_STATUS.DISPUTED) {
+        return next(new AppError(`Handoff is not disputed (current: '${handoff.status}')`, 409));
     }
 
-    handoff.status = 'resolved';
+    assertTransition(handoff, HANDOFF_STATUS.RESOLVED);
+    handoff.status = HANDOFF_STATUS.RESOLVED;
     handoff.dispute = {
         ...handoff.dispute?.toObject?.(),
         resolvedBy: req.user.id,
@@ -738,6 +661,10 @@ const resendHandoffNotification = asyncHandler(async (req, res, next) => {
         return next(new AppError('Handoff not found', 404));
     }
 
+    if (isTerminal(handoff.status)) {
+        return next(new AppError(`Cannot resend notification for handoff in terminal status '${handoff.status}'`, 409));
+    }
+
     const phone = handoff.receiver?.phone;
     if (!phone) {
         return next(new AppError('Receiver phone is missing', 400));
@@ -751,36 +678,23 @@ const resendHandoffNotification = asyncHandler(async (req, res, next) => {
         await handoff.save();
         message = `${message}. ${CONFIRMATION_BASE_URL}/${token.rawToken}`;
     }
-    const recipient = {
-        user: handoff.receiver?.user || null,
-        phone,
-        name: handoff.receiver?.name || ''
-    };
-
-    const smsResult = await sendSMS(phone, message);
-    await logNotification({
+    const result = await notify({
         handoff,
-        recipient,
-        channel: 'sms',
+        recipient: {
+            user: handoff.receiver?.user || null,
+            phone,
+            name: handoff.receiver?.name || ''
+        },
         message,
-        result: smsResult
-    });
-
-    const whatsappResult = await sendWhatsAppMessage(phone, message);
-    await logNotification({
-        handoff,
-        recipient,
-        channel: 'whatsapp',
-        message,
-        result: whatsappResult
+        channels: ['whatsapp', 'sms'],
+        fallback: true
     });
 
     res.status(200).json({
         status: 'success',
         data: {
             handoff,
-            sms: smsResult,
-            whatsapp: whatsappResult
+            delivery: result
         }
     });
 });

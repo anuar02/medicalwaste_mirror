@@ -4,8 +4,7 @@ const History = require('../models/History');
 const User = require('../models/User');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { sendAlertNotification } = require('../utils/telegram');
-const { sendWhatsAppAlertNotification } = require('../utils/whatsapp');
+const { notifyBinAlert } = require('../services/notificationService');
 const { logger } = require('../middleware/loggers');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
@@ -250,8 +249,9 @@ const exportBinData = asyncHandler(async (req, res, next) => {
         filter.binId = { $in: Array.isArray(targetBinIds) ? targetBinIds : [targetBinIds] };
     }
 
-    // 3. Database Query
-    const bins = await WasteBin.find(filter).lean();
+    // 3. Database Query (scoped to user's company for non-admin)
+    const scopedFilter = addCompanyToQuery({ ...filter }, req.user);
+    const bins = await WasteBin.find(scopedFilter).lean();
 
     if (!bins || bins.length === 0) {
         return res.status(404).json({
@@ -360,7 +360,7 @@ const getBinAnalytics = asyncHandler(async (req, res) => {
  * Predict maintenance needs
  */
 const predictMaintenance = asyncHandler(async (req, res, next) => {
-    const bin = await WasteBin.findOne({ binId: req.params.id });
+    const bin = await WasteBin.findOne(addCompanyToQuery({ binId: req.params.id }, req.user));
 
     if (!bin) {
         return next(new AppError('No waste bin found with that ID', 404));
@@ -409,7 +409,7 @@ const predictMaintenance = asyncHandler(async (req, res, next) => {
  * Get bin alerts
  */
 const getBinAlerts = asyncHandler(async (req, res, next) => {
-    const bin = await WasteBin.findOne({ binId: req.params.id });
+    const bin = await WasteBin.findOne(addCompanyToQuery({ binId: req.params.id }, req.user));
 
     if (!bin) {
         return next(new AppError('No waste bin found with that ID', 404));
@@ -467,7 +467,7 @@ const dismissAlert = asyncHandler(async (req, res) => {
 const scheduleCollection = asyncHandler(async (req, res, next) => {
     const { scheduledFor, priority, notes } = req.body;
 
-    const bin = await WasteBin.findOne({ binId: req.params.id });
+    const bin = await WasteBin.findOne(addCompanyToQuery({ binId: req.params.id }, req.user));
 
     if (!bin) {
         return next(new AppError('No waste bin found with that ID', 404));
@@ -498,13 +498,14 @@ const getCollectionRoutes = asyncHandler(async (req, res) => {
 
     const targetDate = date ? new Date(date) : new Date();
 
-    // Find bins scheduled for collection or overfull
-    const bins = await WasteBin.find({
+    // Find bins scheduled for collection or overfull (scoped to user's company)
+    const binQuery = addCompanyToQuery({
         $or: [
             { nextCollection: { $lte: targetDate } },
             { $expr: { $gte: ['$fullness', '$alertThreshold'] } }
         ]
-    });
+    }, req.user);
+    const bins = await WasteBin.find(binQuery);
 
     const routes = [{
         id: 'route-1',
@@ -531,10 +532,12 @@ const getCollectionRoutes = asyncHandler(async (req, res) => {
 const optimizeRoutes = asyncHandler(async (req, res) => {
     const { date, vehicleCapacity, maxDistance } = req.body;
 
-    // Simple optimization - group by department
-    const bins = await WasteBin.find({
-        $expr: { $gte: ['$fullness', '$alertThreshold'] }
-    });
+    // Simple optimization - group by department (scoped to user's company)
+    const binQuery = addCompanyToQuery(
+        { $expr: { $gte: ['$fullness', '$alertThreshold'] } },
+        req.user
+    );
+    const bins = await WasteBin.find(binQuery);
 
     const optimizedRoutes = bins.reduce((routes, bin) => {
         const existingRoute = routes.find(r => r.department === bin.department);
@@ -561,7 +564,9 @@ const optimizeRoutes = asyncHandler(async (req, res) => {
  * Get bin metrics
  */
 const getBinMetrics = asyncHandler(async (req, res) => {
+    const scopeMatch = addCompanyToQuery({}, req.user);
     const metrics = await WasteBin.aggregate([
+        { $match: scopeMatch },
         {
             $group: {
                 _id: null,
@@ -585,7 +590,7 @@ const getBinMetrics = asyncHandler(async (req, res) => {
 const setCollectingMode = asyncHandler(async (req, res, next) => {
     const { isCollecting } = req.body;
 
-    const bin = await WasteBin.findOne({ binId: req.params.id });
+    const bin = await WasteBin.findOne(addCompanyToQuery({ binId: req.params.id }, req.user));
 
     if (!bin) {
         return next(new AppError('No waste bin found with that ID', 404));
@@ -1277,8 +1282,8 @@ const getNearbyBins = asyncHandler(async (req, res) => {
         });
     }
 
-    // Find bins within specified distance
-    const bins = await WasteBin.find({
+    // Find bins within specified distance (scoped to user's company)
+    const nearQuery = addCompanyToQuery({
         location: {
             $near: {
                 $geometry: {
@@ -1288,7 +1293,8 @@ const getNearbyBins = asyncHandler(async (req, res) => {
                 $maxDistance: parseInt(maxDistance)
             }
         }
-    });
+    }, req.user);
+    const bins = await WasteBin.find(nearQuery);
 
     res.status(200).json({
         status: 'success',
@@ -1325,8 +1331,9 @@ const getOverfilledBins = asyncHandler(async (req, res) => {
 const sendManualAlert = asyncHandler(async (req, res, next) => {
     const { binId } = req.params;
 
-    // Find the bin
-    const bin = await WasteBin.findOne({ binId });
+    // Find the bin (scoped to user's company)
+    const binQuery = addCompanyToQuery({ binId }, req.user);
+    const bin = await WasteBin.findOne(binQuery);
 
     if (!bin) {
         return next(new AppError('No waste bin found with that ID', 404));
@@ -1354,21 +1361,17 @@ const sendManualAlert = asyncHandler(async (req, res, next) => {
             lastUpdate: bin.lastUpdate
         };
 
-        const telegramResults = await sendAlertNotification(binData, userIds);
-        const whatsappResults = await sendWhatsAppAlertNotification(binData, userIds);
+        const { totalUsers, successCount, results } = await notifyBinAlert(binData, userIds);
 
-        const totalSent = (telegramResults?.length || 0) + (whatsappResults?.length || 0);
-        const successCount = (telegramResults?.filter(r => r.success)?.length || 0)
-            + (whatsappResults?.filter(r => r.success)?.length || 0);
-
-        logger.info(`Manual alert notifications sent for bin ${binId}. Results: ${JSON.stringify({ telegramResults, whatsappResults })}`);
+        logger.info(`Manual alert notifications sent for bin ${binId}: ${successCount}/${totalUsers} succeeded`);
 
         res.status(200).json({
             status: 'success',
             message: 'Alert notification sent successfully',
             data: {
-                notificationsSent: totalSent,
-                successCount
+                notificationsSent: totalUsers,
+                successCount,
+                results
             }
         });
     } catch (error) {

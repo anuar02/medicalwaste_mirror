@@ -281,7 +281,8 @@
       "markVisited": "Mark Visited",
       "actions": "Actions",
       "open2gis": "Open 2GIS",
-      "openApple": "Apple Maps"
+      "openApple": "Apple Maps",
+      "distance": "Distance"
     }
   },
   "roles": {

@@ -281,7 +281,8 @@
       "markVisited": "Отметить посещение",
       "actions": "Действия",
       "open2gis": "Открыть 2ГИС",
-      "openApple": "Apple Maps"
+      "openApple": "Apple Maps",
+      "distance": "Расстояние"
     }
   },
   "roles": {

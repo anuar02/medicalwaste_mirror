@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import * as Location from 'expo-location';
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +26,7 @@ import { WasteBin } from '../../types/models';
 import { getUrgencyColor } from '../../utils/urgency';
 import { formatRelativeTime, getDataFreshness } from '../../utils/formatTime';
 import { toValidCoordinate } from '../../utils/coordinates';
+import { haversineDistance, formatDistance } from '../../utils/distance';
 import PulsingDot from '../../components/shared/PulsingDot';
 
 export default function DriverContainerDetailScreen() {
@@ -57,48 +59,80 @@ export default function DriverContainerDetailScreen() {
   const hasLocation = Boolean(coordinate);
   const freshness = getDataFreshness(container?.lastUpdate);
 
+  const [driverCoords, setDriverCoords] = useState<{ lat: number; lon: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (!cancelled) {
+          setDriverCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        }
+      } catch {
+        // silent — distance is nice-to-have
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const distanceMeters = useMemo(() => {
+    if (!driverCoords || !coordinate) return null;
+    return haversineDistance(driverCoords.lat, driverCoords.lon, coordinate.latitude, coordinate.longitude);
+  }, [driverCoords, coordinate]);
+
   const handleMarkVisited = () => {
     if (!session?.sessionId || !containerId || markVisitedMutation.isPending) return;
 
-    Alert.alert(
-      t('driver.route.collectWeightTitle'),
-      t('driver.route.collectWeightMessage'),
-      [
-        {
-          text: t('driver.route.skipWeight'),
-          style: 'cancel',
-          onPress: () => {
-            markVisitedMutation.mutate({ sessionId: session.sessionId, containerId });
+    const sessionId = session.sessionId;
+    const submit = (weightStr?: string) => {
+      const weight = parseFloat(weightStr ?? '');
+      markVisitedMutation.mutate({
+        sessionId,
+        containerId,
+        ...(Number.isFinite(weight) && weight > 0 ? { collectedWeight: weight } : {}),
+      });
+    };
+
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        t('driver.route.collectWeightTitle'),
+        t('driver.route.collectWeightPrompt'),
+        [
+          { text: t('driver.route.skipWeight'), style: 'cancel', onPress: () => submit() },
+          { text: t('common.confirm'), onPress: (weightStr?: string) => submit(weightStr) },
+        ],
+        'plain-text',
+        '',
+        'decimal-pad',
+      );
+    } else {
+      Alert.alert(
+        t('driver.route.collectWeightTitle'),
+        t('driver.route.collectWeightMessage'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('driver.route.skipWeight'), onPress: () => submit() },
+          {
+            text: t('driver.route.enterWeight'),
+            onPress: () => {
+              Alert.prompt(
+                t('driver.route.collectWeightTitle'),
+                t('driver.route.collectWeightPrompt'),
+                [
+                  { text: t('common.cancel'), style: 'cancel' },
+                  { text: t('common.confirm'), onPress: (w?: string) => submit(w) },
+                ],
+                'plain-text',
+                '',
+                'decimal-pad',
+              );
+            },
           },
-        },
-        {
-          text: t('driver.route.enterWeight'),
-          onPress: () => {
-            Alert.prompt(
-              t('driver.route.collectWeightTitle'),
-              t('driver.route.collectWeightPrompt'),
-              [
-                { text: t('common.cancel'), style: 'cancel' },
-                {
-                  text: t('common.confirm'),
-                  onPress: (weightStr: string | undefined) => {
-                    const weight = parseFloat(weightStr ?? '');
-                    markVisitedMutation.mutate({
-                      sessionId: session.sessionId,
-                      containerId,
-                      ...(Number.isFinite(weight) && weight > 0 ? { collectedWeight: weight } : {}),
-                    });
-                  },
-                },
-              ],
-              'plain-text',
-              '',
-              'decimal-pad',
-            );
-          },
-        },
-      ],
-    );
+        ],
+      );
+    }
   };
 
   const handleOpen2Gis = () => {
@@ -178,6 +212,13 @@ export default function DriverContainerDetailScreen() {
             <Text style={styles.infoLabel}>{t('driver.containerDetail.temperature')}</Text>
             <Text style={styles.infoValue}>{container.temperature != null ? `${container.temperature}°C` : '--'}</Text>
           </View>
+          {distanceMeters != null && (
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="map-marker-distance" size={18} color={dark.teal} />
+              <Text style={styles.infoLabel}>{t('driver.containerDetail.distance')}</Text>
+              <Text style={styles.infoValue}>{formatDistance(distanceMeters)}</Text>
+            </View>
+          )}
           <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
             <MaterialCommunityIcons name="clock-outline" size={18} color={dark.teal} />
             <Text style={styles.infoLabel}>{t('driver.containerDetail.lastUpdate')}</Text>

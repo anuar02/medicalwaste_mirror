@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardCheck, Filter, RefreshCw, X, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ClipboardCheck, Filter, RefreshCw, X, CheckCircle, AlertTriangle, BellOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import apiService from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -114,6 +114,25 @@ const HandoffManagement = () => {
         });
         return map;
     }, [drivers]);
+
+    const driverLocationMap = useMemo(() => {
+        const map = new Map();
+        activeSessions.forEach((item) => {
+            const driverUserId = item.session?.driver?._id || item.session?.driver;
+            if (driverUserId && item.lastLocation) {
+                map.set(String(driverUserId), {
+                    coords: item.lastLocation.location?.coordinates,
+                    timestamp: item.lastLocation.timestamp,
+                });
+            }
+        });
+        return map;
+    }, [activeSessions]);
+
+    const selectedDriverLocation = useMemo(() => {
+        if (!createDriverId) return null;
+        return driverLocationMap.get(String(createDriverId)) || null;
+    }, [createDriverId, driverLocationMap]);
 
     const selectedSessionCompany = useMemo(() => {
         if (!createSessionId) return null;
@@ -405,6 +424,15 @@ const HandoffManagement = () => {
                                         >
                                             {STATUS_LABELS[handoff.status] || handoff.status}
                                         </span>
+                                        {handoff.lastNotification?.success === false && (
+                                            <span
+                                                className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600"
+                                                title={handoff.lastNotification.error || 'Уведомление не доставлено'}
+                                            >
+                                                <BellOff className="h-3 w-3" />
+                                                Уведомление не доставлено
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="mt-2 flex flex-wrap gap-4 text-sm text-slate-500">
                                         <span>Тип: {handoff.type}</span>
@@ -714,6 +742,12 @@ const HandoffManagement = () => {
                                     <p className="mt-1 text-xs text-slate-400">
                                         Если выбрана активная сессия, водитель подставится автоматически
                                     </p>
+                                    {selectedDriverLocation?.coords && (
+                                        <p className="mt-1 text-xs text-teal-600">
+                                            📍 Последняя геолокация: {selectedDriverLocation.coords[1]?.toFixed(5)}, {selectedDriverLocation.coords[0]?.toFixed(5)}
+                                            {selectedDriverLocation.timestamp && ` · ${new Date(selectedDriverLocation.timestamp).toLocaleTimeString('ru-RU')}`}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -739,6 +773,11 @@ const HandoffManagement = () => {
                                                     <span className="font-semibold">{bin.binId}</span>
                                                     <span className="text-slate-500">{bin.wasteType}</span>
                                                 </label>
+                                                <div className="mt-1 ml-6 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
+                                                    {bin.department && <span>🏥 {bin.department}</span>}
+                                                    {bin.fullness != null && <span>📊 {bin.fullness}%</span>}
+                                                    {bin.location?.address && <span>📍 {bin.location.address}</span>}
+                                                </div>
                                                 {checked && (
                                                     <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                                                         <input

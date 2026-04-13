@@ -163,7 +163,13 @@ const handoffSchema = new mongoose.Schema(
             }
         ],
         completedAt: Date,
-        expiresAt: Date
+        expiresAt: Date,
+        lastNotification: {
+            success: { type: Boolean, default: null },
+            channel: String,
+            at: Date,
+            error: String
+        }
     },
     { timestamps: true }
 );

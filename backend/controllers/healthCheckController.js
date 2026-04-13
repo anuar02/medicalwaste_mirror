@@ -3,6 +3,7 @@ const HealthCheck = require('../models/HealthCheck');
 const WasteBin = require('../models/WasteBin');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { addCompanyToQuery } = require('../middleware/companyFilter');
 
 /**
  * Receive health check data from device
@@ -122,8 +123,8 @@ const getHealthCheckHistory = asyncHandler(async (req, res, next) => {
     const { binId } = req.params;
     const { limit = 24 } = req.query;
 
-    // Verify bin exists
-    const bin = await WasteBin.findOne({ binId });
+    // Verify bin exists and caller has access (scoped to company for non-admin)
+    const bin = await WasteBin.findOne(addCompanyToQuery({ binId }, req.user));
     if (!bin) {
         return next(new AppError('No waste bin found with that ID', 404));
     }
@@ -141,8 +142,8 @@ const getHealthCheckHistory = asyncHandler(async (req, res, next) => {
  * Get all devices with their latest health status
  */
 const getAllDevicesHealth = asyncHandler(async (req, res) => {
-    // Get all bins with device info
-    const bins = await WasteBin.find().select('binId department deviceInfo');
+    // Get all bins with device info (scoped to company for non-admin)
+    const bins = await WasteBin.find(addCompanyToQuery({}, req.user)).select('binId department deviceInfo');
 
     // Get latest health check for each bin
     const healthData = await Promise.all(

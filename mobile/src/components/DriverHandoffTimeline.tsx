@@ -180,7 +180,6 @@ export default function DriverHandoffTimeline({
   const [disputeReason, setDisputeReason] = useState<string>('');
   const [disputeDescription, setDisputeDescription] = useState('');
   const [disputeError, setDisputeError] = useState<string | null>(null);
-  const [confirmTarget, setConfirmTarget] = useState<Handoff | null>(null);
   const [confirmSuccess, setConfirmSuccess] = useState(false);
   const copyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
@@ -322,17 +321,11 @@ export default function DriverHandoffTimeline({
 
   const handleConfirm = (handoff: Handoff) => {
     if (confirmMutation.isPending || readOnly) return;
-    setConfirmTarget(handoff);
-  };
-
-  const submitConfirm = () => {
-    if (!confirmTarget) return;
     setConfirmError(null);
-    confirmMutation.mutate(confirmTarget._id, {
+    confirmMutation.mutate(handoff._id, {
       onSuccess: () => {
         onRefresh();
-        setExpandedIds((prev) => ({ ...prev, [confirmTarget._id]: false }));
-        setConfirmTarget(null);
+        setExpandedIds((prev) => ({ ...prev, [handoff._id]: false }));
         setConfirmSuccess(true);
         setTimeout(() => setConfirmSuccess(false), 2000);
       },
@@ -878,44 +871,6 @@ export default function DriverHandoffTimeline({
         </View>
       </Modal>
 
-      <Modal visible={Boolean(confirmTarget)} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('handoff.confirm.title')}</Text>
-            {confirmTarget ? (
-              <Text style={styles.modalBody}>
-                {t('handoff.confirm.body', {
-                  count: getHandoffTotals(confirmTarget).totalContainers,
-                  weight: formatNumber(getHandoffTotals(confirmTarget).totalWeight),
-                  name: confirmTarget.sender?.name ?? t('handoff.card.facilityFallback'),
-                })}
-              </Text>
-            ) : null}
-            {confirmError ? <Text style={styles.errorText}>{confirmError}</Text> : null}
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalButton}
-                onPress={() => setConfirmTarget(null)}
-              >
-                <Text style={styles.modalButtonText}>{t('handoff.confirm.cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary]}
-                onPress={submitConfirm}
-                disabled={confirmMutation.isPending}
-              >
-                {confirmMutation.isPending ? (
-                  <ActivityIndicator color={dark.text} />
-                ) : (
-                  <Text style={[styles.modalButtonText, styles.modalButtonTextPrimary]}>
-                    {t('handoff.confirm.ok')}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }

@@ -168,82 +168,8 @@ const sendTelegramMessage = async (chatId, message, options = {}) => {
     }
 };
 
-/**
- * Send alert notification for overfilled bins to specified users
- * @param {Object} bin - Waste bin data
- * @param {Array} userIds - List of user IDs to notify (null for all eligible users)
- * @returns {Promise<Array>} - Array of notification results
- */
-const sendAlertNotification = async (bin, userIds = null) => {
-    try {
-        // Prepare query to find users to notify
-        const query = {
-            'telegram.active': true,
-            'telegram.chatId': { $ne: null },
-            'notificationPreferences.receiveAlerts': true,
-            active: true
-        };
-
-        // If specific user IDs are provided, add them to query
-        if (userIds && userIds.length > 0) {
-            query._id = { $in: userIds };
-        }
-
-        // Find users to notify
-        const users = await User.find(query);
-
-        if (users.length === 0) {
-            logger.warn('No users available to receive Telegram alert notification');
-            return [];
-        }
-
-        // Create alert message
-        const message = `
-*⚠️ ALERT: Waste Bin ${bin.binId} is ${bin.fullness}% full*
-
-Waste bin in *${bin.department}* has reached *${bin.fullness}%* capacity.
-This exceeds the alert threshold of ${bin.alertThreshold}%.
-
-*Bin Details:*
-• *Waste Type:* ${bin.wasteType}
-• *Location:* Floor ${bin.location.floor || '1'}, Room ${bin.location.room || 'Unknown'}
-• *Last Update:* ${new Date(bin.lastUpdate).toLocaleString()}
-
-Please schedule collection as soon as possible.
-`;
-
-        // Send message to each user
-        const results = [];
-        for (const user of users) {
-            try {
-                const result = await sendTelegramMessage(user.telegram.chatId, message);
-                results.push({
-                    userId: user._id,
-                    username: user.username,
-                    success: true,
-                    messageId: result.message_id
-                });
-            } catch (error) {
-                logger.error(`Failed to send Telegram alert to user ${user.username}: ${error.message}`);
-                results.push({
-                    userId: user._id,
-                    username: user.username,
-                    success: false,
-                    error: error.message
-                });
-            }
-        }
-
-        return results;
-    } catch (error) {
-        logger.error(`Error in sendAlertNotification: ${error.message}`);
-        throw error;
-    }
-};
-
 module.exports = {
     bot,
     initializeBot,
-    sendTelegramMessage,
-    sendAlertNotification
+    sendTelegramMessage
 };

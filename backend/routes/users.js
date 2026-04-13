@@ -1,6 +1,6 @@
 // routes/users.js
 const express = require('express');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const router = express.Router();
 const {
     getProfile,
@@ -81,10 +81,44 @@ const phoneValidation = [
 
 router.get('/drivers', restrictTo('admin', 'supervisor'), getAllDrivers);
 router.get('/drivers/pending', restrictTo('admin', 'supervisor'), getPendingDrivers);
-router.get('/drivers/:driverId', restrictTo('admin', 'supervisor'), getDriverDetails);
-router.patch('/drivers/:driverId', updateDriverDetails);
-router.post('/drivers/verify', restrictTo('admin', 'supervisor'), verifyDriver);
-router.post('/assign-company', restrictTo('admin'), assignCompany);
+router.get(
+    '/drivers/:driverId',
+    restrictTo('admin', 'supervisor'),
+    [param('driverId').isMongoId().withMessage('Invalid driver ID')],
+    validateRequest,
+    getDriverDetails
+);
+router.patch(
+    '/drivers/:driverId',
+    restrictTo('admin', 'supervisor', 'driver'),
+    [
+        param('driverId').isMongoId().withMessage('Invalid driver ID'),
+        body('vehicleInfo.plateNumber').optional().trim().isLength({ min: 1, max: 20 }),
+        body('phoneNumber').optional().trim().matches(/^\+[1-9]\d{6,14}$/).withMessage('Phone number must be in E.164 format')
+    ],
+    validateRequest,
+    updateDriverDetails
+);
+router.post(
+    '/drivers/verify',
+    restrictTo('admin', 'supervisor'),
+    [
+        body('driverId').isMongoId().withMessage('Invalid driver ID'),
+        body('status').isIn(['approved', 'rejected', 'pending']).withMessage('Invalid status')
+    ],
+    validateRequest,
+    verifyDriver
+);
+router.post(
+    '/assign-company',
+    restrictTo('admin'),
+    [
+        body('userId').isMongoId().withMessage('Invalid user ID'),
+        body('companyId').isMongoId().withMessage('Invalid company ID')
+    ],
+    validateRequest,
+    assignCompany
+);
 
 
 
@@ -135,7 +169,13 @@ router.get('/departments', getDepartments);
 // Admin-only routes
 router.use(adminAuth);
 
-router.delete('/:userId', restrictTo('admin'), deleteUser);
+router.delete(
+    '/:userId',
+    restrictTo('admin'),
+    [param('userId').isMongoId().withMessage('Invalid user ID')],
+    validateRequest,
+    deleteUser
+);
 
 // Get all users
 router.get('/', getAllUsers);
@@ -144,6 +184,7 @@ router.get('/', getAllUsers);
 router.patch(
     '/:userId/role', // Matches the frontend's /users/${userId}/role
     [
+        param('userId').isMongoId().withMessage('Invalid user ID'),
         body('role')
             .isIn(['user', 'admin', 'supervisor', 'driver'])
             .withMessage('Invalid role')
@@ -155,9 +196,7 @@ router.patch(
 // Deactivate user
 router.patch(
     '/:userId/deactivate',
-    [
-        body('userId').isMongoId().withMessage('Invalid user ID')
-    ],
+    [param('userId').isMongoId().withMessage('Invalid user ID')],
     validateRequest,
     deactivateUser
 );
@@ -165,9 +204,7 @@ router.patch(
 // Activate user
 router.patch(
     '/:userId/activate',
-    [
-        body('userId').isMongoId().withMessage('Invalid user ID')
-    ],
+    [param('userId').isMongoId().withMessage('Invalid user ID')],
     validateRequest,
     activateUser
 );
