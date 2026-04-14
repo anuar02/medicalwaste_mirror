@@ -161,6 +161,7 @@ const apiService = {
         getAllUsers: createCompatibleMethod(() => api.get('/users')),
         deleteUser: createCompatibleMethod((userId) => api.delete(`/users/${userId}`)),
         updateUserRole: createCompatibleMethod((userId, data) => api.patch(`/users/${userId}/role`, data)),
+        assignCompany: createCompatibleMethod((data) => api.post('/users/assign-company', data)),
     },
 
     // Devices endpoints (unchanged interface)

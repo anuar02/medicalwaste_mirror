@@ -12,6 +12,7 @@ import {
     Truck,
     Bell,
     UserCheck,
+    Users as UsersIcon,
     Building2,
     Factory,
     PackageX,
@@ -149,9 +150,9 @@ const buildNavItems = (t, hasActiveSession) => ([
         supervisorOnly: true,
     },
     {
-        icon: <Activity className="h-5 w-5" />,
-        label: 'Мониторинг Водителей',
-        path: '/driver/dashboard',
+        icon: <UsersIcon className="h-5 w-5" />,
+        label: 'Пользователи',
+        path: '/admin/users',
         adminOnly: true,
     },
     {
@@ -203,7 +204,7 @@ const filterNavItems = (items, { isAdmin, isSupervisor, userRole, isDriver }) =>
     items.filter((item) => {
         if (item.adminOnly && !isAdmin) return false;
         if (item.supervisorOnly && !isSupervisor) return false;
-        if (item.userOnly && (isAdmin || userRole === 'driver')) return false;
+        if (item.userOnly && (isAdmin || isSupervisor || userRole === 'driver')) return false;
         if (item.driverOnly && !isDriver) return false;
         if (item.driverOrAdmin && !(isDriver || isAdmin)) return false;
         if (item.hideForDriver && isDriver) return false;

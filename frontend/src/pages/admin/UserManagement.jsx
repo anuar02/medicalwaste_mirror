@@ -68,6 +68,7 @@ const DeleteModal = ({ isOpen, onClose, onConfirm, userName }) => {
 // User Management component
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
+    const [companies, setCompanies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [userToDelete, setUserToDelete] = useState(null);
@@ -88,6 +89,34 @@ const UserManagement = () => {
             console.error(error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Fetch medical companies for the assignment dropdown
+    const fetchCompanies = async () => {
+        try {
+            const response = await apiService.medicalCompanies.getMedicalCompanies();
+            const list =
+                response.data?.data?.medicalCompanies ||
+                response.data?.data?.companies ||
+                response.data?.data ||
+                [];
+            setCompanies(Array.isArray(list) ? list : []);
+        } catch (error) {
+            console.error('Failed to load companies', error);
+        }
+    };
+
+    // Assign a company to a user
+    const assignCompanyToUser = async (userId, companyId) => {
+        if (!companyId) return;
+        try {
+            await apiService.users.assignCompany({ userId, companyId });
+            toast.success('Компания назначена');
+            fetchUsers();
+        } catch (error) {
+            toast.error('Не удалось назначить компанию');
+            console.error(error);
         }
     };
 
@@ -197,6 +226,7 @@ const UserManagement = () => {
         }
 
         fetchUsers();
+        fetchCompanies();
     }, [isAdmin, navigate]);
 
     // Check if current user is trying to change their own role/delete themselves
@@ -340,6 +370,9 @@ const UserManagement = () => {
                                     </div>
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                                    Компания
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                                     Действия
                                 </th>
                             </tr>
@@ -396,6 +429,20 @@ const UserManagement = () => {
                                                     <p className="mt-1 text-xs text-slate-400">Нельзя изменить свою роль</p>
                                                 )}
                                             </div>
+                                        </td>
+                                        <td className="whitespace-nowrap px-6 py-4 text-sm">
+                                            <select
+                                                value={user.company?._id || user.company || ''}
+                                                onChange={(e) => assignCompanyToUser(user._id || user.id, e.target.value)}
+                                                className="block w-full rounded-md border border-slate-200 px-3 py-1 text-sm focus:border-teal-500 focus:outline-none focus:ring-teal-500"
+                                            >
+                                                <option value="">— Не назначена —</option>
+                                                {companies.map((c) => (
+                                                    <option key={c._id || c.id} value={c._id || c.id}>
+                                                        {c.name}
+                                                    </option>
+                                                ))}
+                                            </select>
                                         </td>
                                         <td className="whitespace-nowrap px-6 py-4 text-sm">
                                             <div className="flex items-center space-x-2">

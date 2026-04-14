@@ -406,7 +406,8 @@ const updateUserRole = asyncHandler(async (req, res, next) => {
  */
 const getAllUsers = asyncHandler(async (req, res) => {
     const users = await User.find()
-        .select('firstName lastName phoneNumber username email role department lastLogin active');
+        .select('firstName lastName phoneNumber username email role department lastLogin active company')
+        .populate('company', 'name');
 
     res.status(200).json({
         status: 'success',
