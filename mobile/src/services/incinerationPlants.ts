@@ -8,9 +8,12 @@ export interface IncinerationPlantsResponse {
   plants?: IncinerationPlant[];
 }
 
-export async function fetchIncinerationPlants(): Promise<IncinerationPlant[]> {
+export async function fetchIncinerationPlants(companyId?: string): Promise<IncinerationPlant[]> {
   try {
-    const response = await api.get<ApiSuccess<IncinerationPlantsResponse>>('/api/incineration-plants?active=true');
+    const query = companyId
+      ? `/api/incineration-plants?active=true&companyId=${companyId}`
+      : '/api/incineration-plants?active=true';
+    const response = await api.get<ApiSuccess<IncinerationPlantsResponse>>(query);
     if (response.data.status !== 'success') {
       throw new Error('Failed to load incineration plants');
     }

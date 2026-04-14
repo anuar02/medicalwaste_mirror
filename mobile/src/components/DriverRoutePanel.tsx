@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   RefreshControl,
   StyleSheet,
   Text,
@@ -19,9 +18,9 @@ import {
   useActiveCollection,
   useSessionRoute,
   useStartCollection,
-  useStopCollection,
 } from '../hooks/useCollections';
 import { useHandoffs } from '../hooks/useHandoffs';
+import { useSessionRouteRealtime } from '../hooks/useSessionRouteRealtime';
 import { useWasteBins } from '../hooks/useWasteBins';
 import { useAuthStore } from '../stores/authStore';
 import { dark, spacing, typography } from '../theme';
@@ -74,20 +73,18 @@ function decodePolyline(encoded: string): Array<{ latitude: number; longitude: n
 export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanelProps) {
   const { t } = useTranslation();
   const { data, isLoading, refetch, isFetching } = useActiveCollection();
-  const stopMutation = useStopCollection();
   const startMutation = useStartCollection();
   const {
     data: bins,
     isFetching: binsFetching,
     refetch: refetchBins,
-  } = useWasteBins();
+  } = useWasteBins({ enabled: !data });
   const currentUser = useAuthStore((s) => s.user);
   const currentUserId = String(
     (currentUser as any)?._id || (currentUser as any)?.id || '',
   );
   const handoffsQuery = useHandoffs({
     enabled: !data,
-    refetchInterval: !data ? 15000 : false,
   });
   const pendingHandoffs = useMemo(() => {
     if (data) return [];
@@ -120,8 +117,8 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
 
   const sessionRouteQuery = useSessionRoute(data?._id ?? data?.sessionId, {
     enabled: Boolean(data),
-    refetchInterval: data?.status === 'active' ? 15000 : false,
   });
+  useSessionRouteRealtime(data);
 
   const driverRouteCoords = useMemo(() => {
     const routePoints = sessionRouteQuery.data?.route ?? [];
@@ -133,9 +130,10 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     return path.length > 1 ? path : [];
   }, [sessionRouteQuery.data?.route]);
 
-  const snapPoints = useMemo(() => ['12%', '50%', '85%'], []);
+  const snapPoints = useMemo(() => ['16%', '52%', '88%'], []);
   const sheetRef = useRef<BottomSheet>(null);
   const [sheetIndex, setSheetIndex] = useState(0);
+  const isSheetExpanded = sheetIndex > 0;
 
   const sessionItems = useMemo(() => (
     data?.selectedContainers?.filter((entry) => (
@@ -316,15 +314,6 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     return { latitude, longitude };
   }, [currentLocation]);
 
-  const handleStop = () => {
-    if (!data?.sessionId || stopMutation.isPending) return;
-    stopMutation.mutate(data.sessionId, {
-      onSuccess: () => {
-        refetch();
-      },
-    });
-  };
-
   // Visited state is driven by handoff completion; driver has no manual override.
 
   // Multi-stop route: origin = driver, waypoints = all unvisited (max 8), optimizeWaypoints
@@ -466,6 +455,11 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
   }
 
   const isNextStop = (id: string) => nextStopMarker?.id === id;
+  const openSheet = () => {
+    if (!isSheetExpanded) {
+      sheetRef.current?.snapToIndex(1);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -534,53 +528,111 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
         backgroundStyle={styles.sheetBg}
         handleIndicatorStyle={styles.sheetHandle}
         onChange={setSheetIndex}
-        enableContentPanningGesture={false}
+        enableContentPanningGesture
+        enableOverDrag={false}
       >
         {data ? (
           <BottomSheetFlatList
             data={sessionItems}
             keyExtractor={(item: CollectionContainer) => item.container._id}
             contentContainerStyle={styles.sheetContent}
+            scrollEnabled={isSheetExpanded}
+            showsVerticalScrollIndicator={isSheetExpanded}
             refreshControl={
               <RefreshControl
-                refreshing={isFetching || binsFetching}
+                refreshing={isFetching}
                 onRefresh={() => {
                   refetch();
-                  refetchBins();
                 }}
               />
             }
             ListHeaderComponent={
-              <>
-                {/* Peek row — visible when sheet collapsed */}
-                {nextStopMarker && (
-                  <View style={styles.peekRow}>
-                    <View style={styles.peekInfo}>
-                      <Text style={styles.peekLabel}>{t('driver.route.nextStop')}</Text>
-                      <Text style={styles.peekBinId}>{nextStopMarker.binId ?? t('driver.route.container')}</Text>
-                    </View>
-                    <Text style={styles.peekDistance}>
-                      {[
-                        containerDistances[nextStopMarker.id] != null ? formatDistance(containerDistances[nextStopMarker.id]) : null,
-                        routeMeta?.duration,
-                      ].filter(Boolean).join(' · ')}
+              <TouchableOpacity
+                activeOpacity={0.95}
+                onPress={openSheet}
+                style={styles.sheetSummaryCard}
+              >
+                <View style={styles.sheetSummaryTop}>
+                  <View style={styles.sheetSummaryCopy}>
+                    <Text style={styles.peekLabel}>{t('driver.route.nextStop')}</Text>
+                    <Text style={styles.peekBinId}>
+                      {nextStopMarker?.binId ?? t('driver.route.container')}
                     </Text>
+                  </View>
+                  {nextStopMarker ? (
                     <TouchableOpacity
                       style={styles.peekNavIcon}
-                      onPress={() => handleOpen2Gis(nextStopMarker.latitude, nextStopMarker.longitude)}
+                      onPress={() =>
+                        handleOpen2Gis(
+                          nextStopMarker.latitude,
+                          nextStopMarker.longitude,
+                        )
+                      }
                     >
-                      <MaterialCommunityIcons name="navigation-variant" size={18} color={dark.text} />
+                      <MaterialCommunityIcons
+                        name="navigation-variant"
+                        size={18}
+                        color={dark.text}
+                      />
                     </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                <View style={styles.summaryStatRow}>
+                  <View style={styles.summaryStat}>
+                    <Text style={styles.summaryStatValue}>
+                      {visitedCount}/{totalCount}
+                    </Text>
+                    <Text style={styles.summaryStatLabel}>
+                      {t('driver.route.containersTitle')}
+                    </Text>
                   </View>
-                )}
-                {nextStopMarker && (
-                  <View style={styles.peekBarRow}>
-                    <View style={styles.peekBarWrap}>
-                      <AnimatedProgressBar fullness={nextStopMarker.fullness ?? 0} color={getUrgencyColor(nextStopMarker.fullness)} height={4} />
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryStat}>
+                    <Text style={styles.summaryStatValue}>
+                      {routeMeta?.distance ?? '--'}
+                    </Text>
+                    <Text style={styles.summaryStatLabel}>ETA</Text>
+                  </View>
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryStat}>
+                    <Text style={styles.summaryStatValue}>
+                      {routeMeta?.duration ?? '--'}
+                    </Text>
+                    <Text style={styles.summaryStatLabel}>
+                      {t('driver.route.nextStop')}
+                    </Text>
+                  </View>
+                </View>
+
+                {nextStopMarker ? (
+                  <>
+                    <View style={styles.peekMetaRow}>
+                      <Text style={styles.peekDistance}>
+                        {[
+                          containerDistances[nextStopMarker.id] != null
+                            ? formatDistance(
+                                containerDistances[nextStopMarker.id],
+                              )
+                            : null,
+                          routeMeta?.duration,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </Text>
                     </View>
-                  </View>
-                )}
-                {/* Route progress */}
+                    <View style={styles.peekBarRow}>
+                      <View style={styles.peekBarWrap}>
+                        <AnimatedProgressBar
+                          fullness={nextStopMarker.fullness ?? 0}
+                          color={getUrgencyColor(nextStopMarker.fullness)}
+                          height={4}
+                        />
+                      </View>
+                    </View>
+                  </>
+                ) : null}
+
                 <View style={styles.routeProgress}>
                   <Text style={styles.routeProgressText}>
                     {t('driver.route.progress', {
@@ -591,8 +643,24 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
                     })}
                   </Text>
                 </View>
-                <Text style={styles.sectionTitle}>{t('driver.route.containersTitle')}</Text>
-              </>
+
+                <View style={styles.sheetHintRow}>
+                  <MaterialCommunityIcons
+                    name={isSheetExpanded ? 'chevron-down' : 'chevron-up'}
+                    size={16}
+                    color={dark.teal}
+                  />
+                  <Text style={styles.sheetHintText}>
+                    {t('driver.route.containersTitle')}
+                  </Text>
+                </View>
+
+                {isSheetExpanded ? (
+                  <Text style={styles.sectionTitle}>
+                    {t('driver.route.containersTitle')}
+                  </Text>
+                ) : null}
+              </TouchableOpacity>
             }
             renderItem={({ item: entry, index }: { item: CollectionContainer; index: number }) => (
               <ContainerCard
@@ -610,17 +678,10 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
                 index={index}
               />
             )}
-            ListFooterComponent={
-              <TouchableOpacity style={styles.button} onPress={handleStop}>
-                {stopMutation.isPending ? (
-                  <ActivityIndicator color={dark.text} />
-                ) : (
-                  <Text style={styles.buttonText}>{t('driver.route.endSession')}</Text>
-                )}
-              </TouchableOpacity>
-            }
             ListEmptyComponent={
-              <Text style={styles.emptyText}>{t('driver.route.noContainers')}</Text>
+              sessionItems.length === 0 ? (
+                <Text style={styles.emptyText}>{t('driver.route.noContainers')}</Text>
+              ) : null
             }
           />
         ) : (
@@ -769,14 +830,63 @@ const styles = StyleSheet.create({
   },
   /* Bottom sheet */
   sheetBg: {
-    backgroundColor: dark.bg,
+    backgroundColor: dark.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: dark.border,
   },
   sheetHandle: {
-    backgroundColor: dark.muted,
+    backgroundColor: dark.borderStrong,
+    width: 56,
   },
   sheetContent: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
+  },
+  sheetSummaryCard: {
+    backgroundColor: dark.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: dark.border,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  sheetSummaryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  sheetSummaryCopy: {
+    flex: 1,
+  },
+  summaryStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: dark.surfaceMuted,
+    borderRadius: 14,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  summaryStat: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  summaryStatValue: {
+    ...typography.bodyStrong,
+    color: dark.text,
+  },
+  summaryStatLabel: {
+    ...typography.caption,
+    color: dark.textSecondary,
+  },
+  summaryDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    backgroundColor: dark.border,
   },
   /* Peek row — next stop compact info */
   peekRow: {
@@ -804,7 +914,9 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: dark.teal,
     fontWeight: '600',
-    marginRight: spacing.sm,
+  },
+  peekMetaRow: {
+    marginTop: spacing.sm,
   },
   peekNavIcon: {
     width: 36,
@@ -842,13 +954,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(13, 148, 136, 0.1)',
     borderRadius: 10,
     padding: spacing.md,
-    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
   },
   routeProgressText: {
     ...typography.caption,
     color: dark.teal,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  sheetHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  sheetHintText: {
+    ...typography.caption,
+    color: dark.teal,
+    fontWeight: '600',
   },
   /* No-session select header */
   selectHeader: {

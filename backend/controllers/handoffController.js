@@ -18,6 +18,7 @@ const {
     canBeDisputed,
     isTerminal
 } = require('../services/handoffStateMachine');
+const { broadcastHandoffEvent } = require('../utils/gpsWebSocket');
 
 const CONFIRMATION_BASE_URL = process.env.PUBLIC_CONFIRM_BASE_URL || 'https://medicalwaste.kz/confirm';
 
@@ -386,6 +387,8 @@ const createHandoff = asyncHandler(async (req, res, next) => {
         });
     }
 
+    broadcastHandoffEvent('handoff_created', handoff);
+
     res.status(201).json({
         status: 'success',
         data: {
@@ -531,6 +534,8 @@ const confirmHandoff = asyncHandler(async (req, res, next) => {
         }
     }
 
+    broadcastHandoffEvent('handoff_updated', handoff);
+
     res.status(200).json({
         status: 'success',
         data: { handoff }
@@ -603,6 +608,8 @@ const confirmHandoffByToken = asyncHandler(async (req, res, next) => {
         );
     }
 
+    broadcastHandoffEvent('handoff_updated', handoff);
+
     res.status(200).json({
         status: 'success',
         data: { handoff }
@@ -674,6 +681,8 @@ const disputeHandoff = asyncHandler(async (req, res, next) => {
 
     await handoff.save();
 
+    broadcastHandoffEvent('handoff_updated', handoff);
+
     res.status(200).json({
         status: 'success',
         data: { handoff }
@@ -708,6 +717,8 @@ const resolveHandoff = asyncHandler(async (req, res, next) => {
     };
 
     await handoff.save();
+
+    broadcastHandoffEvent('handoff_updated', handoff);
 
     res.status(200).json({
         status: 'success',

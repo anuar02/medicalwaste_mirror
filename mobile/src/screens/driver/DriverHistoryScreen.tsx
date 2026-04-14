@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,188 +12,262 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useCollectionHistory } from '../../hooks/useCollections';
 import { useHandoffs } from '../../hooks/useHandoffs';
-import { dark, spacing, typography } from '../../theme';
+import { dark, elevation, spacing, typography } from '../../theme';
 import { DriverHistoryStackParamList } from '../../types/navigation';
 import { CollectionSession, Handoff } from '../../types/models';
+import Card from '../../components/shared/Card';
+import Chip from '../../components/shared/Chip';
+import EmptyState from '../../components/shared/EmptyState';
+import SectionHeader from '../../components/shared/SectionHeader';
+import StatTile from '../../components/shared/StatTile';
 
 function formatSessionDate(iso?: string): string {
   if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function formatDuration(start?: string, end?: string): string | null {
   if (!start || !end) return null;
   const ms = new Date(end).getTime() - new Date(start).getTime();
-  if (ms <= 0 || isNaN(ms)) return null;
+  if (ms <= 0 || Number.isNaN(ms)) return null;
   const totalMin = Math.floor(ms / 60000);
   if (totalMin < 60) return `${totalMin}m`;
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  const hours = Math.floor(totalMin / 60);
+  const minutes = totalMin % 60;
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+function formatSessionTime(iso?: string): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export default function DriverHistoryScreen() {
   const { t } = useTranslation();
   const { data, isLoading, isFetching, refetch } = useCollectionHistory();
   const { data: handoffs } = useHandoffs({ enabled: true });
-  const navigation = useNavigation<NativeStackNavigationProp<DriverHistoryStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<DriverHistoryStackParamList>>();
+
+  const sessions = data ?? [];
 
   const getSessionHandoffs = useCallback(
     (session: CollectionSession): Handoff[] =>
       (handoffs ?? [])
-        .filter((h) => h.session?._id === session._id || h.session?.sessionId === session.sessionId)
+        .filter(
+          (handoff) =>
+            handoff.session?._id === session._id ||
+            handoff.session?.sessionId === session.sessionId,
+        )
         .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '')),
     [handoffs],
   );
 
+  const summary = useMemo(() => {
+    return sessions.reduce(
+      (acc, session) => {
+        const sessionHandoffs = getSessionHandoffs(session);
+        const sessionWeight =
+          session.totalWeightCollected ??
+          session.selectedContainers?.reduce(
+            (sum, container) => sum + (container.collectedWeight ?? 0),
+            0,
+          ) ??
+          0;
+        acc.sessions += 1;
+        acc.containers += session.selectedContainers?.length ?? 0;
+        acc.weight += sessionWeight;
+        if (sessionHandoffs.some((handoff) => handoff.status === 'disputed')) {
+          acc.disputes += 1;
+        }
+        return acc;
+      },
+      { sessions: 0, containers: 0, weight: 0, disputes: 0 },
+    );
+  }, [getSessionHandoffs, sessions]);
+
   const renderItem = useCallback(
     ({ item: session, index }: { item: CollectionSession; index: number }) => {
-      const sHandoffs = getSessionHandoffs(session);
-      const hasDispute = sHandoffs.some((h) => h.status === 'disputed');
-
-      const statusKey = hasDispute ? 'disputed' : session.status;
-      const chipLabel = hasDispute
-        ? t('driver.history.statusDisputed')
-        : session.status === 'completed'
-          ? t('driver.history.statusCompleted')
-          : t('driver.history.statusActive');
-
-      const chipBg =
-        statusKey === 'disputed'
-          ? styles.chipDanger
-          : statusKey === 'completed'
-            ? styles.chipSuccess
-            : styles.chipNeutral;
-      const chipTextColor =
-        statusKey === 'disputed'
-          ? dark.dangerText
-          : statusKey === 'completed'
-            ? dark.successText
-            : dark.text;
-
-      const containerCount = session.selectedContainers?.length ?? 0;
+      const sessionHandoffs = getSessionHandoffs(session);
+      const hasDispute = sessionHandoffs.some(
+        (handoff) => handoff.status === 'disputed',
+      );
+      const isCompleted = session.status === 'completed' && !hasDispute;
       const duration = formatDuration(session.startTime, session.endTime);
-      const sessionId = typeof session.sessionId === 'string' && session.sessionId.length > 0
-        ? session.sessionId
-        : null;
-
-      // Performance metrics (set by backend on session completion)
-      const kmDriven = session.totalDistance != null && session.totalDistance > 0
-        ? session.totalDistance
-        : null;
-      const weightCollected = session.totalWeightCollected != null && session.totalWeightCollected > 0
-        ? session.totalWeightCollected
-        // Fallback: sum collectedWeight from individual containers
-        : session.selectedContainers?.reduce((sum, c) => sum + (c.collectedWeight ?? 0), 0) || null;
-      const containersVisited = session.containersCollected ?? session.selectedContainers?.filter(c => c.visited).length ?? 0;
-      const timePerBin = session.totalDuration && containersVisited > 0
-        ? Math.round(session.totalDuration / containersVisited)
-        : null;
-      const hasMetrics = kmDriven != null || weightCollected != null || timePerBin != null;
+      const containerCount = session.selectedContainers?.length ?? 0;
+      const weightCollected =
+        session.totalWeightCollected ??
+        session.selectedContainers?.reduce(
+          (sum, container) => sum + (container.collectedWeight ?? 0),
+          0,
+        ) ??
+        0;
+      const distance = session.totalDistance;
+      const visitedCount =
+        session.containersCollected ??
+        session.selectedContainers?.filter((container) => container.visited)
+          .length ??
+        0;
+      const timePerBin =
+        session.totalDuration && visitedCount > 0
+          ? Math.round(session.totalDuration / visitedCount)
+          : null;
 
       return (
         <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
           <TouchableOpacity
-            style={styles.card}
-            activeOpacity={0.7}
-            disabled={!sessionId}
+            activeOpacity={0.85}
+            disabled={!session.sessionId}
             onPress={() => {
-              if (!sessionId) return;
-              navigation.navigate('DriverSessionTimeline', { sessionId });
+              if (!session.sessionId) return;
+              navigation.navigate('DriverSessionTimeline', {
+                sessionId: session.sessionId,
+              });
             }}
           >
-            {/* Header: ID + status chip */}
-            <View style={styles.cardHeader}>
-              <Text style={styles.sessionId} numberOfLines={1}>
-                #{sessionId ?? '—'}
-              </Text>
-              <View style={[styles.chip, chipBg]}>
-                <Text style={[styles.chipText, { color: chipTextColor }]}>{chipLabel}</Text>
+            <Card variant="elevated" padding="lg" style={styles.card}>
+              <View style={styles.cardTop}>
+                <View style={styles.cardTitleWrap}>
+                  <Text style={styles.sessionId} numberOfLines={1}>
+                    {t('driver.history.sessionLabel')}
+                  </Text>
+                  <Text style={styles.sessionDate}>
+                    {formatSessionDate(session.startTime)} · {formatSessionTime(session.startTime)}
+                  </Text>
+                </View>
+                <Chip
+                  label={
+                    hasDispute
+                      ? t('driver.history.statusDisputed')
+                      : isCompleted
+                        ? t('driver.history.statusCompleted')
+                        : t('driver.history.statusActive')
+                  }
+                  tone={
+                    hasDispute
+                      ? 'danger'
+                      : isCompleted
+                        ? 'success'
+                        : 'neutral'
+                  }
+                  icon={
+                    hasDispute
+                      ? 'alert-circle-outline'
+                      : isCompleted
+                        ? 'check-circle-outline'
+                        : 'clock-outline'
+                  }
+                />
               </View>
-            </View>
 
-            {/* Meta: date · duration · containers */}
-            <View style={styles.metaRow}>
-              <Text style={styles.dateText}>{formatSessionDate(session.startTime)}</Text>
-              {duration && (
-                <>
-                  <Text style={styles.metaDot}>·</Text>
-                  <Text style={styles.durationText}>{duration}</Text>
-                </>
-              )}
-              {containerCount > 0 && (
-                <>
-                  <Text style={styles.metaDot}>·</Text>
-                  <Text style={styles.containerCount}>
+              <View style={styles.metaRow}>
+                {duration ? (
+                  <View style={styles.metaItem}>
+                    <MaterialCommunityIcons
+                      name="timer-outline"
+                      size={14}
+                      color={dark.muted}
+                    />
+                    <Text style={styles.metaText}>{duration}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.metaItem}>
+                  <MaterialCommunityIcons
+                    name="trash-can-outline"
+                    size={14}
+                    color={dark.muted}
+                  />
+                  <Text style={styles.metaText}>
                     {t('driver.history.containers', { count: containerCount })}
                   </Text>
-                </>
-              )}
-            </View>
-
-            {/* Performance metrics */}
-            {hasMetrics && (
-              <View style={styles.metricsRow}>
-                {kmDriven != null && (
-                  <View style={styles.metricBadge}>
-                    <Text style={styles.metricBadgeText}>
-                      {t('driver.history.kmDriven', { value: kmDriven.toFixed(1) })}
-                    </Text>
-                  </View>
-                )}
-                {weightCollected != null && (
-                  <View style={styles.metricBadge}>
-                    <Text style={styles.metricBadgeText}>
-                      {t('driver.history.weightTotal', { value: weightCollected.toFixed(1) })}
-                    </Text>
-                  </View>
-                )}
-                {timePerBin != null && (
-                  <View style={styles.metricBadge}>
-                    <Text style={styles.metricBadgeText}>
-                      {t('driver.history.timePerBin', { value: timePerBin })}
-                    </Text>
-                  </View>
-                )}
+                </View>
               </View>
-            )}
 
-            {/* Handoff previews */}
-            {sHandoffs.length > 0 && (
-              <View style={styles.previews}>
-                {sHandoffs.slice(0, 3).map((handoff) => {
-                  const isCompleted = handoff.status === 'completed';
-                  const isDisputed = handoff.status === 'disputed';
-                  return (
-                    <View key={handoff._id} style={styles.previewRow}>
+              <View style={styles.metricRow}>
+                <Chip
+                  label={t('driver.history.weightTotal', {
+                    value: weightCollected.toFixed(1),
+                  })}
+                  tone="teal"
+                  icon="scale-bathroom"
+                />
+                {distance != null && distance > 0 ? (
+                  <Chip
+                    label={t('driver.history.kmDriven', {
+                      value: distance.toFixed(1),
+                    })}
+                    tone="info"
+                    icon="map-marker-distance"
+                  />
+                ) : null}
+                {timePerBin != null ? (
+                  <Chip
+                    label={t('driver.history.timePerBin', { value: timePerBin })}
+                    tone="neutral"
+                    icon="timer-sand"
+                  />
+                ) : null}
+              </View>
+
+              {sessionHandoffs.length ? (
+                <View style={styles.previewWrap}>
+                  <SectionHeader
+                    title={t('driver.home.notificationsTitle')}
+                    style={styles.previewHeader}
+                  />
+                  {sessionHandoffs.slice(0, 3).map((handoff, handoffIndex) => {
+                    const tone =
+                      handoff.status === 'disputed'
+                        ? 'danger'
+                        : handoff.status === 'completed'
+                          ? 'success'
+                          : 'warning';
+                    return (
                       <View
+                        key={handoff._id}
                         style={[
-                          styles.previewDot,
-                          isDisputed
-                            ? styles.dotDanger
-                            : isCompleted
-                              ? styles.dotSuccess
-                              : styles.dotNeutral,
+                          styles.previewRow,
+                          handoffIndex < sessionHandoffs.slice(0, 3).length - 1 &&
+                            styles.previewDivider,
                         ]}
-                      />
-                      <Text style={styles.previewText} numberOfLines={1}>
-                        {handoff.type === 'facility_to_driver'
-                          ? t('driver.history.previewFacility', {
-                              name: handoff.sender?.name ?? t('handoff.card.facilityFallback'),
-                            })
-                          : t('driver.history.previewIncineration')}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
+                      >
+                        <View style={styles.previewDotWrap}>
+                          <Chip
+                            label={
+                              handoff.type === 'facility_to_driver'
+                                ? t('driver.history.previewFacility', {
+                                    name:
+                                      handoff.sender?.name ??
+                                      t('handoff.card.facilityFallback'),
+                                  })
+                                : t('driver.history.previewIncineration')
+                            }
+                            tone={tone}
+                            icon={
+                              handoff.type === 'facility_to_driver'
+                                ? 'warehouse'
+                                : 'fire'
+                            }
+                          />
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </Card>
           </TouchableOpacity>
         </Animated.View>
       );
@@ -214,17 +288,61 @@ export default function DriverHistoryScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlatList
-        data={data ?? []}
+        data={sessions}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={dark.teal} />
         }
-        ListHeaderComponent={<Text style={styles.title}>{t('driver.history.title')}</Text>}
+        ListHeaderComponent={
+          <>
+            <Animated.View entering={FadeInDown.springify()}>
+              <Text style={styles.title}>{t('driver.history.title')}</Text>
+              <Text style={styles.subtitle}>
+                {sessions.length
+                  ? t('driver.history.containers', {
+                      count: summary.containers,
+                    })
+                  : t('driver.history.empty')}
+              </Text>
+            </Animated.View>
+
+            <Animated.View entering={FadeIn.delay(80)} style={styles.statsRow}>
+              <StatTile
+                label={t('driver.history.title')}
+                value={summary.sessions}
+                icon="clipboard-text-clock-outline"
+                tone="teal"
+                style={styles.statTile}
+              />
+              <StatTile
+                label={t('driver.home.statWeight')}
+                value={Math.round(summary.weight)}
+                unit="kg"
+                icon="scale-bathroom"
+                style={styles.statTile}
+              />
+              <StatTile
+                label={t('driver.history.statusDisputed')}
+                value={summary.disputes}
+                icon="alert-circle-outline"
+                style={styles.statTile}
+              />
+            </Animated.View>
+
+            <SectionHeader title={t('driver.history.title')} />
+          </>
+        }
         renderItem={renderItem}
         ListEmptyComponent={
-          <Animated.View entering={FadeInDown} style={styles.emptyCard}>
-            <Text style={styles.emptyText}>{t('driver.history.empty')}</Text>
+          <Animated.View entering={FadeIn} style={styles.emptyWrap}>
+            <Card variant="outlined" padding="none">
+              <EmptyState
+                icon="history"
+                title={t('driver.history.empty')}
+                body={t('handoff.emptyState.body')}
+              />
+            </Card>
           </Animated.View>
         }
       />
@@ -247,130 +365,87 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   title: {
-    ...typography.title,
+    ...typography.heading,
     color: dark.text,
+  },
+  subtitle: {
+    ...typography.body,
+    color: dark.textSecondary,
+    marginTop: spacing.xs,
     marginBottom: spacing.lg,
   },
-  /* Card */
-  card: {
-    backgroundColor: dark.surface,
-    borderRadius: 16,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: dark.border,
-    marginBottom: spacing.md,
-  },
-  cardHeader: {
+  statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  statTile: {
+    minHeight: 128,
+  },
+  card: {
+    marginBottom: spacing.md,
+    ...elevation.sm,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  cardTitleWrap: {
+    flex: 1,
+    gap: 2,
   },
   sessionId: {
-    ...typography.body,
-    fontWeight: '700',
+    ...typography.title,
     color: dark.text,
-    flex: 1,
-    marginRight: spacing.sm,
   },
-  chip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: 999,
+  sessionDate: {
+    ...typography.caption,
+    color: dark.textSecondary,
   },
-  chipSuccess: {
-    backgroundColor: dark.success,
-  },
-  chipDanger: {
-    backgroundColor: dark.danger,
-  },
-  chipNeutral: {
-    backgroundColor: 'rgba(100, 116, 139, 0.2)',
-  },
-  chipText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  /* Meta row */
   metaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginTop: spacing.md,
   },
-  dateText: {
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  metaText: {
     ...typography.caption,
     color: dark.textSecondary,
   },
-  metaDot: {
-    ...typography.caption,
-    color: dark.muted,
-    marginHorizontal: 6,
-  },
-  durationText: {
-    ...typography.caption,
-    color: dark.teal,
-    fontWeight: '600',
-  },
-  containerCount: {
-    ...typography.caption,
-    color: dark.muted,
-  },
-  /* Performance metrics row */
-  metricsRow: {
+  metricRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
-  metricBadge: {
-    backgroundColor: 'rgba(13, 148, 136, 0.12)',
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-  },
-  metricBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: dark.teal,
-  },
-  /* Handoff previews */
-  previews: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
+  previewWrap: {
+    marginTop: spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: dark.border,
+    borderTopColor: dark.divider,
+    paddingTop: spacing.md,
+  },
+  previewHeader: {
+    marginBottom: spacing.sm,
+    paddingHorizontal: 0,
   },
   previewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
+    paddingVertical: spacing.xs,
   },
-  previewDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: spacing.sm,
+  previewDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: dark.divider,
   },
-  dotSuccess: {
-    backgroundColor: dark.successText,
+  previewDotWrap: {
+    alignSelf: 'flex-start',
   },
-  dotDanger: {
-    backgroundColor: dark.dangerText,
-  },
-  dotNeutral: {
-    backgroundColor: dark.muted,
-  },
-  previewText: {
-    ...typography.caption,
-    color: dark.textSecondary,
-    flex: 1,
-  },
-  /* Empty */
-  emptyCard: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-  },
-  emptyText: {
-    ...typography.body,
-    color: dark.textSecondary,
+  emptyWrap: {
+    marginTop: spacing.lg,
   },
 });

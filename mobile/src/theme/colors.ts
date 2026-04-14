@@ -6,7 +6,7 @@ export const colors = {
   warning: '#f59e0b',
   background: '#f8fafc',
   surface: '#ffffff',
-  textPrimary: '#0f172a',
+  textPrimary: '#0B1F33',
   textSecondary: '#475569',
   border: '#e2e8f0',
 };

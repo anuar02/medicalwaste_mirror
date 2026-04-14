@@ -184,9 +184,43 @@ function sendToAllClients(message) {
     });
 }
 
+function broadcastHandoffEvent(event, handoff) {
+    if (!handoff) return;
+    const plain = typeof handoff.toObject === 'function' ? handoff.toObject() : handoff;
+    const senderUserId = plain?.sender?.user?._id || plain?.sender?.user || null;
+    const receiverUserId = plain?.receiver?.user?._id || plain?.receiver?.user || null;
+    sendToAllClients({
+        type: event, // 'handoff_created' | 'handoff_updated'
+        data: {
+            handoff: plain,
+            senderUserId: senderUserId ? String(senderUserId) : null,
+            receiverUserId: receiverUserId ? String(receiverUserId) : null,
+            company: plain?.company ? String(plain.company) : null
+        }
+    });
+}
+
+function broadcastSessionEvent(event, session) {
+    if (!session) return;
+    const plain = typeof session.toObject === 'function' ? session.toObject() : session;
+    const driverId = plain?.driver?._id || plain?.driver || null;
+    sendToAllClients({
+        type: event, // 'session_updated'
+        data: {
+            session: plain,
+            sessionId: plain?.sessionId || null,
+            sessionMongoId: plain?._id ? String(plain._id) : null,
+            driverId: driverId ? String(driverId) : null,
+            status: plain?.status || null
+        }
+    });
+}
+
 module.exports = {
     initializeGpsWebSocket,
     broadcastGpsUpdate,
+    broadcastHandoffEvent,
+    broadcastSessionEvent,
     getConnectedClientsCount,
     sendToAllClients
 };

@@ -64,7 +64,7 @@
       "roleCompany": "{{role}} · {{company}}",
       "noSession": "Нет активной сессии",
       "startSession": "Начать сессию",
-      "sessionActive": "Сессия #{{id}} · активна {{time}}",
+      "sessionActive": "Сбор в процессе · {{time}}",
       "sessionProgress": "{{visited}}/{{total}} контейнеров посещено",
       "sessionPending": "{{count}} передач ожидает",
       "continue": "Продолжить",
@@ -242,6 +242,7 @@
     },
     "history": {
       "title": "История сессий",
+      "sessionLabel": "Рейс сбора",
       "status": "Статус: {{status}}",
       "start": "Начало: {{value}}",
       "end": "Конец: {{value}}",
@@ -341,6 +342,11 @@
     "incineration": {
       "readyTitle": "Все передачи от учреждений подтверждены.",
       "readyBody": "Создайте передачу для утилизационного завода.",
+      "chainTitle": "Цепочка утилизации",
+      "chainBody": "Отходы от {{company}} должны передаваться по назначенной цепочке утилизации.",
+      "sourceCompany": "Медицинская организация",
+      "defaultPlant": "Завод по умолчанию: {{plant}}",
+      "noDefaultPlant": "Для этой компании не настроен завод утилизации по умолчанию.",
       "selectPlant": "Выберите завод утилизации",
       "noPlants": "Нет доступных заводов.",
       "totalContainers": "Контейнеров всего: {{count}}",

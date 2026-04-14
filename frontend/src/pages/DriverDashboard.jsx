@@ -112,7 +112,7 @@ function AdminDriverTrackingView() {
                         </div>
                     ) : (
                         <div className="divide-y divide-slate-100">
-                            {driverSessions.map(({ session, lastLocation }) => {
+                            {driverSessions.map(({ session, driverProfile, lastLocation }) => {
                                 const driver = session.driver || {};
                                 const visited = (session.selectedContainers || []).filter(c => c.visited).length;
                                 const total = (session.selectedContainers || []).length;
@@ -120,7 +120,13 @@ function AdminDriverTrackingView() {
                                     <div
                                         key={session._id || session.sessionId}
                                         className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
-                                        onClick={() => driver._id && navigate(`/admin/drivers/${driver._id}`)}
+                                        onClick={() => driverProfile?._id && navigate(`/admin/drivers/${driverProfile._id}`, {
+                                            state: {
+                                                driver: driverProfile,
+                                                activeSession: session,
+                                                lastLocation
+                                            }
+                                        })}
                                     >
                                         <div className="h-2.5 w-2.5 rounded-full shrink-0 bg-teal-500" />
                                         <div className="min-w-0 flex-1">
@@ -155,7 +161,7 @@ function AdminDriverTrackingView() {
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         />
-                        {driverSessions.map(({ session, lastLocation }) => {
+                        {driverSessions.map(({ session, driverProfile, lastLocation }) => {
                             const driver = session.driver || {};
                             const lat = lastLocation?.coordinates?.[1];
                             const lng = lastLocation?.coordinates?.[0];
@@ -182,10 +188,16 @@ function AdminDriverTrackingView() {
                                                 <p className="text-xs text-slate-500">
                                                     Время: {formatSessionDuration(session.startTime)}
                                                 </p>
-                                                {driver._id && (
+                                                {driverProfile?._id && (
                                                     <button
                                                         className="mt-2 text-teal-600 hover:text-teal-700 text-xs underline"
-                                                        onClick={() => navigate(`/admin/drivers/${driver._id}`)}
+                                                        onClick={() => navigate(`/admin/drivers/${driverProfile._id}`, {
+                                                            state: {
+                                                                driver: driverProfile,
+                                                                activeSession: session,
+                                                                lastLocation
+                                                            }
+                                                        })}
                                                     >
                                                         Подробнее →
                                                     </button>
@@ -261,7 +273,7 @@ function SupervisorSessionMonitorView() {
                     </div>
                 ) : (
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {driverSessions.map(({ session, lastLocation }) => {
+                        {driverSessions.map(({ session, driverProfile, lastLocation }) => {
                             const driver = session.driver || {};
                             const containers = session.selectedContainers || [];
                             const visited = containers.filter(c => c.visited).length;
@@ -328,9 +340,15 @@ function SupervisorSessionMonitorView() {
                                     </div>
 
                                     {/* Link */}
-                                    {driver._id && (
+                                    {driverProfile?._id && (
                                         <button
-                                            onClick={() => navigate(`/admin/drivers/${driver._id}`)}
+                                            onClick={() => navigate(`/admin/drivers/${driverProfile._id}`, {
+                                                state: {
+                                                    driver: driverProfile,
+                                                    activeSession: session,
+                                                    lastLocation
+                                                }
+                                            })}
                                             className="mt-auto text-xs font-medium text-teal-600 hover:text-teal-700 text-left underline"
                                         >
                                             Подробнее о водителе →

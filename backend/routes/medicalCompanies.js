@@ -62,7 +62,22 @@ const medicalCompanyValidation = [
     body('wasteTypes.*')
         .optional()
         .isIn(['infectious', 'pathological', 'pharmaceutical', 'sharps', 'chemical'])
-        .withMessage('Invalid waste type')
+        .withMessage('Invalid waste type'),
+
+    body('allowedIncinerationPlants')
+        .optional()
+        .isArray()
+        .withMessage('Allowed incineration plants must be an array'),
+
+    body('allowedIncinerationPlants.*')
+        .optional()
+        .isMongoId()
+        .withMessage('Each incineration plant must be a valid ID'),
+
+    body('defaultIncinerationPlant')
+        .optional({ nullable: true, checkFalsy: true })
+        .isMongoId()
+        .withMessage('Default incineration plant must be a valid ID')
 ];
 
 // Public route for getting active companies (for driver registration)

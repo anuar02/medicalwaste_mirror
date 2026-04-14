@@ -1,5 +1,6 @@
 // controllers/collectionController.js
 const CollectionSession = require('../models/CollectionSession');
+const Driver = require('../models/Driver');
 const DriverLocation = require('../models/DriverLocation');
 const WasteBin = require('../models/WasteBin');
 const User = require('../models/User');
@@ -9,6 +10,7 @@ const { STATUSES: HANDOFF_STATUS } = require('../services/handoffStateMachine');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
 const mongoose = require('mongoose');
+const { sendToAllClients, broadcastSessionEvent, broadcastHandoffEvent } = require('../utils/gpsWebSocket');
 
 const OPEN_FACILITY_HANDOFF_STATUSES = [
     HANDOFF_STATUS.CREATED,
@@ -132,6 +134,14 @@ const startCollection = asyncHandler(async (req, res, next) => {
 
     // 8️⃣ Populate session containers
     await session.populate('selectedContainers.container');
+    await session.populate('company', 'name allowedIncinerationPlants defaultIncinerationPlant');
+
+    // Broadcast session + linked handoffs so clients update without polling
+    broadcastSessionEvent('session_updated', session);
+    for (const h of openHandoffs) {
+        const updated = await Handoff.findById(h._id);
+        if (updated) broadcastHandoffEvent('handoff_updated', updated);
+    }
 
     // 8️⃣ Return response
     res.status(201).json({
@@ -177,6 +187,9 @@ const stopCollection = asyncHandler(async (req, res, next) => {
 
     // Populate data for response
     await session.populate('selectedContainers.container');
+    await session.populate('company', 'name allowedIncinerationPlants defaultIncinerationPlant');
+
+    broadcastSessionEvent('session_updated', session);
 
     res.status(200).json({
         status: 'success',
@@ -236,6 +249,20 @@ const recordDriverLocation = asyncHandler(async (req, res, next) => {
     session.route.push(location._id);
     await session.save();
 
+    sendToAllClients({
+        type: 'collection_location_update',
+        data: {
+            sessionId: session.sessionId,
+            sessionMongoId: String(session._id),
+            driverId: String(driverId),
+            location: {
+                _id: String(location._id),
+                location: location.location,
+                timestamp: location.timestamp,
+            }
+        }
+    });
+
     res.status(201).json({
         status: 'success',
         data: {
@@ -289,7 +316,8 @@ const addContainerToSession = asyncHandler(async (req, res, next) => {
 
     // 4️⃣ Reload session with populated containers
     const updatedSession = await CollectionSession.findById(session._id)
-        .populate('selectedContainers.container');
+        .populate('selectedContainers.container')
+        .populate('company', 'name allowedIncinerationPlants defaultIncinerationPlant');
 
     res.status(200).json({
         status: 'success',
@@ -342,7 +370,9 @@ const getActiveSession = asyncHandler(async (req, res) => {
     const session = await CollectionSession.findOne({
         driver: driverId,
         status: 'active'
-    }).populate('selectedContainers.container');
+    })
+        .populate('selectedContainers.container')
+        .populate('company', 'name allowedIncinerationPlants defaultIncinerationPlant');
 
     res.status(200).json({
         status: 'success',
@@ -384,6 +414,7 @@ const getCollectionHistory = asyncHandler(async (req, res, next) => {
 
     const sessions = await CollectionSession.find(query)
         .populate('selectedContainers.container')
+        .populate('company', 'name allowedIncinerationPlants defaultIncinerationPlant')
         .populate('driver', 'username email phoneNumber')
         .sort({ startTime: -1 })
         .limit(parseInt(limit))
@@ -419,11 +450,15 @@ const getActiveDrivers = asyncHandler(async (req, res) => {
 
     // Get last location for each driver
     const driversWithLocations = await Promise.all(sessions.map(async (session) => {
+        const driverProfile = await Driver.findOne({ user: session.driver?._id || session.driver })
+            .populate('user', 'username email lastLogin')
+            .populate('medicalCompany', 'name licenseNumber');
         const lastLocation = await DriverLocation.findOne({ session: session._id })
             .sort({ timestamp: -1 });
 
         return {
             session,
+            driverProfile,
             lastLocation
         };
     }));
@@ -447,8 +482,12 @@ const getSessionRoute = asyncHandler(async (req, res, next) => {
     const isObjectId = mongoose.isValidObjectId(sessionId);
 
     const session = isObjectId
-        ? await CollectionSession.findById(sessionId).populate('selectedContainers.container')
-        : await CollectionSession.findOne({ sessionId }).populate('selectedContainers.container');
+        ? await CollectionSession.findById(sessionId)
+            .populate('selectedContainers.container')
+            .populate('company', 'name allowedIncinerationPlants defaultIncinerationPlant')
+        : await CollectionSession.findOne({ sessionId })
+            .populate('selectedContainers.container')
+            .populate('company', 'name allowedIncinerationPlants defaultIncinerationPlant');
 
     if (!session) {
         return next(new AppError('Session not found', 404));

@@ -1,4 +1,5 @@
 const IncinerationPlant = require('../models/IncinerationPlant');
+const MedicalCompany = require('../models/MedicalCompany');
 const AppError = require('../utils/appError');
 const { asyncHandler } = require('../utils/asyncHandler');
 
@@ -7,7 +8,28 @@ const getIncinerationPlants = asyncHandler(async (req, res) => {
     if (req.query.active === 'true') filter.active = true;
     if (req.query.active === 'false') filter.active = false;
 
-    const plants = await IncinerationPlant.find(filter).sort({ createdAt: -1 });
+    let plants;
+    if (req.query.companyId) {
+        const company = await MedicalCompany.findById(req.query.companyId)
+            .select('allowedIncinerationPlants defaultIncinerationPlant')
+            .populate('allowedIncinerationPlants');
+
+        if (!company) {
+            return next(new AppError('Medical company not found', 404));
+        }
+
+        const allowedIds = company.allowedIncinerationPlants.map((plant) => String(plant._id || plant));
+        if (company.defaultIncinerationPlant) {
+            allowedIds.push(String(company.defaultIncinerationPlant));
+        }
+
+        plants = await IncinerationPlant.find({
+            ...filter,
+            _id: { $in: Array.from(new Set(allowedIds)) }
+        }).sort({ createdAt: -1 });
+    } else {
+        plants = await IncinerationPlant.find(filter).sort({ createdAt: -1 });
+    }
 
     res.status(200).json({
         status: 'success',

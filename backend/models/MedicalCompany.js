@@ -81,6 +81,15 @@ const medicalCompanySchema = new mongoose.Schema({
             message: 'Invalid waste type'
         }
     }],
+    allowedIncinerationPlants: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'IncinerationPlant'
+    }],
+    defaultIncinerationPlant: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'IncinerationPlant',
+        default: null
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -100,6 +109,14 @@ medicalCompanySchema.index({ name: 'text', licenseNumber: 'text' });
 
 // Pre-save middleware
 medicalCompanySchema.pre('save', function(next) {
+    if (
+        this.defaultIncinerationPlant &&
+        !this.allowedIncinerationPlants.some(
+            (plantId) => String(plantId) === String(this.defaultIncinerationPlant)
+        )
+    ) {
+        this.allowedIncinerationPlants.push(this.defaultIncinerationPlant);
+    }
     this.updatedAt = Date.now();
     next();
 });
@@ -116,7 +133,10 @@ medicalCompanySchema.statics.getActiveCompanies = function() {
     return this.find({
         isActive: true,
         certificationExpiry: { $gte: new Date() }
-    }).select('name licenseNumber address contactInfo wasteTypes');
+    })
+        .select('name licenseNumber address contactInfo wasteTypes allowedIncinerationPlants defaultIncinerationPlant')
+        .populate('allowedIncinerationPlants', 'name active')
+        .populate('defaultIncinerationPlant', 'name active');
 };
 
 const MedicalCompany = mongoose.model('MedicalCompany', medicalCompanySchema);

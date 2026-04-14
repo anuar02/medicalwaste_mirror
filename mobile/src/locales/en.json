@@ -64,7 +64,7 @@
       "roleCompany": "{{role}} · {{company}}",
       "noSession": "No active session",
       "startSession": "Start session",
-      "sessionActive": "Session #{{id}} · active {{time}}",
+      "sessionActive": "Collection in progress · {{time}}",
       "sessionProgress": "{{visited}}/{{total}} containers visited",
       "sessionPending": "{{count}} handoffs pending",
       "continue": "Continue",
@@ -242,6 +242,7 @@
     },
     "history": {
       "title": "Session History",
+      "sessionLabel": "Collection run",
       "status": "Status: {{status}}",
       "start": "Start: {{value}}",
       "end": "End: {{value}}",
@@ -341,6 +342,11 @@
     "incineration": {
       "readyTitle": "All facility handoffs confirmed.",
       "readyBody": "Create a handoff for the incineration plant.",
+      "chainTitle": "Disposal chain",
+      "chainBody": "Waste from {{company}} must be transferred through the assigned disposal path.",
+      "sourceCompany": "Medical organization",
+      "defaultPlant": "Default incineration plant: {{plant}}",
+      "noDefaultPlant": "No default incineration plant is configured for this company.",
       "selectPlant": "Select incineration plant",
       "noPlants": "No plants available.",
       "totalContainers": "Total containers: {{count}}",

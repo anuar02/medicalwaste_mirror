@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { MapContainer, TileLayer, Marker, Polyline, Circle } from 'react-leaflet';
+import L from 'leaflet';
 import {
     ArrowLeft,
     Building2,
@@ -8,6 +10,7 @@ import {
     CheckCircle,
     Clock,
     FileText,
+    MapPin,
     Phone,
     Truck,
     User,
@@ -17,6 +20,14 @@ import apiService from '../../services/api';
 import DashboardCard from '../../components/dashboard/DashboardCard';
 import Button from '../../components/ui/Button';
 import toast from 'react-hot-toast';
+import 'leaflet/dist/leaflet.css';
+
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
 
 const DriverDetails = () => {
     const { driverId } = useParams();
@@ -26,6 +37,8 @@ const DriverDetails = () => {
     const [driverOverride, setDriverOverride] = useState(null);
 
     const driverFromState = location.state?.driver || null;
+    const activeSessionFromState = location.state?.activeSession || null;
+    const lastLocationFromState = location.state?.lastLocation || null;
 
     const { data: driversData, isLoading } = useQuery({
         queryKey: ['drivers'],
@@ -41,6 +54,34 @@ const DriverDetails = () => {
 
     const driver = driverOverride || driverFromState || driverFromQuery;
 
+    const { data: activeDriversData } = useQuery({
+        queryKey: ['active-driver-sessions'],
+        queryFn: () => apiService.collections.getActiveDrivers(),
+        refetchInterval: 15000,
+        staleTime: 5000
+    });
+
+    const activeDriverEntries = activeDriversData?.data?.data?.activeDrivers || [];
+    const activeDriverEntry = useMemo(() => {
+        if (!driver) return null;
+        return activeDriverEntries.find((entry) => {
+            const entryProfileId = entry?.driverProfile?._id;
+            const entryUserId = entry?.session?.driver?._id;
+            return entryProfileId === driver._id || entryUserId === driver.user?._id;
+        }) || null;
+    }, [activeDriverEntries, driver]);
+
+    const activeSession = activeDriverEntry?.session || activeSessionFromState;
+    const lastLocation = activeDriverEntry?.lastLocation || lastLocationFromState;
+
+    const { data: sessionRouteData } = useQuery({
+        queryKey: ['driver-session-route', activeSession?._id || activeSession?.sessionId],
+        queryFn: () => apiService.collections.getSessionRoute(activeSession?._id || activeSession?.sessionId),
+        enabled: Boolean(activeSession?._id || activeSession?.sessionId),
+        refetchInterval: activeSession ? 15000 : false,
+        staleTime: 5000
+    });
+
     useEffect(() => {
         if (driver) {
             setVerificationNotes(driver.verificationNotes || '');
@@ -54,6 +95,11 @@ const DriverDetails = () => {
             month: '2-digit',
             year: 'numeric'
         });
+    };
+
+    const formatDateTime = (date) => {
+        if (!date) return '—';
+        return new Date(date).toLocaleString('ru-RU');
     };
 
     const getStatus = (driverData) => {
@@ -115,6 +161,22 @@ const DriverDetails = () => {
 
     const status = getStatus(driver);
     const StatusIcon = status.icon;
+    const routePoints = sessionRouteData?.data?.data?.route || [];
+    const routePath = routePoints
+        .map((point) => {
+            const coordinates = point?.location?.coordinates;
+            if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+            const [lng, lat] = coordinates;
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+            return [lat, lng];
+        })
+        .filter(Boolean);
+    const mapCenter = routePath[routePath.length - 1]
+        || (Array.isArray(lastLocation?.coordinates) && lastLocation.coordinates.length >= 2
+            ? [lastLocation.coordinates[1], lastLocation.coordinates[0]]
+            : null);
+    const visitedCount = activeSession?.selectedContainers?.filter((item) => item.visited).length || 0;
+    const totalCount = activeSession?.selectedContainers?.length || 0;
 
     return (
         <div className="container mx-auto p-6 space-y-6">
@@ -137,6 +199,63 @@ const DriverDetails = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-6">
+                    {activeSession && mapCenter && (
+                        <DashboardCard title="Активная сессия и местоположение">
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
+                                    <div className="rounded-lg bg-slate-50 p-3">
+                                        <div className="text-xs uppercase tracking-wide text-slate-400">Статус</div>
+                                        <div className="mt-1 font-semibold text-teal-700">Сессия активна</div>
+                                    </div>
+                                    <div className="rounded-lg bg-slate-50 p-3">
+                                        <div className="text-xs uppercase tracking-wide text-slate-400">Контейнеры</div>
+                                        <div className="mt-1 font-semibold text-slate-800">{visitedCount} / {totalCount}</div>
+                                    </div>
+                                    <div className="rounded-lg bg-slate-50 p-3">
+                                        <div className="text-xs uppercase tracking-wide text-slate-400">Начало</div>
+                                        <div className="mt-1 font-semibold text-slate-800">{formatDateTime(activeSession.startTime)}</div>
+                                    </div>
+                                    <div className="rounded-lg bg-slate-50 p-3">
+                                        <div className="text-xs uppercase tracking-wide text-slate-400">Последний GPS</div>
+                                        <div className="mt-1 font-semibold text-slate-800">{formatDateTime(lastLocation?.timestamp)}</div>
+                                    </div>
+                                </div>
+                                <div className="h-72 overflow-hidden rounded-xl border border-slate-200">
+                                    <MapContainer
+                                        center={mapCenter}
+                                        zoom={13}
+                                        style={{ height: '100%', width: '100%' }}
+                                        scrollWheelZoom={false}
+                                    >
+                                        <TileLayer
+                                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                        />
+                                        {routePath.length > 1 && (
+                                            <Polyline positions={routePath} pathOptions={{ color: '#0d9488', weight: 4 }} />
+                                        )}
+                                        {mapCenter && (
+                                            <>
+                                                <Marker position={mapCenter} />
+                                                <Circle
+                                                    center={mapCenter}
+                                                    radius={250}
+                                                    pathOptions={{ color: '#0d9488', fillColor: '#0d9488', fillOpacity: 0.08, weight: 1 }}
+                                                />
+                                            </>
+                                        )}
+                                    </MapContainer>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-slate-600">
+                                    <MapPin className="h-4 w-4 text-teal-600" />
+                                    <span>
+                                        Текущее местоположение доступно для мониторинга, пока сессия водителя активна.
+                                    </span>
+                                </div>
+                            </div>
+                        </DashboardCard>
+                    )}
+
                     <DashboardCard title="Личная информация">
                         <div className="space-y-3 text-sm text-slate-700">
                             <div className="flex items-center gap-2">

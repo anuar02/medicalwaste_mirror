@@ -13,10 +13,10 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { RouteProp, useIsFocused, useRoute } from '@react-navigation/native';
+import { RouteProp, useRoute } from '@react-navigation/native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
-import { useActiveCollection, useStopCollection } from '../../hooks/useCollections';
+import { useActiveCollection } from '../../hooks/useCollections';
 import { useHandoffs } from '../../hooks/useHandoffs';
 import DriverRoutePanel from '../../components/DriverRoutePanel';
 import DriverHandoffTimeline from '../../components/DriverHandoffTimeline';
@@ -24,7 +24,6 @@ import { dark, spacing, typography } from '../../theme';
 import { Handoff } from '../../types/models';
 import { DriverTabParamList } from '../../types/navigation';
 
-const HANDOFF_POLL_INTERVAL = 10000;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type SessionTab = 'route' | 'handoffs';
@@ -42,9 +41,7 @@ const SESSION_STEPS = ['collect', 'handoff', 'incinerate', 'done'] as const;
 export default function DriverSessionScreen() {
   const { t } = useTranslation();
   const route = useRoute<RouteProp<DriverTabParamList, 'DriverSession'>>();
-  const isFocused = useIsFocused();
   const { data: session } = useActiveCollection();
-  const stopMutation = useStopCollection();
   const [activeTab, setActiveTab] = useState<SessionTab>('route');
   const [focusId, setFocusId] = useState<string | undefined>(undefined);
   const [completionVisible, setCompletionVisible] = useState(false);
@@ -67,11 +64,8 @@ export default function DriverSessionScreen() {
     }),
   ).current;
 
-  // Poll for handoffs whenever a session is active, regardless of tab focus.
-  // This ensures drivers don't miss new facility handoffs while on other tabs.
   const { data: handoffs, isLoading, refetch, isFetching } = useHandoffs({
     enabled: Boolean(session),
-    refetchInterval: session ? HANDOFF_POLL_INTERVAL : false,
   });
 
   const sessionHandoffs = useMemo(
@@ -154,16 +148,10 @@ export default function DriverSessionScreen() {
 
     completionTriggered.current = true;
     setCompletionVisible(true);
-  }, [incinerationHandoff, session, stopMutation, refetch]);
+  }, [incinerationHandoff, session]);
 
   const handleCloseCompletion = () => {
     setCompletionVisible(false);
-    if (!session || stopMutation.isPending || session.status === 'completed') return;
-    stopMutation.mutate(session.sessionId, {
-      onSuccess: () => {
-        refetch();
-      },
-    });
   };
 
   const handlePageScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {

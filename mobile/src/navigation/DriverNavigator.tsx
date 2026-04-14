@@ -12,6 +12,8 @@ import DriverHistoryStack from './DriverHistoryStack';
 import DriverContainersStack from './DriverContainersStack';
 import { DriverTabParamList } from '../types/navigation';
 import { useActiveCollection } from '../hooks/useCollections';
+import { useHandoffsRealtime } from '../hooks/useHandoffsRealtime';
+import { useActiveSessionRealtime } from '../hooks/useActiveSessionRealtime';
 import { useAuthStore } from '../stores/authStore';
 import DriverRegistrationScreen from '../screens/driver/DriverRegistrationScreen';
 import { dark } from '../theme';
@@ -24,6 +26,9 @@ export default function DriverNavigator() {
   const { data: session } = useActiveCollection();
   const hasSession = Boolean(session);
   const isApprovedDriver = user?.role === 'driver' && user?.verificationStatus === 'approved';
+
+  useHandoffsRealtime({ enabled: isApprovedDriver });
+  useActiveSessionRealtime({ enabled: isApprovedDriver });
 
   const initialRouteName = useMemo(
     () => {

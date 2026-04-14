@@ -2,10 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { fetchWasteBins, scheduleCollection } from '../services/wasteBins';
 
-export function useWasteBins() {
+export function useWasteBins(options?: {
+  enabled?: boolean;
+  refetchInterval?: number | false;
+}) {
   return useQuery({
     queryKey: ['waste-bins'],
     queryFn: fetchWasteBins,
+    enabled: options?.enabled,
+    refetchInterval: options?.refetchInterval,
   });
 }
 

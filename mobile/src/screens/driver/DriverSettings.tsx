@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   logoutText: {
-    color: dark.dangerText,
+    color: dark.textInverse,
     fontWeight: '600',
     fontSize: 15,
   },

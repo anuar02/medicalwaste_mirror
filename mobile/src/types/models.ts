@@ -70,6 +70,7 @@ export interface CollectionSession {
   _id: string;
   sessionId: string;
   driver: string;
+  company?: string | MedicalCompany;
   route?: string;
   status: 'active' | 'completed';
   startTime?: string;
@@ -167,4 +168,6 @@ export interface MedicalCompany {
   name: string;
   licenseNumber?: string;
   contactInfo?: { phone?: string };
+  allowedIncinerationPlants?: IncinerationPlant[];
+  defaultIncinerationPlant?: IncinerationPlant | string | null;
 }

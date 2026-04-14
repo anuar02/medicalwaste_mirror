@@ -268,7 +268,10 @@ const getMedicalCompanies = asyncHandler(async (req, res) => {
     const companies = await MedicalCompany.find({
         isActive: true,
         certificationExpiry: { $gte: new Date() } // Only companies with valid certifications
-    }).select('name licenseNumber address contactInfo wasteTypes certificationExpiry isActive');
+    })
+        .select('name licenseNumber address contactInfo wasteTypes certificationExpiry isActive allowedIncinerationPlants defaultIncinerationPlant')
+        .populate('allowedIncinerationPlants', 'name active')
+        .populate('defaultIncinerationPlant', 'name active');
 
     res.status(200).json({
         status: 'success',
@@ -284,6 +287,8 @@ const getMedicalCompanies = asyncHandler(async (req, res) => {
  */
 const createMedicalCompany = asyncHandler(async (req, res, next) => {
     const company = await MedicalCompany.create(req.body);
+    await company.populate('allowedIncinerationPlants', 'name active');
+    await company.populate('defaultIncinerationPlant', 'name active');
 
     res.status(201).json({
         status: 'success',
@@ -303,7 +308,9 @@ const updateMedicalCompany = asyncHandler(async (req, res, next) => {
         id,
         req.body,
         { new: true, runValidators: true }
-    );
+    )
+        .populate('allowedIncinerationPlants', 'name active')
+        .populate('defaultIncinerationPlant', 'name active');
 
     if (!company) {
         return next(new AppError('Medical company not found', 404));

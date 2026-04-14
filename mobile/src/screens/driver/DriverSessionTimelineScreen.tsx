@@ -1,20 +1,19 @@
 import React, { useMemo } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { RouteProp, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
 import { DriverHistoryStackParamList } from '../../types/navigation';
 import { useCollectionHistory, useSessionRoute } from '../../hooks/useCollections';
 import { useHandoffs } from '../../hooks/useHandoffs';
+import { useSessionRouteRealtime } from '../../hooks/useSessionRouteRealtime';
 import DriverHandoffTimeline from '../../components/DriverHandoffTimeline';
 import { dark, spacing, typography } from '../../theme';
 import { toValidCoordinate } from '../../utils/coordinates';
 
 export default function DriverSessionTimelineScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
   const route = useRoute<RouteProp<DriverHistoryStackParamList, 'DriverSessionTimeline'>>();
   const { data: sessions, isLoading: sessionsLoading } = useCollectionHistory();
   const { data: handoffs, isLoading: handoffsLoading, refetch, isFetching } = useHandoffs({
@@ -35,8 +34,8 @@ export default function DriverSessionTimelineScreen() {
 
   const sessionRouteQuery = useSessionRoute(session?._id ?? session?.sessionId, {
     enabled: Boolean(session),
-    refetchInterval: session?.status === 'active' ? 15000 : false,
   });
+  useSessionRouteRealtime(session);
 
   const routePath = useMemo(() => {
     const points = sessionRouteQuery.data?.route ?? [];
@@ -100,13 +99,6 @@ export default function DriverSessionTimelineScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <TouchableOpacity
-        onPress={() => navigation.goBack()}
-        style={styles.backButton}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <MaterialCommunityIcons name="arrow-left" size={22} color={dark.text} />
-      </TouchableOpacity>
       <View style={styles.mapWrapper}>
         {sessionRouteQuery.isLoading ? (
           <View style={styles.mapLoading}>
@@ -158,12 +150,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: dark.bg,
-  },
-  backButton: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    alignSelf: 'flex-start',
   },
   centered: {
     flex: 1,

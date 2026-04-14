@@ -18,7 +18,8 @@ router.get(
     '/',
     restrictTo('admin', 'supervisor', 'driver'),
     [
-        query('active').optional().isIn(['true', 'false']).withMessage('Invalid active filter')
+        query('active').optional().isIn(['true', 'false']).withMessage('Invalid active filter'),
+        query('companyId').optional().isMongoId().withMessage('Invalid company ID')
     ],
     validateRequest,
     getIncinerationPlants

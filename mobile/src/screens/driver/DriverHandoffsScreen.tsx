@@ -25,9 +25,10 @@ import {
   useHandoffs,
 } from '../../hooks/useHandoffs';
 import { useIncinerationPlants } from '../../hooks/useIncinerationPlants';
+import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing, typography } from '../../theme';
 import { CONFIRMATION_BASE_URL } from '../../utils/constants';
-import { Handoff } from '../../types/models';
+import { Handoff, MedicalCompany } from '../../types/models';
 
 type StepState = 'completed' | 'pending' | 'future' | 'disputed' | 'expired';
 
@@ -106,18 +107,28 @@ function getStepStateForHandoff(handoff?: Handoff): StepState {
   return 'pending';
 }
 
+function getCompanyObject(value: unknown): MedicalCompany | null {
+  if (!value || typeof value !== 'object') return null;
+  return value as MedicalCompany;
+}
+
 export default function DriverHandoffsScreen() {
   const { t } = useTranslation();
+  const { user } = useAuthStore();
   const { data: handoffs, isLoading: isHandoffsLoading, refetch, isFetching } = useHandoffs();
   const confirmMutation = useConfirmHandoff();
   const createMutation = useCreateIncineratorHandoff();
   const disputeMutation = useDisputeHandoff();
   const { data: session } = useActiveCollection();
+  const sessionCompany = getCompanyObject(session?.company);
+  const userCompany = getCompanyObject(user?.company);
+  const company = sessionCompany ?? userCompany;
+  const companyId = company?._id;
   const {
     data: plants,
     isLoading: isPlantsLoading,
     error: plantsError,
-  } = useIncinerationPlants();
+  } = useIncinerationPlants(companyId);
 
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -147,6 +158,22 @@ export default function DriverHandoffsScreen() {
   useEffect(() => () => {
     if (copyTimeout.current) clearTimeout(copyTimeout.current);
   }, []);
+
+  useEffect(() => {
+    if (selectedPlantId || !(plants ?? []).length) return;
+    const defaultPlantId =
+      typeof company?.defaultIncinerationPlant === 'string'
+        ? company.defaultIncinerationPlant
+        : company?.defaultIncinerationPlant?._id;
+    const preferredPlantId =
+      defaultPlantId && plants?.some((plant) => plant._id === defaultPlantId)
+        ? defaultPlantId
+        : plants?.[0]?._id;
+
+    if (preferredPlantId) {
+      setSelectedPlantId(preferredPlantId);
+    }
+  }, [company?.defaultIncinerationPlant, plants, selectedPlantId]);
 
   const sessionHandoffs = useMemo(() => {
     if (!session) return [];
@@ -183,6 +210,11 @@ export default function DriverHandoffsScreen() {
 
   const confirmationToken = createMutation.data?.confirmationToken;
   const confirmationUrl = confirmationToken ? `${CONFIRMATION_BASE_URL}/${confirmationToken}` : null;
+  const companyName = company?.name ?? t('driver.home.company');
+  const defaultPlantName =
+    typeof company?.defaultIncinerationPlant === 'object'
+      ? company.defaultIncinerationPlant?.name
+      : plants?.find((plant) => plant._id === company?.defaultIncinerationPlant)?.name;
 
   const statusMeta = (status?: string) => {
     const key = (status ?? 'default') as keyof typeof STATUS_COLORS;
@@ -566,6 +598,17 @@ export default function DriverHandoffsScreen() {
               <>
                 <Text style={styles.cardSubtitle}>{t('handoff.incineration.readyTitle')}</Text>
                 <Text style={styles.cardSubtitle}>{t('handoff.incineration.readyBody')}</Text>
+                <View style={styles.chainInlineCard}>
+                  <Text style={styles.chainInlineLabel}>
+                    {t('handoff.incineration.sourceCompany')}
+                  </Text>
+                  <Text style={styles.chainInlineValue}>{companyName}</Text>
+                  {defaultPlantName ? (
+                    <Text style={styles.chainInlineMeta}>
+                      {t('handoff.incineration.defaultPlant', { plant: defaultPlantName })}
+                    </Text>
+                  ) : null}
+                </View>
                 <Text style={styles.sectionSubtitle}>{t('handoff.incineration.selectPlant')}</Text>
                 {isPlantsLoading ? (
                   <ActivityIndicator color={colors.primary} />
@@ -663,6 +706,12 @@ export default function DriverHandoffsScreen() {
             <Text style={styles.cardName}>
               {incinerationHandoff.receiver?.name ?? t('handoff.card.incinerationFallback')}
             </Text>
+            <View style={styles.chainInlineCard}>
+              <Text style={styles.chainInlineLabel}>
+                {t('handoff.incineration.sourceCompany')}
+              </Text>
+              <Text style={styles.chainInlineValue}>{companyName}</Text>
+            </View>
             <View style={styles.cardGrid}>
               <View style={styles.cardRow}>
                 <Text style={styles.cardKey}>{t('handoff.card.containers')}</Text>
@@ -730,10 +779,10 @@ export default function DriverHandoffsScreen() {
               </Text>
             ) : null}
           </View>
-          {session?.sessionId ? (
+          {session ? (
             <View style={styles.sessionPill}>
               <Text style={styles.sessionPillText}>
-                {t('handoff.sessionLabel', { id: session.sessionId })}
+                {t('driver.route.statusValue.active')}
               </Text>
             </View>
           ) : null}
@@ -751,6 +800,17 @@ export default function DriverHandoffsScreen() {
           </View>
         ) : (
           <View style={styles.timeline}>
+            <View style={styles.chainCard}>
+              <Text style={styles.chainEyebrow}>{t('handoff.incineration.chainTitle')}</Text>
+              <Text style={styles.chainTitle}>
+                {t('handoff.incineration.chainBody', { company: companyName })}
+              </Text>
+              <Text style={styles.chainMeta}>
+                {defaultPlantName
+                  ? t('handoff.incineration.defaultPlant', { plant: defaultPlantName })
+                  : t('handoff.incineration.noDefaultPlant')}
+              </Text>
+            </View>
             {timelineSteps.map((step, index) => (
               <View key={step.id} style={styles.timelineItem}>
                 {renderTimelineNode(step.state, index === timelineSteps.length - 1)}
@@ -868,6 +928,31 @@ const styles = StyleSheet.create({
   timeline: {
     marginTop: spacing.md,
   },
+  chainCard: {
+    backgroundColor: '#ecfdf5',
+    borderRadius: 16,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    marginBottom: spacing.lg,
+  },
+  chainEyebrow: {
+    ...typography.caption,
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  chainTitle: {
+    ...typography.body,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: spacing.xs,
+  },
+  chainMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+  },
   timelineItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -942,6 +1027,31 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     marginTop: spacing.md,
+  },
+  chainInlineCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chainInlineLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  chainInlineValue: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontWeight: '700',
+    marginTop: spacing.xs,
+  },
+  chainInlineMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
   cardLabel: {
     ...typography.caption,
