@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
+import * as Location from 'expo-location';
 import {
+  ActivityIndicator,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -14,7 +16,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import Animated, { FadeInUp, FadeInRight, SlideInLeft } from 'react-native-reanimated';
 
-import { useActiveCollection, useCollectionHistory } from '../../hooks/useCollections';
+import {
+  useActiveCollection,
+  useCollectionHistory,
+  useStartCollection,
+} from '../../hooks/useCollections';
 import { useHandoffs } from '../../hooks/useHandoffs';
 import { useAuthStore } from '../../stores/authStore';
 import { dark, spacing, typography } from '../../theme';
@@ -66,7 +72,47 @@ export default function DriverHome() {
   const { user } = useAuthStore();
   const { data: session } = useActiveCollection();
   const { data: history, isLoading: historyLoading, refetch: refetchHistory } = useCollectionHistory();
-  const { data: handoffs, isFetching, refetch } = useHandoffs({ enabled: true });
+  const { data: handoffs, isFetching, refetch, error: handoffsError } = useHandoffs({ enabled: true });
+  const startMutation = useStartCollection();
+
+  const currentUserId = String((user as any)?._id || (user as any)?.id || '');
+  const pendingHandoffs = useMemo(() => {
+    if (session) return [];
+    const openStatuses = new Set([
+      'created',
+      'pending',
+      'confirmedBySender',
+      'confirmed_by_sender',
+    ]);
+    return (handoffs ?? []).filter((h) => {
+      if (h.type !== 'facility_to_driver') return false;
+      if (!openStatuses.has(String(h.status))) return false;
+      const receiver: any = h.receiver?.user;
+      const receiverId = String(receiver?._id || receiver?.id || receiver || '');
+      if (!receiverId || !currentUserId) return true;
+      return receiverId === currentUserId;
+    });
+  }, [session, handoffs, currentUserId]);
+
+  const handleStartFromHandoff = async () => {
+    if (session || startMutation.isPending) return;
+    let startLocation: { type: 'Point'; coordinates: [number, number] } | undefined;
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status === 'granted') {
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        startLocation = {
+          type: 'Point',
+          coordinates: [position.coords.longitude, position.coords.latitude],
+        };
+      }
+    } catch {
+      // backend accepts sessions without a start location
+    }
+    startMutation.mutate({ startLocation });
+  };
 
   const sessionHandoffs = useMemo(
     () => getSessionHandoffs(handoffs, session?.sessionId, session?._id),
@@ -219,6 +265,64 @@ export default function DriverHome() {
             <>
               <Text style={styles.sessionTitle}>{t('driver.route.waitingTitle')}</Text>
               <Text style={styles.sessionMeta}>{t('driver.route.waitingBody')}</Text>
+
+              <TouchableOpacity
+                style={styles.fetchButton}
+                onPress={() => refetch()}
+                disabled={isFetching}
+              >
+                {isFetching ? (
+                  <ActivityIndicator size="small" color={dark.text} />
+                ) : (
+                  <MaterialCommunityIcons name="refresh" size={16} color={dark.text} />
+                )}
+                <Text style={styles.fetchButtonText}>
+                  {t('common.refresh')}
+                  {handoffs ? ` (${pendingHandoffs.length}/${handoffs.length})` : ''}
+                </Text>
+              </TouchableOpacity>
+
+              {handoffsError ? (
+                <Text style={styles.fetchErrorText}>
+                  {String((handoffsError as Error)?.message ?? handoffsError)}
+                </Text>
+              ) : null}
+
+              {pendingHandoffs.length > 0 ? (
+                <View style={styles.handoffList}>
+                  {pendingHandoffs.map((h) => {
+                    const count = h.totalContainers ?? h.containers?.length ?? 0;
+                    const weight = h.totalDeclaredWeight ?? 0;
+                    const senderName =
+                      h.sender?.name || h.sender?.user?.username || '—';
+                    return (
+                      <View key={h._id} style={styles.handoffCard}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.handoffTitle}>
+                            {h.handoffId || '#'}
+                          </Text>
+                          <Text style={styles.handoffMeta}>
+                            {senderName} · {count} конт. · {weight} кг
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.handoffStartBtn}
+                          onPress={handleStartFromHandoff}
+                          disabled={startMutation.isPending}
+                        >
+                          {startMutation.isPending ? (
+                            <ActivityIndicator size="small" color={dark.text} />
+                          ) : (
+                            <Text style={styles.handoffStartText}>
+                              {t('driver.route.startSession')}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
             </>
           ) : (
             <>
@@ -437,6 +541,65 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
   },
   sessionButtonText: {
+    color: dark.text,
+    fontWeight: '700',
+  },
+  fetchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: dark.bg,
+    borderRadius: 12,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: dark.border,
+    marginTop: spacing.md,
+  },
+  fetchButtonText: {
+    ...typography.body,
+    color: dark.text,
+    fontWeight: '700',
+  },
+  fetchErrorText: {
+    ...typography.caption,
+    color: dark.dangerText,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  handoffList: {
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  handoffCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: dark.bg,
+    borderRadius: 12,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: dark.border,
+  },
+  handoffTitle: {
+    ...typography.body,
+    color: dark.text,
+    fontWeight: '600',
+  },
+  handoffMeta: {
+    ...typography.caption,
+    color: dark.textSecondary,
+    marginTop: 2,
+  },
+  handoffStartBtn: {
+    backgroundColor: dark.teal,
+    borderRadius: 10,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  handoffStartText: {
+    ...typography.body,
     color: dark.text,
     fontWeight: '700',
   },

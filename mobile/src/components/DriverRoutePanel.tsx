@@ -89,8 +89,8 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     enabled: !data,
     refetchInterval: !data ? 15000 : false,
   });
-  const openHandoff = useMemo(() => {
-    if (data) return null;
+  const pendingHandoffs = useMemo(() => {
+    if (data) return [];
     const list = handoffsQuery.data ?? [];
     const openStatuses = new Set([
       'created',
@@ -98,19 +98,17 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
       'confirmedBySender',
       'confirmed_by_sender',
     ]);
-    return (
-      list.find((h) => {
-        if (h.type !== 'facility_to_driver') return false;
-        if (!openStatuses.has(String(h.status))) return false;
-        const receiver: any = h.receiver?.user;
-        const receiverId = String(receiver?._id || receiver?.id || receiver || '');
-        // If receiver.user is missing (supervisor targeted by role not driver id),
-        // still accept: backend already scoped the list to this driver's identity.
-        if (!receiverId) return true;
-        if (!currentUserId) return true;
-        return receiverId === currentUserId;
-      }) ?? null
-    );
+    return list.filter((h) => {
+      if (h.type !== 'facility_to_driver') return false;
+      if (!openStatuses.has(String(h.status))) return false;
+      // Backend already scoped the list to this driver's identity as sender/receiver.
+      // Accept any item where receiver.user matches or is missing.
+      const receiver: any = h.receiver?.user;
+      const receiverId = String(receiver?._id || receiver?.id || receiver || '');
+      if (!receiverId) return true;
+      if (!currentUserId) return true;
+      return receiverId === currentUserId;
+    });
   }, [data, handoffsQuery.data, currentUserId]);
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -403,34 +401,27 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     fetchRoute();
   }, [currentLocation, data, unvisitedMarkers, t]);
 
-  // Auto-start a session as soon as supervisor dispatches an open handoff.
+  // Driver manually picks a pending handoff to begin the session.
   // Containers come from the handoff itself — driver cannot pick ad-hoc.
-  useEffect(() => {
-    if (data || !openHandoff || startMutation.isPending) return;
-
-    let cancelled = false;
-    (async () => {
-      let startLocation: { type: 'Point'; coordinates: [number, number] } | undefined;
-      try {
-        const permission = await Location.requestForegroundPermissionsAsync();
-        if (permission.status === 'granted') {
-          const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          startLocation = {
-            type: 'Point',
-            coordinates: [position.coords.longitude, position.coords.latitude],
-          };
-        }
-      } catch {
-        // fall through — backend accepts sessions without a start location
+  const handleStartFromHandoff = async () => {
+    if (data || startMutation.isPending) return;
+    let startLocation: { type: 'Point'; coordinates: [number, number] } | undefined;
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status === 'granted') {
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        startLocation = {
+          type: 'Point',
+          coordinates: [position.coords.longitude, position.coords.latitude],
+        };
       }
-      if (cancelled) return;
-      startMutation.mutate({ startLocation });
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [data, openHandoff, startMutation]);
+    } catch {
+      // fall through — backend accepts sessions without a start location
+    }
+    startMutation.mutate({ startLocation });
+  };
 
   const handleOpen2Gis = (targetLat?: number, targetLng?: number) => {
     if (!currentLocation || targetLat == null || targetLng == null) return;
@@ -634,32 +625,76 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
           />
         ) : (
           <View style={styles.waitingContainer}>
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={() => {
+                handoffsQuery.refetch();
+                refetchBins();
+              }}
+              disabled={handoffsQuery.isFetching}
+            >
+              {handoffsQuery.isFetching ? (
+                <ActivityIndicator size="small" color={dark.text} />
+              ) : (
+                <MaterialCommunityIcons name="refresh" size={16} color={dark.text} />
+              )}
+              <Text style={styles.refreshButtonText}>
+                {t('common.refresh')}
+                {handoffsQuery.data
+                  ? ` (${pendingHandoffs.length}/${handoffsQuery.data.length})`
+                  : ''}
+              </Text>
+            </TouchableOpacity>
+
+            {handoffsQuery.error ? (
+              <Text style={styles.errorText}>
+                {String((handoffsQuery.error as Error)?.message ?? handoffsQuery.error)}
+              </Text>
+            ) : null}
+
             {startMutation.isPending ? (
               <>
                 <ActivityIndicator color={dark.teal} />
                 <Text style={styles.waitingTitle}>{t('driver.route.starting')}</Text>
               </>
-            ) : openHandoff ? (
+            ) : pendingHandoffs.length > 0 ? (
               <>
                 <MaterialCommunityIcons name="truck-fast-outline" size={40} color={dark.teal} />
                 <Text style={styles.waitingTitle}>{t('driver.route.dispatchReceived')}</Text>
                 <Text style={styles.waitingBody}>{t('driver.route.dispatchReceivedBody')}</Text>
+                <View style={styles.handoffList}>
+                  {pendingHandoffs.map((h) => {
+                    const count = h.totalContainers ?? h.containers?.length ?? 0;
+                    const weight = h.totalDeclaredWeight ?? 0;
+                    const senderName = h.sender?.name || h.sender?.user?.username || '—';
+                    return (
+                      <View key={h._id} style={styles.handoffCard}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.handoffTitle}>
+                            {h.handoffId || '#'}
+                          </Text>
+                          <Text style={styles.handoffMeta}>
+                            {senderName} · {count} конт. · {weight} кг
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.handoffStartBtn}
+                          onPress={handleStartFromHandoff}
+                        >
+                          <Text style={styles.handoffStartText}>
+                            {t('driver.route.startSession')}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
               </>
             ) : (
               <>
                 <MaterialCommunityIcons name="clock-outline" size={40} color={dark.muted} />
                 <Text style={styles.waitingTitle}>{t('driver.route.waitingTitle')}</Text>
                 <Text style={styles.waitingBody}>{t('driver.route.waitingBody')}</Text>
-                <TouchableOpacity
-                  style={styles.refreshButton}
-                  onPress={() => {
-                    handoffsQuery.refetch();
-                    refetchBins();
-                  }}
-                >
-                  <MaterialCommunityIcons name="refresh" size={16} color={dark.text} />
-                  <Text style={styles.refreshButtonText}>{t('common.refresh')}</Text>
-                </TouchableOpacity>
               </>
             )}
           </View>
@@ -893,5 +928,47 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: dark.text,
     fontWeight: '600',
+  },
+  handoffList: {
+    width: '100%',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  handoffCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: dark.surface,
+    borderRadius: 12,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: dark.border,
+  },
+  handoffTitle: {
+    ...typography.body,
+    color: dark.text,
+    fontWeight: '600',
+  },
+  handoffMeta: {
+    ...typography.caption,
+    color: dark.textSecondary,
+    marginTop: 2,
+  },
+  handoffStartBtn: {
+    backgroundColor: dark.teal,
+    borderRadius: 10,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  handoffStartText: {
+    ...typography.body,
+    color: dark.text,
+    fontWeight: '700',
+  },
+  errorText: {
+    ...typography.caption,
+    color: dark.dangerText,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
 });
