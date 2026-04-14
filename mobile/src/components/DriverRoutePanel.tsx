@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Modal,
   RefreshControl,
   StyleSheet,
   Text,
@@ -11,11 +13,13 @@ import {
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import * as Location from 'expo-location';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import {
   useActiveCollection,
+  useMarkVisited,
   useSessionRoute,
   useStartCollection,
 } from '../hooks/useCollections';
@@ -70,10 +74,29 @@ function decodePolyline(encoded: string): Array<{ latitude: number; longitude: n
   return coordinates;
 }
 
+function getQrToken(rawValue: string): string {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return '';
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed === 'string') return parsed.trim();
+    if (parsed && typeof parsed === 'object') {
+      return String((parsed as any).binId || (parsed as any).containerId || (parsed as any).id || '').trim();
+    }
+  } catch (error) {
+    // plain-text QR payload
+  }
+
+  return trimmed;
+}
+
 export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanelProps) {
   const { t } = useTranslation();
   const { data, isLoading, refetch, isFetching } = useActiveCollection();
   const startMutation = useStartCollection();
+  const markVisitedMutation = useMarkVisited();
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const {
     data: bins,
     isFetching: binsFetching,
@@ -114,6 +137,8 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
   const [routeError, setRouteError] = useState<string | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [waypointOrder, setWaypointOrder] = useState<number[]>([]);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [hasScanned, setHasScanned] = useState(false);
 
   const sessionRouteQuery = useSessionRoute(data?._id ?? data?.sessionId, {
     enabled: Boolean(data),
@@ -130,7 +155,7 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     return path.length > 1 ? path : [];
   }, [sessionRouteQuery.data?.route]);
 
-  const snapPoints = useMemo(() => ['16%', '52%', '88%'], []);
+  const snapPoints = useMemo(() => ['14%', '48%', '86%'], []);
   const sheetRef = useRef<BottomSheet>(null);
   const [sheetIndex, setSheetIndex] = useState(0);
   const isSheetExpanded = sheetIndex > 0;
@@ -212,6 +237,10 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
 
   const visitedCount = sessionItems.filter((e) => e.visited).length;
   const totalCount = sessionItems.length;
+  const nextStopDistanceMeters = nextStopMarker && currentLocation
+    ? containerDistances[nextStopMarker.id]
+    : null;
+  const isNearNextStop = typeof nextStopDistanceMeters === 'number' && nextStopDistanceMeters <= 75;
 
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
@@ -414,8 +443,8 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
 
   const handleOpen2Gis = (targetLat?: number, targetLng?: number) => {
     if (!currentLocation || targetLat == null || targetLng == null) return;
-    const from = `${currentLocation.coords.latitude},${currentLocation.coords.longitude}`;
-    const to = `${targetLat},${targetLng}`;
+    const from = `${currentLocation.coords.longitude},${currentLocation.coords.latitude}`;
+    const to = `${targetLng},${targetLat}`;
     const appUrl = `dgis://2gis.ru/routeSearch/rsType/car/from/${from}/to/${to}`;
     const webUrl = `https://2gis.com/routeSearch/rsType/car/from/${from}/to/${to}`;
     Linking.openURL(appUrl).catch(() => Linking.openURL(webUrl));
@@ -459,6 +488,70 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
     if (!isSheetExpanded) {
       sheetRef.current?.snapToIndex(1);
     }
+  };
+  const closeScanner = () => {
+    setScannerVisible(false);
+    setHasScanned(false);
+  };
+
+  const handleOpenScanner = async () => {
+    if (!data?.sessionId || !nextStopMarker || !currentMarkerCoordinate) return;
+    if (!isNearNextStop) {
+      Alert.alert(
+        t('driver.route.verificationFarTitle'),
+        t('driver.route.verificationFarBody', {
+          distance: nextStopDistanceMeters != null ? formatDistance(nextStopDistanceMeters) : '--',
+        }),
+      );
+      return;
+    }
+
+    if (!cameraPermission?.granted) {
+      const permission = await requestCameraPermission();
+      if (!permission.granted) {
+        Alert.alert(t('driver.route.scanPermissionTitle'), t('driver.route.scanPermissionBody'));
+        return;
+      }
+    }
+
+    setHasScanned(false);
+    setScannerVisible(true);
+  };
+
+  const handleBarcodeScanned = ({ data: scannedValue }: { data: string }) => {
+    if (hasScanned || !data?.sessionId || !nextStopMarker || !currentMarkerCoordinate) return;
+    setHasScanned(true);
+
+    const qrToken = getQrToken(scannedValue);
+    const acceptedValues = new Set([
+      String(nextStopMarker.id),
+      String(nextStopMarker.binId || ''),
+    ]);
+
+    if (!acceptedValues.has(qrToken)) {
+      Alert.alert(t('driver.route.scanMismatchTitle'), t('driver.route.scanMismatchBody'));
+      setHasScanned(false);
+      return;
+    }
+
+    markVisitedMutation.mutate({
+      sessionId: data.sessionId,
+      containerId: nextStopMarker.id,
+      qrCode: scannedValue,
+      driverLocation: currentMarkerCoordinate,
+    }, {
+      onSuccess: () => {
+        closeScanner();
+        Alert.alert(t('driver.route.scanSuccessTitle'), t('driver.route.scanSuccessBody'));
+      },
+      onError: (error) => {
+        Alert.alert(
+          t('driver.route.scanErrorTitle'),
+          String((error as Error)?.message || t('driver.route.scanErrorBody')),
+        );
+        setHasScanned(false);
+      },
+    });
   };
 
   return (
@@ -572,7 +665,7 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
                       <MaterialCommunityIcons
                         name="navigation-variant"
                         size={18}
-                        color={dark.text}
+                        color={dark.textOnTeal}
                       />
                     </TouchableOpacity>
                   ) : null}
@@ -592,16 +685,16 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
                     <Text style={styles.summaryStatValue}>
                       {routeMeta?.distance ?? '--'}
                     </Text>
-                    <Text style={styles.summaryStatLabel}>ETA</Text>
+                    <Text style={styles.summaryStatLabel}>
+                      {t('driver.containerDetail.distance')}
+                    </Text>
                   </View>
                   <View style={styles.summaryDivider} />
                   <View style={styles.summaryStat}>
                     <Text style={styles.summaryStatValue}>
                       {routeMeta?.duration ?? '--'}
                     </Text>
-                    <Text style={styles.summaryStatLabel}>
-                      {t('driver.route.nextStop')}
-                    </Text>
+                    <Text style={styles.summaryStatLabel}>ETA</Text>
                   </View>
                 </View>
 
@@ -634,15 +727,57 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
                 ) : null}
 
                 <View style={styles.routeProgress}>
-                  <Text style={styles.routeProgressText}>
-                    {t('driver.route.progress', {
-                      visited: visitedCount,
-                      total: totalCount,
-                      distance: routeMeta?.distance ?? '--',
-                      duration: routeMeta?.duration ?? '--',
-                    })}
-                  </Text>
+                  <View style={styles.routeProgressPill}>
+                    <MaterialCommunityIcons
+                      name="check-decagram-outline"
+                      size={14}
+                      color={dark.teal}
+                    />
+                    <Text style={styles.routeProgressText}>
+                      {t('driver.containers.progress', {
+                        visited: visitedCount,
+                        total: totalCount,
+                      })}
+                    </Text>
+                  </View>
                 </View>
+
+                {nextStopMarker && !nextStopMarker.visited ? (
+                  <View style={styles.verifyCard}>
+                    <View style={styles.verifyCopy}>
+                      <Text style={styles.verifyTitle}>
+                        {t('driver.route.scanToVerify')}
+                      </Text>
+                      <Text style={styles.verifyBody}>
+                        {isNearNextStop
+                          ? t('driver.route.verificationReady')
+                          : t('driver.route.verificationFarBody', {
+                              distance: nextStopDistanceMeters != null ? formatDistance(nextStopDistanceMeters) : '--',
+                            })}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.verifyButton, !isNearNextStop && styles.verifyButtonDisabled]}
+                      onPress={handleOpenScanner}
+                      disabled={!isNearNextStop || markVisitedMutation.isPending}
+                    >
+                      {markVisitedMutation.isPending ? (
+                        <ActivityIndicator size="small" color={dark.textOnTeal} />
+                      ) : (
+                        <>
+                          <MaterialCommunityIcons
+                            name="qrcode-scan"
+                            size={18}
+                            color={dark.textOnTeal}
+                          />
+                          <Text style={styles.verifyButtonText}>
+                            {t('driver.route.scanQr')}
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
 
                 <View style={styles.sheetHintRow}>
                   <MaterialCommunityIcons
@@ -763,6 +898,34 @@ export default function DriverRoutePanel({ showTitle = false }: DriverRoutePanel
       </BottomSheet>
 
       {locationError ? <Text style={styles.errorToast}>{locationError}</Text> : null}
+
+      <Modal visible={scannerVisible} transparent animationType="fade" onRequestClose={closeScanner}>
+        <View style={styles.scannerOverlay}>
+          <View style={styles.scannerCard}>
+            <View style={styles.scannerHeader}>
+              <View style={styles.scannerHeaderCopy}>
+                <Text style={styles.scannerTitle}>{t('driver.route.scanQr')}</Text>
+                <Text style={styles.scannerBody}>
+                  {t('driver.route.scanQrBody')}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.scannerClose} onPress={closeScanner}>
+                <MaterialCommunityIcons name="close" size={20} color={dark.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.scannerViewport}>
+              <CameraView
+                style={StyleSheet.absoluteFillObject}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                onBarcodeScanned={handleBarcodeScanned}
+              />
+              <View style={styles.scannerFrame} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -866,7 +1029,7 @@ const styles = StyleSheet.create({
     backgroundColor: dark.surfaceMuted,
     borderRadius: 14,
     marginTop: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.sm,
   },
   summaryStat: {
@@ -929,7 +1092,7 @@ const styles = StyleSheet.create({
   peekBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
     gap: spacing.sm,
   },
   peekBarWrap: {
@@ -951,16 +1114,65 @@ const styles = StyleSheet.create({
   },
   /* Route progress */
   routeProgress: {
-    backgroundColor: 'rgba(13, 148, 136, 0.1)',
-    borderRadius: 10,
-    padding: spacing.md,
     marginTop: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  routeProgressPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: dark.tealMuted,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: dark.tealBorder,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
   routeProgressText: {
     ...typography.caption,
     color: dark.teal,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: '700',
+  },
+  verifyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: dark.surfaceMuted,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: dark.border,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+    gap: spacing.md,
+  },
+  verifyCopy: {
+    flex: 1,
+  },
+  verifyTitle: {
+    ...typography.bodyStrong,
+    color: dark.text,
+  },
+  verifyBody: {
+    ...typography.caption,
+    color: dark.textSecondary,
+    marginTop: spacing.xs,
+  },
+  verifyButton: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: dark.teal,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+  },
+  verifyButtonDisabled: {
+    opacity: 0.45,
+  },
+  verifyButtonText: {
+    ...typography.caption,
+    color: dark.textOnTeal,
+    fontWeight: '700',
   },
   sheetHintRow: {
     flexDirection: 'row',
@@ -1094,5 +1306,61 @@ const styles = StyleSheet.create({
     color: dark.dangerText,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
+  },
+  scannerOverlay: {
+    flex: 1,
+    backgroundColor: dark.overlay,
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  scannerCard: {
+    backgroundColor: dark.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: dark.border,
+    overflow: 'hidden',
+  },
+  scannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
+  scannerHeaderCopy: {
+    flex: 1,
+  },
+  scannerTitle: {
+    ...typography.title,
+    color: dark.text,
+  },
+  scannerBody: {
+    ...typography.body,
+    color: dark.textSecondary,
+    marginTop: spacing.xs,
+  },
+  scannerClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: dark.surfaceMuted,
+  },
+  scannerViewport: {
+    aspectRatio: 1,
+    margin: spacing.lg,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scannerFrame: {
+    width: '62%',
+    height: '62%',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderRadius: 20,
+    backgroundColor: 'transparent',
   },
 });

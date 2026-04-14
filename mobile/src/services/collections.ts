@@ -56,11 +56,30 @@ export async function stopCollection(sessionId: string): Promise<CollectionSessi
   return response.data.data.session;
 }
 
-export async function markCollectionVisited(sessionId: string, containerId: string, collectedWeight?: number) {
+export interface MarkVisitedPayload {
+  sessionId: string;
+  containerId: string;
+  collectedWeight?: number;
+  qrCode?: string;
+  driverLocation?: {
+    latitude: number;
+    longitude: number;
+  };
+}
+
+export async function markCollectionVisited({
+  sessionId,
+  containerId,
+  collectedWeight,
+  qrCode,
+  driverLocation,
+}: MarkVisitedPayload) {
   const response = await api.post<ApiSuccess<{ session: CollectionSession }>>('/api/collections/mark-visited', {
     sessionId,
     containerId,
     collectedWeight,
+    qrCode,
+    driverLocation,
   });
   if (response.data.status !== 'success' || !response.data.data?.session) {
     throw new Error('Failed to mark container visited');

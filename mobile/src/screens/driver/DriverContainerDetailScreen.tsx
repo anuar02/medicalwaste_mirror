@@ -82,8 +82,8 @@ export default function DriverContainerDetailScreen() {
     if (!coordinate) return;
     const lat = coordinate.latitude;
     const lng = coordinate.longitude;
-    const appUrl = `dgis://2gis.ru/routeSearch/rsType/car/to/${lat},${lng}`;
-    const webUrl = `https://2gis.com/routeSearch/rsType/car/to/${lat},${lng}`;
+    const appUrl = `dgis://2gis.ru/routeSearch/rsType/car/to/${lng},${lat}`;
+    const webUrl = `https://2gis.com/routeSearch/rsType/car/to/${lng},${lat}`;
     Linking.openURL(appUrl).catch(() => Linking.openURL(webUrl));
   };
 
@@ -208,7 +208,7 @@ export default function DriverContainerDetailScreen() {
               <Text style={styles.actionsLabel}>{t('driver.containerDetail.actions')}</Text>
               <View style={styles.navButtons}>
                 <TouchableOpacity style={styles.navPrimary} onPress={handleOpen2Gis}>
-                  <MaterialCommunityIcons name="navigation-variant" size={16} color={dark.text} />
+                  <MaterialCommunityIcons name="navigation-variant" size={16} color={dark.surface} />
                   <Text style={styles.navPrimaryText}>{t('driver.containerDetail.open2gis')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navSecondary} onPress={handleOpenAppleMaps}>
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   navPrimaryText: {
-    color: dark.text,
+    color: dark.textInverse,
     fontWeight: '600',
   },
   navSecondary: {

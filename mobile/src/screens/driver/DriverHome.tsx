@@ -268,7 +268,7 @@ export default function DriverHome() {
   }, [handoffs, t]);
 
   const greeting = t(`driver.home.greeting.${getGreetingKey(new Date().getHours())}`);
-  const name = user?.username || t('driver.home.driver');
+  const name = user?.firstName || t('driver.home.driver');
   const company = getCompanyName(user?.company, t('driver.home.company'));
   const sessionNeedsAttention = pendingActions.length > 0 && Boolean(session);
 
@@ -289,7 +289,7 @@ export default function DriverHome() {
       >
         <View style={styles.greetingRow}>
           <Text style={styles.greeting}>
-            {greeting} {name}
+            {greeting}, {name}!
           </Text>
           <Text style={styles.subGreeting}>
             {t('driver.home.roleCompany', {

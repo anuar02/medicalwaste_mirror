@@ -78,7 +78,7 @@ export default function ContainerCard({
             <Text style={styles.binId}>{binId ?? t('driver.route.container')}</Text>
             <View style={styles.badgeRow}>
               {visited != null && (
-                <View style={[styles.badge, { backgroundColor: visited ? dark.success : dark.amberMuted }]}>
+                <View style={[styles.badge, { backgroundColor: visited ? dark.successBg : dark.amberMuted }]}>
                   <Text style={[styles.badgeText, { color: visited ? dark.successText : dark.amber }]}>
                     {visited ? t('driver.containers.visited') : t('driver.containers.pending')}
                   </Text>

@@ -1161,7 +1161,7 @@ const styles = StyleSheet.create({
   },
   plantButtonText: {
     fontSize: 12,
-    color: colors.textPrimary,
+    color: colors.surface,
   },
   plantButtonTextSelected: {
     fontSize: 12,
@@ -1171,7 +1171,7 @@ const styles = StyleSheet.create({
   sectionSubtitle: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: colors.surface,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },

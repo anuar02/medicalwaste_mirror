@@ -40,11 +40,7 @@ export function useStopCollection() {
 export function useMarkVisited() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ sessionId, containerId, collectedWeight }: {
-      sessionId: string;
-      containerId: string;
-      collectedWeight?: number;
-    }) => markCollectionVisited(sessionId, containerId, collectedWeight),
+    mutationFn: markCollectionVisited,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collections', 'active'] });
     },

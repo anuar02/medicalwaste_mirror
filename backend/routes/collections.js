@@ -31,7 +31,7 @@ router.post('/start',
 );
 
 router.post('/stop',
-    restrictTo('driver'),
+    restrictTo('driver', 'admin'),
     [
         body('sessionId').trim().notEmpty().withMessage('Session ID is required'),
         body('endLocation.coordinates').optional().isArray({ min: 2, max: 2 }).withMessage('Invalid coordinates')
@@ -64,11 +64,14 @@ router.post('/add-container',
 
 // Supervisor/admin override only: visits are normally set by handoff completion.
 router.post('/mark-visited',
-    restrictTo('admin', 'supervisor'),
+    restrictTo('admin', 'supervisor', 'driver'),
     [
         body('sessionId').trim().notEmpty().withMessage('Session ID is required'),
         body('containerId').isMongoId().withMessage('Valid container ID is required'),
-        body('collectedWeight').optional().isFloat({ min: 0 }).withMessage('Weight must be positive')
+        body('collectedWeight').optional().isFloat({ min: 0 }).withMessage('Weight must be positive'),
+        body('qrCode').optional().isString().withMessage('QR code must be a string'),
+        body('driverLocation.latitude').optional().isFloat({ min: -90, max: 90 }).withMessage('Valid driver latitude is required'),
+        body('driverLocation.longitude').optional().isFloat({ min: -180, max: 180 }).withMessage('Valid driver longitude is required')
     ],
     validateRequest,
     markContainerVisited

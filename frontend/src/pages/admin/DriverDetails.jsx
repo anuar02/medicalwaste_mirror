@@ -21,6 +21,7 @@ import DashboardCard from '../../components/dashboard/DashboardCard';
 import Button from '../../components/ui/Button';
 import toast from 'react-hot-toast';
 import 'leaflet/dist/leaflet.css';
+import { useAuth } from '../../contexts/AuthContext';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -30,6 +31,7 @@ L.Icon.Default.mergeOptions({
 });
 
 const DriverDetails = () => {
+    const { isAdmin } = useAuth();
     const { driverId } = useParams();
     const location = useLocation();
     const queryClient = useQueryClient();
@@ -130,6 +132,26 @@ const DriverDetails = () => {
         }
     });
 
+    const stopSessionMutation = useMutation({
+        mutationFn: (sessionId) => apiService.collections.stop({ sessionId }),
+        onSuccess: () => {
+            toast.success('Сессия завершена администратором');
+            queryClient.invalidateQueries({ queryKey: ['active-driver-sessions'] });
+            queryClient.invalidateQueries({ queryKey: ['driver-session-route'] });
+        },
+        onError: (error) => {
+            const message = error.response?.data?.message || 'Не удалось завершить сессию';
+            toast.error(message);
+        }
+    });
+
+    const handleAdminStopSession = () => {
+        if (!activeSession?.sessionId || !isAdmin) return;
+        const confirmed = window.confirm('Завершить активную сессию этого водителя?');
+        if (!confirmed) return;
+        stopSessionMutation.mutate(activeSession.sessionId);
+    };
+
     if (isLoading && !driverFromState) {
         return (
             <div className="flex justify-center items-center min-h-[400px]">
@@ -202,6 +224,18 @@ const DriverDetails = () => {
                     {activeSession && mapCenter && (
                         <DashboardCard title="Активная сессия и местоположение">
                             <div className="space-y-4">
+                                {isAdmin && (
+                                    <div className="flex justify-end">
+                                        <Button
+                                            color="red"
+                                            variant="outline"
+                                            onClick={handleAdminStopSession}
+                                            isLoading={stopSessionMutation.isLoading}
+                                        >
+                                            Завершить сессию
+                                        </Button>
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-1 gap-3 text-sm text-slate-700 sm:grid-cols-2">
                                     <div className="rounded-lg bg-slate-50 p-3">
                                         <div className="text-xs uppercase tracking-wide text-slate-400">Статус</div>

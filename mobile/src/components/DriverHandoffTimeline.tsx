@@ -25,6 +25,12 @@ import {
 import { useIncinerationPlants } from '../hooks/useIncinerationPlants';
 import { dark, spacing, typography } from '../theme';
 import { CONFIRMATION_BASE_URL } from '../utils/constants';
+import {
+  clearIncinerationLink,
+  loadIncinerationLink,
+  saveIncinerationLink,
+  StoredIncinerationLink,
+} from '../utils/incinerationLinkStore';
 import { CollectionSession, Handoff } from '../types/models';
 
 const STATUS_COLORS = {
@@ -181,6 +187,9 @@ export default function DriverHandoffTimeline({
   const [disputeDescription, setDisputeDescription] = useState('');
   const [disputeError, setDisputeError] = useState<string | null>(null);
   const [confirmSuccess, setConfirmSuccess] = useState(false);
+  const [storedLink, setStoredLink] = useState<StoredIncinerationLink | null>(
+    null,
+  );
   const copyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
   const layoutMap = useRef<Record<string, number>>({});
@@ -197,6 +206,28 @@ export default function DriverHandoffTimeline({
     if (y == null) return;
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true });
   }, [focusHandoffId]);
+
+  // Hydrate any previously-saved incineration link for this session so the
+  // driver can still open/copy it after navigating away and back.
+  useEffect(() => {
+    let cancelled = false;
+    if (!session?._id) return;
+    loadIncinerationLink(session._id).then((link) => {
+      if (!cancelled) setStoredLink(link);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?._id]);
+
+  // Once the session is done, the link is no longer relevant — drop it from
+  // storage and from local state.
+  useEffect(() => {
+    if (session?.status === 'completed' && session._id) {
+      clearIncinerationLink(session._id);
+      setStoredLink(null);
+    }
+  }, [session?.status, session?._id]);
 
   const facilityHandoffs = useMemo(() => (
     handoffs
@@ -232,7 +263,19 @@ export default function DriverHandoffTimeline({
   ), [facilityHandoffs]);
 
   const confirmationToken = createMutation.data?.confirmationToken;
-  const confirmationUrl = confirmationToken ? `${CONFIRMATION_BASE_URL}/${confirmationToken}` : null;
+  const freshConfirmationUrl = confirmationToken
+    ? `${CONFIRMATION_BASE_URL}/${confirmationToken}`
+    : null;
+
+  // Show the stored link only if it still belongs to the current session's
+  // incineration handoff. If there is no incineration handoff at all, suppress
+  // it — a stale entry from an earlier cycle shouldn't leak through.
+  const storedMatchesCurrent =
+    storedLink &&
+    (!incinerationHandoff || storedLink.handoffId === incinerationHandoff._id);
+
+  const confirmationUrl =
+    freshConfirmationUrl ?? (storedMatchesCurrent ? storedLink!.url : null);
 
   const timelineSteps = useMemo(() => {
     const steps: TimelineStep[] = [];
@@ -376,9 +419,21 @@ export default function DriverHandoffTimeline({
                     error instanceof Error ? error.message : t('handoff.errors.createFailed'),
                   );
                 },
-                onSuccess: () => {
+                onSuccess: (result) => {
                   setCreateError(null);
                   setCopied(false);
+                  const token = result?.confirmationToken;
+                  const newHandoffId = result?.handoff?._id;
+                  if (token && newHandoffId && session._id) {
+                    const link: StoredIncinerationLink = {
+                      handoffId: newHandoffId,
+                      url: `${CONFIRMATION_BASE_URL}/${token}`,
+                      createdAt: new Date().toISOString(),
+                      expiresAt: result.handoff.tokenExpiresAt,
+                    };
+                    setStoredLink(link);
+                    saveIncinerationLink(session._id, link);
+                  }
                 },
               },
             );
@@ -1041,7 +1096,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: dark.text,
+    color: dark.textInverse,
     fontWeight: '600',
   },
   linkCard: {

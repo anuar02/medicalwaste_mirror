@@ -31,7 +31,8 @@
     "verifyCode": "Verify code",
     "phoneLoginFailed": "Phone verification failed",
     "hasAccount": "Already have an account?",
-    "registerFailed": "Registration failed"
+    "registerFailed": "Registration failed",
+    "passwordMismatch": "Passwords do not match"
   },
   "common": {
     "loading": "Loading...",
@@ -238,7 +239,21 @@
       "waitingBody": "Your supervisor will assign containers via a handoff. A session will start automatically.",
       "dispatchReceived": "Dispatch received",
       "dispatchReceivedBody": "Starting your session…",
-      "starting": "Starting session…"
+      "starting": "Starting session…",
+      "scanQr": "Scan QR",
+      "scanQrBody": "Scan the container QR code to confirm pickup at this stop.",
+      "scanPermissionTitle": "Camera access needed",
+      "scanPermissionBody": "Allow camera access to scan the container QR code.",
+      "scanMismatchTitle": "Wrong QR code",
+      "scanMismatchBody": "This QR code does not belong to the current stop.",
+      "scanSuccessTitle": "Container verified",
+      "scanSuccessBody": "Pickup was confirmed for this container.",
+      "scanErrorTitle": "Verification failed",
+      "scanErrorBody": "Unable to verify this container.",
+      "scanToVerify": "Verify pickup",
+      "verificationReady": "You are close enough to this stop. Scan the container QR code to mark it visited.",
+      "verificationFarTitle": "Move closer to the container",
+      "verificationFarBody": "You need to be near the container before scanning. Current distance: {{distance}}."
     },
     "history": {
       "title": "Session History",

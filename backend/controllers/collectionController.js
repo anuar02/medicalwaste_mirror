@@ -17,6 +17,40 @@ const OPEN_FACILITY_HANDOFF_STATUSES = [
     HANDOFF_STATUS.PENDING,
     HANDOFF_STATUS.CONFIRMED_BY_SENDER
 ];
+const VISIT_PROXIMITY_THRESHOLD_METERS = 75;
+
+function toRadians(value) {
+    return (value * Math.PI) / 180;
+}
+
+function getDistanceMeters(fromLat, fromLng, toLat, toLng) {
+    const earthRadius = 6371000;
+    const dLat = toRadians(toLat - fromLat);
+    const dLng = toRadians(toLng - fromLng);
+    const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRadians(fromLat))
+        * Math.cos(toRadians(toLat))
+        * Math.sin(dLng / 2) ** 2;
+    return 2 * earthRadius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function parseQrToken(value) {
+    if (!value || typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+
+    try {
+        const parsed = JSON.parse(trimmed);
+        if (typeof parsed === 'string') return parsed.trim();
+        if (parsed && typeof parsed === 'object') {
+            return String(parsed.binId || parsed.containerId || parsed.id || '').trim();
+        }
+    } catch (error) {
+        // Plain-text QR payloads are valid too.
+    }
+
+    return trimmed;
+}
 
 /**
  * Start a new collection session
@@ -159,12 +193,16 @@ const startCollection = asyncHandler(async (req, res, next) => {
 const stopCollection = asyncHandler(async (req, res, next) => {
     const { sessionId, endLocation } = req.body;
     const driverId = req.user.id;
-
-    const session = await CollectionSession.findOne({
+    const sessionQuery = {
         sessionId,
-        driver: driverId,
         status: 'active'
-    });
+    };
+
+    if (req.user.role !== 'admin') {
+        sessionQuery.driver = driverId;
+    }
+
+    const session = await CollectionSession.findOne(sessionQuery);
 
     if (!session) {
         return next(new AppError('Active session not found', 404));
@@ -176,7 +214,7 @@ const stopCollection = asyncHandler(async (req, res, next) => {
     // Record final location if provided
     if (endLocation && endLocation.coordinates) {
         const endLocationRecord = await DriverLocation.create({
-            driver: driverId,
+            driver: session.driver,
             session: session._id,
             location: endLocation,
             timestamp: new Date()
@@ -329,7 +367,7 @@ const addContainerToSession = asyncHandler(async (req, res, next) => {
  * Manually mark container as visited
  */
 const markContainerVisited = asyncHandler(async (req, res, next) => {
-    const { sessionId, containerId, collectedWeight } = req.body;
+    const { sessionId, containerId, collectedWeight, qrCode, driverLocation } = req.body;
     const driverId = req.user.id;
 
     const session = await CollectionSession.findOne({
@@ -350,10 +388,56 @@ const markContainerVisited = asyncHandler(async (req, res, next) => {
         return next(new AppError('Container not found in session', 404));
     }
 
+    if (req.user.role === 'driver') {
+        const qrToken = parseQrToken(qrCode);
+        if (!qrToken) {
+            return next(new AppError('QR code is required to verify the container visit', 400));
+        }
+
+        const matchedIdentifiers = new Set([
+            String(containerEntry.container?._id || containerEntry.container),
+            String(containerEntry.container?.binId || '')
+        ]);
+
+        if (!matchedIdentifiers.has(qrToken)) {
+            return next(new AppError('Scanned QR code does not match this container', 400));
+        }
+
+        const coordinates = containerEntry.container?.location?.coordinates;
+        const hasContainerCoords = Array.isArray(coordinates) && coordinates.length === 2;
+        if (!hasContainerCoords) {
+            return next(new AppError('Container location is missing. Cannot verify proximity.', 400));
+        }
+
+        if (
+            !driverLocation
+            || typeof driverLocation.latitude !== 'number'
+            || typeof driverLocation.longitude !== 'number'
+        ) {
+            return next(new AppError('Current driver location is required to verify proximity', 400));
+        }
+
+        const [containerLng, containerLat] = coordinates;
+        const distanceMeters = getDistanceMeters(
+            driverLocation.latitude,
+            driverLocation.longitude,
+            containerLat,
+            containerLng
+        );
+
+        if (distanceMeters > VISIT_PROXIMITY_THRESHOLD_METERS) {
+            return next(new AppError(
+                `Driver is too far from the container to verify pickup (${Math.round(distanceMeters)}m)`,
+                403
+            ));
+        }
+    }
+
     await session.markContainerVisited(containerId, collectedWeight);
 
     const updatedSession = await CollectionSession.findById(session._id)
-        .populate('selectedContainers.container');
+        .populate('selectedContainers.container')
+        .populate('company', 'name allowedIncinerationPlants defaultIncinerationPlant');
 
     res.status(200).json({
         status: 'success',

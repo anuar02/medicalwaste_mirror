@@ -1,12 +1,18 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  LayoutChangeEvent,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
 
-import { dark, spacing, typography } from '../../theme';
+import { dark, elevation, radius, spacing, typography } from '../../theme';
 
 interface Segment {
   key: string;
@@ -20,53 +26,77 @@ interface SegmentedControlProps {
   onSelect: (key: string) => void;
 }
 
+const TRACK_PADDING = 4;
+
 export default function SegmentedControl({
   segments,
   activeKey,
   onSelect,
 }: SegmentedControlProps) {
-  const activeIndex = segments.findIndex((s) => s.key === activeKey);
-  const indicatorPosition = useSharedValue(activeIndex >= 0 ? activeIndex : 0);
+  const [trackWidth, setTrackWidth] = useState(0);
+  const activeIndex = Math.max(
+    0,
+    segments.findIndex((s) => s.key === activeKey),
+  );
+  const progress = useSharedValue(activeIndex);
 
   useEffect(() => {
-    const idx = segments.findIndex((s) => s.key === activeKey);
-    if (idx >= 0) {
-      indicatorPosition.value = withSpring(idx, { damping: 20, stiffness: 200 });
-    }
-  }, [activeKey, segments, indicatorPosition]);
+    progress.value = withSpring(activeIndex, {
+      damping: 22,
+      stiffness: 220,
+      mass: 0.6,
+    });
+  }, [activeIndex, progress]);
+
+  const segmentWidth =
+    trackWidth > 0 ? (trackWidth - TRACK_PADDING * 2) / segments.length : 0;
 
   const indicatorStyle = useAnimatedStyle(() => ({
-    left: `${(indicatorPosition.value / segments.length) * 100}%`,
-    width: `${100 / segments.length}%`,
+    transform: [{ translateX: progress.value * segmentWidth }],
+    width: segmentWidth,
   }));
 
+  const onTrackLayout = (e: LayoutChangeEvent) => {
+    setTrackWidth(e.nativeEvent.layout.width);
+  };
+
   return (
-    <View style={styles.container}>
-      <Animated.View style={[styles.indicator, indicatorStyle]} />
-      {segments.map((segment) => (
-        <TouchableOpacity
-          key={segment.key}
-          style={styles.button}
-          onPress={() => onSelect(segment.key)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.labelRow}>
-            <Text
-              style={[
-                styles.text,
-                segment.key === activeKey && styles.textActive,
-              ]}
-            >
-              {segment.label}
-            </Text>
-            {segment.badge != null && segment.badge > 0 ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{segment.badge}</Text>
-              </View>
-            ) : null}
-          </View>
-        </TouchableOpacity>
-      ))}
+    <View style={styles.container} onLayout={onTrackLayout}>
+      {segmentWidth > 0 ? (
+        <Animated.View style={[styles.indicator, indicatorStyle]} />
+      ) : null}
+      {segments.map((segment) => {
+        const isActive = segment.key === activeKey;
+        return (
+          <TouchableOpacity
+            key={segment.key}
+            style={styles.button}
+            onPress={() => onSelect(segment.key)}
+            activeOpacity={0.75}
+          >
+            <View style={styles.labelRow}>
+              <Text
+                style={[styles.text, isActive && styles.textActive]}
+                numberOfLines={1}
+              >
+                {segment.label}
+              </Text>
+              {segment.badge != null && segment.badge > 0 ? (
+                <View style={[styles.badge, isActive && styles.badgeActive]}>
+                  <Text
+                    style={[
+                      styles.badgeText,
+                      isActive && styles.badgeTextActive,
+                    ]}
+                  >
+                    {segment.badge}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
@@ -74,27 +104,28 @@ export default function SegmentedControl({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    padding: 4,
-    borderRadius: 999,
-    backgroundColor: dark.card,
+    padding: TRACK_PADDING,
+    borderRadius: radius.pill,
+    backgroundColor: dark.surfaceMuted,
+    borderWidth: 1,
+    borderColor: dark.border,
     position: 'relative',
   },
   indicator: {
     position: 'absolute',
-    top: 4,
-    bottom: 4,
-    borderRadius: 999,
+    top: TRACK_PADDING,
+    bottom: TRACK_PADDING,
+    left: TRACK_PADDING,
+    borderRadius: radius.pill,
     backgroundColor: dark.teal,
-    shadowColor: dark.teal,
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 1,
+    ...elevation.sm,
   },
   button: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: 999,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.pill,
     alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 1,
   },
   labelRow: {
@@ -102,25 +133,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   text: {
-    ...typography.body,
-    color: dark.muted,
-    fontWeight: '600',
+    ...typography.bodyStrong,
+    color: dark.textSecondary,
   },
   textActive: {
-    color: dark.text,
+    color: dark.textOnTeal,
   },
   badge: {
     marginLeft: spacing.xs,
-    backgroundColor: dark.amber,
-    borderRadius: 999,
+    backgroundColor: dark.warning,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.xs,
     paddingVertical: 2,
     minWidth: 20,
     alignItems: 'center',
   },
+  badgeActive: {
+    backgroundColor: dark.textOnTeal,
+  },
   badgeText: {
     fontSize: 11,
-    color: '#fff7ed',
+    color: dark.textInverse,
     fontWeight: '700',
+  },
+  badgeTextActive: {
+    color: dark.teal,
   },
 });

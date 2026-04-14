@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -156,8 +157,9 @@ export default function DriverRegistrationScreen() {
   };
 
   return (
+    <SafeAreaView style={styles.root}>
     <KeyboardAvoidingView
-      style={styles.root}
+      style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
     >
@@ -323,6 +325,7 @@ export default function DriverRegistrationScreen() {
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -331,8 +334,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: dark.bg,
   },
+  flex: {
+    flex: 1,
+  },
   container: {
     padding: spacing.xl,
+    paddingTop: Platform.OS === 'android' ? spacing.xxl : spacing.lg,
     paddingBottom: spacing.xxl,
     flexGrow: 1,
     gap: spacing.md,
