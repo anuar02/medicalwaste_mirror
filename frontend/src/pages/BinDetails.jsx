@@ -5,8 +5,9 @@ import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
     Trash2, Edit, Clock, Thermometer, MapPin, Weight, ArrowLeft, Share2,
-    AlertTriangle, AreaChart, Wrench, CheckCircle, RotateCcw, Bell, Download,
+    AlertTriangle, AreaChart, Wrench, CheckCircle, RotateCcw, Bell, Download, QrCode, X,
 } from 'lucide-react';
+import QRCode from 'react-qr-code';
 
 import apiService from '../services/api';
 import {
@@ -45,6 +46,7 @@ const BinDetails = () => {
     // State for modals and UI
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
+    const [showQrModal, setShowQrModal] = useState(false);
     const [selectedTimePeriod, setSelectedTimePeriod] = useState('24h');
 
     debug.log('BinDetails component mounted', {binId, selectedTimePeriod});
@@ -475,6 +477,15 @@ const BinDetails = () => {
                     <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => setShowQrModal(true)}
+                    >
+                        <QrCode className="mr-2 h-4 w-4"/>
+                        QR Код
+                    </Button>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleSendAlert}
                         disabled={sendAlertMutation.isLoading}
                     >
@@ -840,6 +851,64 @@ const BinDetails = () => {
                     toast.success('Контейнер успешно обновлен');
                 }}
             />
+
+            {/* QR Code Modal */}
+            {showQrModal && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                    onClick={() => setShowQrModal(false)}
+                >
+                    <div
+                        className="relative w-full max-w-xs rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setShowQrModal(false)}
+                            className="absolute right-4 top-4 rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+
+                        <h3 className="mb-1 font-chakra text-sm font-semibold uppercase tracking-wider text-slate-700">
+                            QR Код контейнера
+                        </h3>
+                        <p className="mb-4 font-data text-xs text-teal-600">{bin.binId || binId}</p>
+
+                        <div className="flex justify-center rounded-xl bg-white p-3 ring-1 ring-slate-100">
+                            <QRCode
+                                id="bin-qr-svg"
+                                value={bin.binId || binId}
+                                size={180}
+                                fgColor="#0f172a"
+                                bgColor="#ffffff"
+                                level="M"
+                            />
+                        </div>
+
+                        <p className="mt-3 text-center text-[11px] text-slate-400">
+                            {bin.department || ''}{bin.wasteType ? ` · ${bin.wasteType}` : ''}
+                        </p>
+
+                        <button
+                            onClick={() => {
+                                const svg = document.getElementById('bin-qr-svg');
+                                const svgData = new XMLSerializer().serializeToString(svg);
+                                const blob = new Blob([svgData], { type: 'image/svg+xml' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `qr-${bin.binId || binId}.svg`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                            }}
+                            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
+                        >
+                            <Download className="h-4 w-4" />
+                            Скачать SVG
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Debug panel for development */}
             {process.env.NODE_ENV === 'development' && (
