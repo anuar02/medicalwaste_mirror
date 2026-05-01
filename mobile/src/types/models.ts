@@ -147,6 +147,7 @@ export interface Handoff {
   totalContainers?: number;
   totalDeclaredWeight?: number;
   totalConfirmedWeight?: number;
+  incinerationPlant?: IncinerationPlant | string;
   createdAt?: string;
   completedAt?: string;
   tokenExpiresAt?: string;

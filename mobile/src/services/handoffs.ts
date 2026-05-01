@@ -111,6 +111,35 @@ export async function resendHandoffNotification(handoffId: string): Promise<Hand
   }
 }
 
+export async function scanPlantQr(handoffId: string, plantId: string): Promise<Handoff> {
+  try {
+    const response = await api.post<ApiSuccess<{ handoff: Handoff }>>(
+      `/api/handoffs/${handoffId}/scan-plant`,
+      { plantId },
+    );
+    if (response.data.status !== 'success' || !response.data.data?.handoff) {
+      throw new Error('Failed to confirm plant arrival');
+    }
+    return response.data.data.handoff;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Failed to confirm plant arrival'));
+  }
+}
+
+export async function refreshReceiverQr(handoffId: string): Promise<{ url: string; expiresAt: string }> {
+  try {
+    const response = await api.post<ApiSuccess<{ url: string; expiresAt: string }>>(
+      `/api/handoffs/${handoffId}/receiver-qr`,
+    );
+    if (response.data.status !== 'success' || !response.data.data?.url) {
+      throw new Error('Failed to generate QR code');
+    }
+    return response.data.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Failed to generate QR code'));
+  }
+}
+
 function getApiErrorMessage(error: unknown, fallback: string) {
   if (axios.isAxiosError(error)) {
     const message = error.response?.data?.message;

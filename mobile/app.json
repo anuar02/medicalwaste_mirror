@@ -16,6 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.yourcompany.mobile",
       "infoPlist": {
+        "NSCameraUsageDescription": "Camera access is needed to scan QR codes.",
         "NSLocationWhenInUseUsageDescription": "We use your location to show nearby containers.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "We use your location to track active collections."
       }
@@ -23,6 +24,7 @@
     "android": {
       "package": "com.yourcompany.mobile",
       "permissions": [
+        "CAMERA",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
@@ -37,6 +39,13 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Camera access is needed to scan QR codes.",
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-location",
       "expo-dev-client"
     ],

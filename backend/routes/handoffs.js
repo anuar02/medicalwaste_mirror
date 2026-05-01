@@ -11,7 +11,9 @@ const {
     disputeHandoff,
     resolveHandoff,
     resendHandoffNotification,
-    getHandoffChain
+    getHandoffChain,
+    scanPlantQr,
+    refreshReceiverQr
 } = require('../controllers/handoffController');
 const { auth, restrictTo } = require('../middleware/auth');
 const { validateRequest } = require('../middleware/validators');
@@ -123,6 +125,27 @@ router.post(
     ],
     validateRequest,
     resendHandoffNotification
+);
+
+router.post(
+    '/:handoffId/scan-plant',
+    restrictTo('driver', 'admin'),
+    [
+        param('handoffId').isMongoId().withMessage('Invalid handoff ID'),
+        body('plantId').isMongoId().withMessage('Invalid plant ID')
+    ],
+    validateRequest,
+    scanPlantQr
+);
+
+router.post(
+    '/:handoffId/receiver-qr',
+    restrictTo('driver', 'admin'),
+    [
+        param('handoffId').isMongoId().withMessage('Invalid handoff ID')
+    ],
+    validateRequest,
+    refreshReceiverQr
 );
 
 router.post(

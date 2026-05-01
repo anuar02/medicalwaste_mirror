@@ -845,6 +845,74 @@ const getHandoffChain = asyncHandler(async (req, res, next) => {
     });
 });
 
+const scanPlantQr = asyncHandler(async (req, res, next) => {
+    const { handoffId } = req.params;
+    const { plantId } = req.body;
+
+    if (!plantId) return next(new AppError('plantId is required', 400));
+
+    const isObjectId = mongoose.isValidObjectId(handoffId);
+    const handoff = await Handoff.findOne(isObjectId ? { _id: handoffId } : { handoffId });
+    if (!handoff) return next(new AppError('Handoff not found', 404));
+
+    if (handoff.type !== 'driver_to_incinerator') {
+        return next(new AppError('Not an incineration handoff', 400));
+    }
+
+    if (req.user.role === 'driver' && String(handoff.sender?.user) !== String(req.user.id)) {
+        return next(new AppError('Not authorized for this handoff', 403));
+    }
+
+    if (!canBeConfirmed(handoff)) {
+        return next(new AppError(`Handoff cannot be confirmed in status '${handoff.status}'`, 409));
+    }
+
+    const plantRef = handoff.incinerationPlant;
+    const plantObjId = plantRef?._id ? String(plantRef._id) : String(plantRef);
+    if (plantObjId !== String(plantId)) {
+        return next(new AppError('Scanned plant does not match this handoff', 400));
+    }
+
+    handoff.sender.confirmedAt = new Date();
+    handoff.sender.role = req.user.role;
+    handoff.sender.name = req.user.username;
+    applyConfirmation(handoff);
+    await handoff.save();
+
+    broadcastHandoffEvent('handoff_updated', handoff);
+
+    res.status(200).json({ status: 'success', data: { handoff } });
+});
+
+const refreshReceiverQr = asyncHandler(async (req, res, next) => {
+    const { handoffId } = req.params;
+    const isObjectId = mongoose.isValidObjectId(handoffId);
+    const handoff = await Handoff.findOne(isObjectId ? { _id: handoffId } : { handoffId });
+
+    if (!handoff) return next(new AppError('Handoff not found', 404));
+    if (handoff.type !== 'driver_to_incinerator') {
+        return next(new AppError('Not an incineration handoff', 400));
+    }
+
+    if (req.user.role === 'driver' && String(handoff.sender?.user) !== String(req.user.id)) {
+        return next(new AppError('Not authorized for this handoff', 403));
+    }
+
+    if (isTerminal(handoff)) {
+        return next(new AppError('Cannot generate QR for a completed handoff', 409));
+    }
+
+    const token = generateConfirmationToken();
+    handoff.confirmationToken = token.hashedToken;
+    handoff.tokenExpiresAt = token.expiresAt;
+    await handoff.save();
+
+    res.status(200).json({
+        status: 'success',
+        data: { url: `${CONFIRMATION_BASE_URL}/${token.rawToken}`, expiresAt: token.expiresAt }
+    });
+});
+
 module.exports = {
     createHandoff,
     getHandoffs,
@@ -856,5 +924,7 @@ module.exports = {
     resolveHandoff,
     resendHandoffNotification,
     getHandoffNotifications,
-    getHandoffChain
+    getHandoffChain,
+    scanPlantQr,
+    refreshReceiverQr
 };

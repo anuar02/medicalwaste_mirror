@@ -14,7 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import QRCode from 'react-native-qrcode-svg';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveCollection } from '../../hooks/useCollections';
@@ -23,11 +25,12 @@ import {
   useCreateIncineratorHandoff,
   useDisputeHandoff,
   useHandoffs,
+  useRefreshReceiverQr,
+  useScanPlantQr,
 } from '../../hooks/useHandoffs';
 import { useIncinerationPlants } from '../../hooks/useIncinerationPlants';
 import { useAuthStore } from '../../stores/authStore';
 import { colors, spacing, typography } from '../../theme';
-import { CONFIRMATION_BASE_URL } from '../../utils/constants';
 import { Handoff, MedicalCompany } from '../../types/models';
 
 type StepState = 'completed' | 'pending' | 'future' | 'disputed' | 'expired';
@@ -119,6 +122,9 @@ export default function DriverHandoffsScreen() {
   const confirmMutation = useConfirmHandoff();
   const createMutation = useCreateIncineratorHandoff();
   const disputeMutation = useDisputeHandoff();
+  const scanPlantMutation = useScanPlantQr();
+  const receiverQrMutation = useRefreshReceiverQr();
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const { data: session } = useActiveCollection();
   const sessionCompany = getCompanyObject(session?.company);
   const userCompany = getCompanyObject(user?.company);
@@ -133,16 +139,18 @@ export default function DriverHandoffsScreen() {
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [disputeModalVisible, setDisputeModalVisible] = useState(false);
   const [disputeHandoffId, setDisputeHandoffId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState<string>('');
   const [disputeDescription, setDisputeDescription] = useState('');
   const [disputeError, setDisputeError] = useState<string | null>(null);
+  const [plantScannerVisible, setPlantScannerVisible] = useState(false);
+  const [plantHasScanned, setPlantHasScanned] = useState(false);
+  const [receiverQrUrl, setReceiverQrUrl] = useState<string | null>(null);
+  const [receiverQrExpiresAt, setReceiverQrExpiresAt] = useState<string | null>(null);
 
   const pulse = useRef(new Animated.Value(1)).current;
-  const copyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -154,10 +162,6 @@ export default function DriverHandoffsScreen() {
     animation.start();
     return () => animation.stop();
   }, [pulse]);
-
-  useEffect(() => () => {
-    if (copyTimeout.current) clearTimeout(copyTimeout.current);
-  }, []);
 
   useEffect(() => {
     if (selectedPlantId || !(plants ?? []).length) return;
@@ -195,6 +199,13 @@ export default function DriverHandoffsScreen() {
       .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))[0]
   ), [sessionHandoffs]);
 
+  useEffect(() => {
+    if (incinerationHandoff?.status === 'completed') {
+      setReceiverQrUrl(null);
+      setReceiverQrExpiresAt(null);
+    }
+  }, [incinerationHandoff?.status]);
+
   const visitedContainers = session?.selectedContainers?.filter((item) => item.visited) ?? [];
   const totalVisitedWeight = visitedContainers.reduce(
     (sum, item) => sum + (item.collectedWeight ?? 0),
@@ -208,8 +219,6 @@ export default function DriverHandoffsScreen() {
     visitedContainers.length > 0 &&
     !incinerationHandoff;
 
-  const confirmationToken = createMutation.data?.confirmationToken;
-  const confirmationUrl = confirmationToken ? `${CONFIRMATION_BASE_URL}/${confirmationToken}` : null;
   const companyName = company?.name ?? t('driver.home.company');
   const defaultPlantName =
     typeof company?.defaultIncinerationPlant === 'object'
@@ -330,7 +339,6 @@ export default function DriverHandoffsScreen() {
                 },
                 onSuccess: () => {
                   setCreateError(null);
-                  setCopied(false);
                 },
               },
             );
@@ -340,12 +348,59 @@ export default function DriverHandoffsScreen() {
     );
   };
 
-  const handleCopyLink = async () => {
-    if (!confirmationUrl) return;
-    await Clipboard.setStringAsync(confirmationUrl);
-    setCopied(true);
-    if (copyTimeout.current) clearTimeout(copyTimeout.current);
-    copyTimeout.current = setTimeout(() => setCopied(false), 2000);
+  const handleOpenPlantScanner = async () => {
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission();
+      if (!result.granted) {
+        Alert.alert(t('handoff.qr.permissionTitle'), t('handoff.qr.permissionBody'));
+        return;
+      }
+    }
+    setPlantHasScanned(false);
+    setPlantScannerVisible(true);
+  };
+
+  const closePlantScanner = () => {
+    setPlantScannerVisible(false);
+    setPlantHasScanned(false);
+  };
+
+  const handlePlantQrScanned = ({ data: scannedValue }: { data: string }) => {
+    if (plantHasScanned || !incinerationHandoff) return;
+    setPlantHasScanned(true);
+    scanPlantMutation.mutate(
+      { handoffId: incinerationHandoff._id, plantId: scannedValue },
+      {
+        onSuccess: () => {
+          closePlantScanner();
+          Alert.alert(t('handoff.qr.scanSuccess'), t('handoff.qr.scanSuccessBody'));
+          refetch();
+        },
+        onError: (error) => {
+          Alert.alert(
+            t('handoff.qr.scanError'),
+            error instanceof Error ? error.message : t('handoff.errors.scan'),
+          );
+          setPlantHasScanned(false);
+        },
+      },
+    );
+  };
+
+  const handleShowReceiverQr = () => {
+    if (!incinerationHandoff || receiverQrMutation.isPending) return;
+    receiverQrMutation.mutate(incinerationHandoff._id, {
+      onSuccess: (data) => {
+        setReceiverQrUrl(data.url);
+        setReceiverQrExpiresAt(data.expiresAt);
+      },
+      onError: (error) => {
+        Alert.alert(
+          t('handoff.qr.scanError'),
+          error instanceof Error ? error.message : t('handoff.errors.scan'),
+        );
+      },
+    });
   };
 
   const openDisputeModal = (handoff: Handoff) => {
@@ -735,21 +790,67 @@ export default function DriverHandoffsScreen() {
                 {t('handoff.card.awaitingOperator')}
               </Text>
             )}
-            {confirmationUrl ? (
-              <View style={styles.linkCard}>
-                <Text style={styles.sectionSubtitle}>{t('handoff.card.confirmationLink')}</Text>
-                <Text style={styles.linkText}>{confirmationUrl}</Text>
-                <TouchableOpacity style={styles.copyButton} onPress={handleCopyLink}>
-                  <Text style={styles.copyButtonText}>
-                    {copied ? t('handoff.card.copied') : t('handoff.card.copyLink')}
-                  </Text>
+            {['created', 'pending', 'confirmed_by_receiver'].includes(incinerationHandoff.status) ? (
+              <View style={styles.qrActionSection}>
+                <Text style={styles.cardSection}>{t('handoff.qr.arrivalTitle')}</Text>
+                <Text style={styles.cardSubtitle}>{t('handoff.qr.arrivalBody')}</Text>
+                <TouchableOpacity
+                  style={[styles.qrScanButton, scanPlantMutation.isPending && styles.primaryButtonDisabled]}
+                  onPress={handleOpenPlantScanner}
+                  disabled={scanPlantMutation.isPending}
+                >
+                  {scanPlantMutation.isPending ? (
+                    <ActivityIndicator color={colors.surface} size="small" />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="qrcode-scan" size={18} color={colors.surface} />
+                      <Text style={styles.primaryButtonText}>{t('handoff.qr.scanPlantButton')}</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
+                {scanPlantMutation.isError ? (
+                  <Text style={styles.errorText}>
+                    {scanPlantMutation.error instanceof Error
+                      ? scanPlantMutation.error.message
+                      : t('handoff.errors.scan')}
+                  </Text>
+                ) : null}
               </View>
             ) : null}
-            {incinerationHandoff.tokenExpiresAt ? (
-              <Text style={styles.cardSubtitle}>
-                {t('handoff.card.linkExpires', { time: formatTime(incinerationHandoff.tokenExpiresAt) })}
-              </Text>
+            {incinerationHandoff.status !== 'completed' ? (
+              <View style={styles.qrActionSection}>
+                <Text style={styles.cardSection}>{t('handoff.qr.operatorTitle')}</Text>
+                <Text style={styles.cardSubtitle}>{t('handoff.qr.operatorBody')}</Text>
+                {receiverQrUrl ? (
+                  <View style={styles.qrDisplay}>
+                    <QRCode value={receiverQrUrl} size={180} backgroundColor="#ffffff" color="#0f172a" />
+                    {receiverQrExpiresAt ? (
+                      <Text style={[styles.cardSubtitle, { marginTop: spacing.sm }]}>
+                        {t('handoff.qr.qrExpires', { time: formatTime(receiverQrExpiresAt) })}
+                      </Text>
+                    ) : null}
+                    <TouchableOpacity
+                      onPress={handleShowReceiverQr}
+                      disabled={receiverQrMutation.isPending}
+                      style={styles.refreshQrButton}
+                    >
+                      <Text style={styles.refreshQrText}>{t('handoff.qr.refreshQr')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.primaryButton, receiverQrMutation.isPending && styles.primaryButtonDisabled]}
+                    onPress={handleShowReceiverQr}
+                    disabled={receiverQrMutation.isPending}
+                  >
+                    {receiverQrMutation.isPending ? (
+                      <ActivityIndicator color={colors.surface} size="small" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>{t('handoff.qr.showOperatorQr')}</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
             ) : null}
             {incinerationHandoff.status !== 'completed' ? (
               <TouchableOpacity onPress={() => openDisputeModal(incinerationHandoff)}>
@@ -884,6 +985,32 @@ export default function DriverHandoffsScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={plantScannerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closePlantScanner}
+      >
+        <View style={styles.scannerOverlay}>
+          <View style={styles.scannerCard}>
+            <View style={styles.scannerHeader}>
+              <View>
+                <Text style={styles.scannerTitle}>{t('handoff.qr.scanPlantTitle')}</Text>
+                <Text style={styles.scannerBody}>{t('handoff.qr.scanPlantBody')}</Text>
+              </View>
+              <TouchableOpacity onPress={closePlantScanner}>
+                <MaterialCommunityIcons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <CameraView
+              style={styles.scannerCamera}
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={plantHasScanned ? undefined : handlePlantQrScanned}
+            />
           </View>
         </View>
       </Modal>
@@ -1283,5 +1410,71 @@ const styles = StyleSheet.create({
   },
   modalButtonTextPrimary: {
     color: colors.surface,
+  },
+  qrActionSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  qrScanButton: {
+    marginTop: spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  qrDisplay: {
+    marginTop: spacing.md,
+    alignItems: 'center',
+    padding: spacing.lg,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+  },
+  refreshQrButton: {
+    marginTop: spacing.md,
+  },
+  refreshQrText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  scannerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  scannerCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: spacing.lg,
+    width: '100%',
+  },
+  scannerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  scannerTitle: {
+    ...typography.body,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  scannerBody: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  scannerCamera: {
+    width: '100%',
+    height: 240,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
 });

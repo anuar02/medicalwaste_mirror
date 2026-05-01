@@ -6,7 +6,9 @@ import {
   createFacilityToDriverHandoff,
   disputeHandoff,
   fetchHandoffs,
+  refreshReceiverQr,
   resendHandoffNotification,
+  scanPlantQr,
 } from '../services/handoffs';
 
 export function useHandoffs(options?: { enabled?: boolean; refetchInterval?: number | false }) {
@@ -71,5 +73,22 @@ export function useResendHandoffNotification() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['handoffs'] });
     },
+  });
+}
+
+export function useScanPlantQr() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ handoffId, plantId }: { handoffId: string; plantId: string }) =>
+      scanPlantQr(handoffId, plantId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['handoffs'] });
+    },
+  });
+}
+
+export function useRefreshReceiverQr() {
+  return useMutation({
+    mutationFn: (handoffId: string) => refreshReceiverQr(handoffId),
   });
 }

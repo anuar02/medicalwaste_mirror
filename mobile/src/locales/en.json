@@ -415,11 +415,29 @@
       "confirm": "Failed to confirm handoff.",
       "plants": "Failed to load plants.",
       "disputeFailed": "Failed to submit dispute.",
-      "resendFailed": "Failed to regenerate link."
+      "resendFailed": "Failed to regenerate link.",
+      "scan": "Failed to process the scan. Please try again."
     },
     "history": {
       "title": "Session handoffs",
       "notFound": "Session not found."
+    },
+    "qr": {
+      "arrivalTitle": "Confirm your arrival",
+      "arrivalBody": "Scan the QR code at the incineration plant to confirm arrival.",
+      "scanPlantButton": "Scan Plant QR",
+      "scanPlantTitle": "Scan Plant QR",
+      "scanPlantBody": "Point the camera at the plant's QR code.",
+      "operatorTitle": "Operator confirmation",
+      "operatorBody": "Show this QR code to the plant operator so they can confirm receipt.",
+      "showOperatorQr": "Show QR to Operator",
+      "qrExpires": "QR valid until {{time}}",
+      "refreshQr": "Refresh QR",
+      "scanSuccess": "Arrival confirmed",
+      "scanSuccessBody": "Your arrival at the plant has been recorded.",
+      "scanError": "Scan failed",
+      "permissionTitle": "Camera permission required",
+      "permissionBody": "Camera access is needed to scan QR codes."
     }
   }
 }
