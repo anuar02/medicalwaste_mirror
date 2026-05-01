@@ -32,3 +32,30 @@ A comprehensive IoT solution for medical waste management that monitors smart wa
 - Node.js >= 18.0.0
 - MongoDB >= 5.0
 - npm or yarn
+
+## WhatsApp OTP
+
+Phone login supports SMS and WhatsApp OTP channels. WhatsApp OTP uses Twilio Verify with the WhatsApp channel.
+
+Backend environment variables:
+
+```env
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_WHATSAPP_FROM=+14155238886
+TWILIO_VERIFY_SERVICE_SID=VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+WHATSAPP_OTP_FALLBACK_TO_SMS=false
+```
+
+The login start endpoint accepts `channel: "sms"` or `channel: "whatsapp"`:
+
+```http
+POST /api/auth/phone/start
+```
+
+```json
+{
+  "phoneNumber": "+77051234567",
+  "channel": "whatsapp"
+}
+```

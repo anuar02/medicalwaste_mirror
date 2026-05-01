@@ -12,10 +12,33 @@ const schemaOptions = {
             delete ret.password;
             delete ret.resetPasswordToken;
             delete ret.resetPasswordExpires;
+            delete ret.phoneOtpHash;
+            delete ret.phoneOtpExpires;
+            delete ret.phoneOtpPurpose;
+            delete ret.phoneOtpAttempts;
+            delete ret.phoneOtpSentAt;
             delete ret.__v;
             return ret;
         }
     }
+};
+
+const deriveNameParts = (user) => {
+    const source = [
+        user.firstName,
+        user.lastName,
+        user.username,
+        user.email ? String(user.email).split('@')[0] : ''
+    ].filter(Boolean).join(' ');
+    const parts = String(source || 'Unknown User')
+        .trim()
+        .split(/[\s._-]+/)
+        .filter(Boolean);
+
+    return {
+        firstName: parts[0] || 'Unknown',
+        lastName: parts.length > 1 ? parts.slice(1).join(' ') : 'User'
+    };
 };
 
 const userSchema = new mongoose.Schema({
@@ -107,11 +130,10 @@ const userSchema = new mongoose.Schema({
     },
     phoneNumber: {
         type: String,
-        required: [true, 'Phone number is required'],
         trim: true,
         validate: {
             validator: function(v) {
-                return /^\+[1-9]\d{6,14}$/.test(v);
+                return !v || /^\+[1-9]\d{6,14}$/.test(v);
             },
             message: 'Phone number must be in E.164 format, e.g. +77051234567'
         }
@@ -177,7 +199,24 @@ const userSchema = new mongoose.Schema({
     },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
-    passwordChangedAt: Date
+    phoneOtpHash: String,
+    phoneOtpExpires: Date,
+    phoneOtpPurpose: {
+        type: String,
+        enum: ['login', 'password-reset']
+    },
+    phoneOtpAttempts: {
+        type: Number,
+        default: 0
+    },
+    phoneOtpSentAt: Date,
+    passwordChangedAt: Date,
+    googleId: {
+        type: String,
+        sparse: true,
+        index: true
+    },
+    googleProfile: mongoose.Schema.Types.Mixed
 }, schemaOptions);
 
 // Index for efficient queries
@@ -186,6 +225,22 @@ userSchema.index({ email: 1 }, { unique: true, sparse: true });
 userSchema.index({ role: 1 });
 userSchema.index({ company: 1 });
 userSchema.index({ verificationStatus: 1 });
+userSchema.index({ phoneNumber: 1 }, { sparse: true });
+
+userSchema.pre('validate', function(next) {
+    const names = deriveNameParts(this);
+    if (!this.firstName || String(this.firstName).trim() === '') {
+        this.firstName = names.firstName;
+    }
+    if (!this.lastName || String(this.lastName).trim() === '') {
+        this.lastName = names.lastName;
+    }
+    if (!this.phoneNumber) {
+        this.phoneNumber = undefined;
+        this.phoneNumberVerified = false;
+    }
+    next();
+});
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

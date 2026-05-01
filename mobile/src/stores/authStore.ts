@@ -16,7 +16,7 @@ interface AuthState {
   isLoading: boolean;
   setUser: (user: User) => void;
   login: (email: string, password: string) => Promise<void>;
-  startPhoneLogin: (phoneNumber: string) => Promise<void>;
+  startPhoneLogin: (phoneNumber: string, channel?: 'sms' | 'whatsapp') => Promise<void>;
   verifyPhoneLogin: (phoneNumber: string, code: string) => Promise<void>;
   register: (payload: {
     firstName: string;
@@ -41,8 +41,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     const user = await loginService(email, password);
     set({ user });
   },
-  startPhoneLogin: async (phoneNumber) => {
-    await startPhoneLoginService(phoneNumber);
+  startPhoneLogin: async (phoneNumber, channel = 'sms') => {
+    await startPhoneLoginService(phoneNumber, channel);
   },
   verifyPhoneLogin: async (phoneNumber, code) => {
     const user = await verifyPhoneLoginService(phoneNumber, code);

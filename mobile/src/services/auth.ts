@@ -57,9 +57,10 @@ export async function register(payload: {
   return response.data.data.user;
 }
 
-export async function startPhoneLogin(phoneNumber: string): Promise<void> {
+export async function startPhoneLogin(phoneNumber: string, channel: 'sms' | 'whatsapp' = 'sms'): Promise<void> {
   const response = await api.post<ApiSuccess<{ status: string }>>('/api/auth/phone/start', {
     phoneNumber,
+    channel,
   });
   if (response.data.status !== 'success') {
     throw new Error('Failed to start phone login');

@@ -19,10 +19,12 @@ const ensureVerifyReady = () => {
     return { client, serviceSid };
 };
 
-async function startPhoneVerification(phoneNumber) {
+async function startPhoneVerification(phoneNumber, channel = 'sms') {
     if (!phoneNumber) {
         return { success: false, error: 'Phone number is required' };
     }
+
+    const normalizedChannel = channel === 'whatsapp' ? 'whatsapp' : 'sms';
 
     const { client, serviceSid } = ensureVerifyReady();
     if (!client || !serviceSid) {
@@ -33,9 +35,9 @@ async function startPhoneVerification(phoneNumber) {
         const result = await client.verify.v2
             .services(serviceSid)
             .verifications
-            .create({ to: phoneNumber, channel: 'sms' });
+            .create({ to: phoneNumber, channel: normalizedChannel });
 
-        return { success: true, status: result.status, sid: result.sid };
+        return { success: true, status: result.status, sid: result.sid, channel: normalizedChannel };
     } catch (error) {
         return { success: false, error: error.message };
     }

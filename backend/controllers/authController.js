@@ -8,16 +8,17 @@ const AppError = require('../utils/appError');
 const { logger } = require('../middleware/loggers');
 const { sendEmail } = require('../utils/email');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { sendSMS } = require('../services/smsService');
 const { startPhoneVerification, checkPhoneVerification } = require('../services/twilioVerifyService');
+
+const PHONE_OTP_TTL_MS = Number(process.env.PHONE_OTP_TTL_MS || 10 * 60 * 1000);
+const PHONE_OTP_RESEND_MS = Number(process.env.PHONE_OTP_RESEND_MS || 60 * 1000);
+const PHONE_OTP_MAX_ATTEMPTS = Number(process.env.PHONE_OTP_MAX_ATTEMPTS || 5);
+const TWILIO_VERIFY_OTP_HASH = 'twilio-verify';
 
 const normalizePhone = (value) => {
     if (!value) return '';
     return String(value).replace(/[^\d+]/g, '');
-};
-
-const generatePlaceholderPhone = () => {
-    const suffix = String(Math.floor(Math.random() * 1e9)).padStart(9, '0');
-    return `+7${suffix}`;
 };
 
 const splitName = (rawName) => {
@@ -55,7 +56,9 @@ const buildUniqueUsername = async ({ username, firstName, lastName, email }) => 
 };
 
 const ensureSingleUserByPhone = async (phoneNumber) => {
-    const users = await User.find({ phoneNumber }).select('_id role verificationStatus active');
+    const users = await User.find({ phoneNumber }).select(
+        '_id role verificationStatus active phoneNumber phoneOtpHash phoneOtpExpires phoneOtpPurpose phoneOtpAttempts phoneOtpSentAt'
+    );
     if (users.length === 0) {
         throw new AppError('User not found', 404);
     }
@@ -63,6 +66,114 @@ const ensureSingleUserByPhone = async (phoneNumber) => {
         throw new AppError('Multiple accounts use this phone number. Contact support.', 409);
     }
     return users[0];
+};
+
+const generateOtpCode = () => String(crypto.randomInt(100000, 1000000));
+
+const normalizeOtpChannel = (value) => (
+    value === 'whatsapp' || value === 'sms' ? value : 'sms'
+);
+
+const hashPhoneOtp = ({ phoneNumber, code, purpose }) => crypto
+    .createHash('sha256')
+    .update(`${purpose}:${phoneNumber}:${code}`)
+    .digest('hex');
+
+const sendPhoneOtp = async (user, purpose, channel = 'sms') => {
+    if (user.phoneOtpSentAt && Date.now() - user.phoneOtpSentAt.getTime() < PHONE_OTP_RESEND_MS) {
+        throw new AppError('Please wait before requesting a new code', 429);
+    }
+
+    const code = generateOtpCode();
+    const normalizedChannel = normalizeOtpChannel(channel);
+    let deliveredChannel = normalizedChannel;
+    let result;
+
+    if (normalizedChannel === 'whatsapp') {
+        result = await startPhoneVerification(user.phoneNumber, 'whatsapp');
+
+        if (!result.success && process.env.WHATSAPP_OTP_FALLBACK_TO_SMS === 'true') {
+            const message = `MedicalWaste.kz code: ${code}. Do not share it.`;
+            result = await sendSMS(user.phoneNumber, message);
+            deliveredChannel = 'sms';
+        }
+    } else {
+        const message = `MedicalWaste.kz code: ${code}. Do not share it.`;
+        result = await sendSMS(user.phoneNumber, message);
+    }
+
+    if (!result.success) {
+        throw new AppError(result.error || 'Failed to send verification code', 502);
+    }
+
+    user.phoneOtpHash = deliveredChannel === 'whatsapp'
+        ? TWILIO_VERIFY_OTP_HASH
+        : hashPhoneOtp({
+            phoneNumber: user.phoneNumber,
+            code,
+            purpose
+        });
+    user.phoneOtpExpires = Date.now() + PHONE_OTP_TTL_MS;
+    user.phoneOtpPurpose = purpose;
+    user.phoneOtpAttempts = 0;
+    user.phoneOtpSentAt = Date.now();
+    await user.save({ validateBeforeSave: false });
+
+    return { status: 'pending', channel: deliveredChannel };
+};
+
+const verifyPhoneOtp = async (user, code, purpose) => {
+    if (
+        !user.phoneOtpHash
+        || user.phoneOtpPurpose !== purpose
+        || !user.phoneOtpExpires
+        || user.phoneOtpExpires < Date.now()
+    ) {
+        return false;
+    }
+
+    if (user.phoneOtpAttempts >= PHONE_OTP_MAX_ATTEMPTS) {
+        return false;
+    }
+
+    if (user.phoneOtpHash === TWILIO_VERIFY_OTP_HASH) {
+        const check = await checkPhoneVerification(user.phoneNumber, String(code || '').trim());
+        if (!check.success || check.status !== 'approved') {
+            user.phoneOtpAttempts += 1;
+            await user.save({ validateBeforeSave: false });
+            return false;
+        }
+
+        user.phoneOtpHash = undefined;
+        user.phoneOtpExpires = undefined;
+        user.phoneOtpPurpose = undefined;
+        user.phoneOtpAttempts = 0;
+        user.phoneOtpSentAt = undefined;
+        await user.save({ validateBeforeSave: false });
+
+        return true;
+    }
+
+    const expectedHash = hashPhoneOtp({
+        phoneNumber: user.phoneNumber,
+        code: String(code || '').trim(),
+        purpose
+    });
+
+    if (expectedHash !== user.phoneOtpHash) {
+        user.phoneOtpAttempts += 1;
+        await user.save({ validateBeforeSave: false });
+        return false;
+    }
+
+    user.phoneOtpHash = undefined;
+    user.phoneOtpExpires = undefined;
+    user.phoneOtpPurpose = undefined;
+    user.phoneOtpAttempts = 0;
+    user.phoneOtpSentAt = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    return true;
 };
 
 /**
@@ -217,6 +328,11 @@ const register = asyncHandler(async (req, res, next) => {
     const normalizedPhoneNumber = normalizePhone(phoneNumber);
     const resolvedUsername = await buildUniqueUsername({ username, firstName, lastName, email });
 
+    const existingPhoneUser = await User.findOne({ phoneNumber: normalizedPhoneNumber }).select('_id');
+    if (existingPhoneUser) {
+        return next(new AppError('Phone number already in use', 400));
+    }
+
     // Build user data
     const userData = {
         firstName,
@@ -329,7 +445,6 @@ const googleCallback = asyncHandler(async (req, res, next) => {
             // Generate a random password for Google users (they'll login with Google)
             const randomPassword = crypto.randomBytes(16).toString('hex');
             const { firstName, lastName } = splitName(data.name || data.given_name || data.family_name);
-            const phoneNumber = generatePlaceholderPhone();
 
             user = await User.create({
                 username: data.name.replace(/\s+/g, '_').toLowerCase() + '_' + crypto.randomBytes(3).toString('hex'),
@@ -337,7 +452,6 @@ const googleCallback = asyncHandler(async (req, res, next) => {
                 lastName,
                 email: data.email,
                 password: randomPassword,
-                phoneNumber,
                 googleId: data.sub,
                 googleProfile: data,
                 active: true
@@ -425,7 +539,6 @@ const googleLogin = asyncHandler(async (req, res, next) => {
             // Create new user
             const randomPassword = crypto.randomBytes(16).toString('hex');
             const { firstName, lastName } = splitName(payload.name || name);
-            const phoneNumber = generatePlaceholderPhone();
 
             user = await User.create({
                 username: name.replace(/\s+/g, '_').toLowerCase() + '_' + crypto.randomBytes(3).toString('hex'),
@@ -433,7 +546,6 @@ const googleLogin = asyncHandler(async (req, res, next) => {
                 lastName,
                 email,
                 password: randomPassword,
-                phoneNumber,
                 googleId,
                 googleProfile: payload,
                 active: true
@@ -543,23 +655,20 @@ const login = asyncHandler(async (req, res, next) => {
 });
 
 const startPhoneLogin = asyncHandler(async (req, res, next) => {
-    const { phoneNumber } = req.body;
+    const { phoneNumber, channel } = req.body;
     const normalizedPhone = normalizePhone(phoneNumber);
     if (!normalizedPhone) {
         return next(new AppError('Phone number is required', 400));
     }
 
-    await ensureSingleUserByPhone(normalizedPhone);
-
-    const result = await startPhoneVerification(normalizedPhone);
-    if (!result.success) {
-        return next(new AppError(result.error || 'Failed to start verification', 400));
-    }
+    const user = await ensureSingleUserByPhone(normalizedPhone);
+    const result = await sendPhoneOtp(user, 'login', channel);
 
     res.status(200).json({
         status: 'success',
         data: {
-            status: result.status
+            status: result.status,
+            channel: result.channel
         }
     });
 });
@@ -571,12 +680,11 @@ const verifyPhoneLogin = asyncHandler(async (req, res, next) => {
         return next(new AppError('Phone number and code are required', 400));
     }
 
-    const check = await checkPhoneVerification(normalizedPhone, code);
-    if (!check.success || check.status !== 'approved') {
-        return next(new AppError(check.error || 'Invalid verification code', 401));
-    }
-
     const user = await ensureSingleUserByPhone(normalizedPhone);
+    const isValidCode = await verifyPhoneOtp(user, code, 'login');
+    if (!isValidCode) {
+        return next(new AppError('Invalid or expired verification code', 401));
+    }
 
     if (!user.active) {
         return next(new AppError('Your account has been deactivated', 401));
@@ -728,6 +836,57 @@ const resetPassword = asyncHandler(async (req, res, next) => {
     createAndSendTokens(user, 200, res);
 });
 
+const forgotPasswordPhone = asyncHandler(async (req, res, next) => {
+    const normalizedPhone = normalizePhone(req.body.phoneNumber);
+    if (!normalizedPhone) {
+        return next(new AppError('Phone number is required', 400));
+    }
+
+    const users = await User.find({ phoneNumber: normalizedPhone }).select(
+        '_id phoneNumber active phoneOtpHash phoneOtpExpires phoneOtpPurpose phoneOtpAttempts phoneOtpSentAt'
+    );
+
+    if (users.length === 1 && users[0].active) {
+        await sendPhoneOtp(users[0], 'password-reset');
+    }
+
+    res.status(200).json({
+        status: 'success',
+        message: 'If this phone number is registered, a reset code will be sent'
+    });
+});
+
+const resetPasswordPhone = asyncHandler(async (req, res, next) => {
+    const { code, password, passwordConfirm } = req.body;
+    const normalizedPhone = normalizePhone(req.body.phoneNumber);
+
+    if (!normalizedPhone || !code) {
+        return next(new AppError('Phone number and code are required', 400));
+    }
+
+    if (password !== passwordConfirm) {
+        return next(new AppError('Passwords do not match', 400));
+    }
+
+    const user = await ensureSingleUserByPhone(normalizedPhone);
+    if (!user.active) {
+        return next(new AppError('Your account has been deactivated', 401));
+    }
+
+    const isValidCode = await verifyPhoneOtp(user, code, 'password-reset');
+    if (!isValidCode) {
+        return next(new AppError('Invalid or expired verification code', 401));
+    }
+
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.passwordChangedAt = Date.now() - 1000;
+    await user.save();
+
+    createAndSendTokens(user, 200, res);
+});
+
 /**
  * Change password while logged in
  */
@@ -801,6 +960,8 @@ module.exports = {
     refreshToken,
     forgotPassword,
     resetPassword,
+    forgotPasswordPhone,
+    resetPasswordPhone,
     changePassword,
     verifyToken,
     getGoogleAuthURL,

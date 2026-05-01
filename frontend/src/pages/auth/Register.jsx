@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, UserPlus, AlertCircle, ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
+import { Eye, EyeOff, UserPlus, AlertCircle, ArrowLeft, CheckCircle, XCircle, Phone, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from '../../components/ui/Button';
 
@@ -15,7 +15,7 @@ const Register = () => {
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
-        phoneNumber: '',
+        phoneNumber: '+7',
         username: '',
         email: '',
         password: '',
@@ -27,8 +27,8 @@ const Register = () => {
         firstName: { isValid: false, message: '', touched: false },
         lastName: { isValid: false, message: '', touched: false },
         phoneNumber: { isValid: false, message: '', touched: false },
-        username: { isValid: false, message: '', touched: false },
-        email: { isValid: false, message: '', touched: false },
+        username: { isValid: true, message: '', touched: false },
+        email: { isValid: true, message: '', touched: false },
         password: { isValid: false, message: '', touched: false },
         passwordConfirm: { isValid: false, message: '', touched: false },
     });
@@ -48,6 +48,13 @@ const Register = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [formSubmitted, setFormSubmitted] = useState(false);
+
+    const normalizePhoneInput = (value) => {
+        const cleaned = String(value || '').replace(/[^\d+]/g, '');
+        if (!cleaned) return '+7';
+        if (cleaned.startsWith('+')) return cleaned;
+        return `+${cleaned}`;
+    };
 
     // Validate form data based on rules
     useEffect(() => {
@@ -107,8 +114,8 @@ const Register = () => {
             } else {
                 usernameValidation.isValid = true;
             }
-        } else if (validation.username.touched) {
-            usernameValidation.message = t('register.usernameRequired');
+        } else {
+            usernameValidation.isValid = true;
         }
 
         // Email validation
@@ -125,8 +132,8 @@ const Register = () => {
             } else {
                 emailValidation.isValid = true;
             }
-        } else if (validation.email.touched) {
-            emailValidation.message = t('register.emailRequired');
+        } else {
+            emailValidation.isValid = true;
         }
 
         // Check password strength
@@ -211,7 +218,7 @@ const Register = () => {
         const { name, value } = e.target;
         setFormData({
             ...formData,
-            [name]: value,
+            [name]: name === 'phoneNumber' ? normalizePhoneInput(value) : value,
         });
     };
 
@@ -256,8 +263,8 @@ const Register = () => {
                 firstName: formData.firstName,
                 lastName: formData.lastName,
                 phoneNumber: formData.phoneNumber.trim(),
-                username: formData.username,
-                email: formData.email,
+                username: formData.username.trim() || undefined,
+                email: formData.email.trim() || undefined,
                 password: formData.password,
                 passwordConfirm: formData.passwordConfirm
             });
@@ -285,22 +292,32 @@ const Register = () => {
     };
 
     return (
-        <div className="flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4">
-            <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
+        <div className="flex flex-col items-center justify-center bg-slate-50 px-4 py-8">
+            <div className="w-full max-w-2xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
                 <div className="border-b border-slate-100 p-6">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-semibold text-slate-800">{t('register.title')}</h2>
+                        <div>
+                            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
+                                <Phone className="h-5 w-5" />
+                            </div>
+                            <h2 className="text-xl font-semibold text-slate-800">{t('register.title')}</h2>
+                        </div>
                         <Link to="/login" className="flex items-center text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors">
                             <ArrowLeft className="mr-1 h-4 w-4" />
                             {t('register.backToLogin')}
                         </Link>
                     </div>
                     <p className="mt-1 text-sm text-slate-500">
-                        {t('register.subtitle')}
+                        Создайте аккаунт с номером телефона. Email можно добавить как резервный способ восстановления.
                     </p>
                 </div>
 
                 <div className="p-6">
+                    <div className="mb-5 flex items-start rounded-lg border border-teal-100 bg-teal-50 px-4 py-3 text-sm text-teal-800">
+                        <ShieldCheck className="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
+                        <p>Телефон будет основным способом входа через SMS-код Mobizon.</p>
+                    </div>
+
                     {/* Error message */}
                     {error && (
                         <div className="mb-4 flex items-center rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 animate-fade-in">
@@ -369,7 +386,7 @@ const Register = () => {
                                 className={`block w-full rounded-lg border px-3 py-2 text-slate-700 focus:ring-teal-500 transition-all duration-200 ${getInputStatusClass('phoneNumber')}`}
                                 placeholder="+77051234567"
                             />
-                            <p className="mt-1 text-xs text-slate-400">{t('register.phoneHint')}</p>
+                            <p className="mt-1 text-xs text-slate-400">Формат: +77051234567</p>
                             {validation.phoneNumber.touched && !validation.phoneNumber.isValid && (
                                 <p className="mt-1 text-xs text-red-500">{validation.phoneNumber.message}</p>
                             )}
@@ -377,7 +394,7 @@ const Register = () => {
                         {/* Username */}
                         <div>
                             <label htmlFor="username" className="mb-1 block text-sm font-medium text-slate-700">
-                                {t('register.username')}
+                                {t('register.username')} <span className="font-normal text-slate-400">(необязательно)</span>
                             </label>
                             <div className="relative">
                                 <input
@@ -385,7 +402,6 @@ const Register = () => {
                                     name="username"
                                     type="text"
                                     autoComplete="username"
-                                    required
                                     value={formData.username}
                                     onChange={handleChange}
                                     onBlur={handleBlur}
@@ -410,7 +426,7 @@ const Register = () => {
                         {/* Email */}
                         <div>
                             <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
-                                Email
+                                Email <span className="font-normal text-slate-400">(необязательно)</span>
                             </label>
                             <div className="relative">
                                 <input
@@ -418,7 +434,6 @@ const Register = () => {
                                     name="email"
                                     type="email"
                                     autoComplete="email"
-                                    required
                                     value={formData.email}
                                     onChange={handleChange}
                                     onBlur={handleBlur}

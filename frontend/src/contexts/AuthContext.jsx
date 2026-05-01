@@ -207,6 +207,53 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const startPhoneLogin = async (phoneNumber, channel = 'sms') => {
+        setError(null);
+
+        try {
+            await apiService.auth.startPhoneLogin({ phoneNumber, channel });
+            toast.success(channel === 'whatsapp'
+                ? 'Код подтверждения отправлен в WhatsApp'
+                : 'Код подтверждения отправлен');
+            return { success: true };
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || err.message || 'Не удалось отправить код';
+            setError(errorMessage);
+            toast.error(errorMessage);
+            return { success: false, error: errorMessage };
+        }
+    };
+
+    const verifyPhoneLogin = async (phoneNumber, code) => {
+        setError(null);
+
+        try {
+            const response = await apiService.auth.verifyPhoneLogin({ phoneNumber, code });
+            const token = extractToken(response);
+            const userData = extractUserData(response);
+
+            if (!token) {
+                throw new Error('No token received from server');
+            }
+
+            if (!userData) {
+                throw new Error('No user data received from server');
+            }
+
+            localStorage.setItem('token', token);
+            setUser(userData);
+            toast.success('Успешный вход в систему!');
+            navigate('/');
+
+            return { success: true };
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || err.message || 'Неверный или просроченный код';
+            setError(errorMessage);
+            toast.error(errorMessage);
+            return { success: false, error: errorMessage };
+        }
+    };
+
     // Google Auth URL retrieval
     const getGoogleAuthUrl = async () => {
         try {
@@ -535,6 +582,8 @@ export const AuthProvider = ({ children }) => {
         loading,
         error,
         login,
+        startPhoneLogin,
+        verifyPhoneLogin,
         register,
         logout,
         forgotPassword,

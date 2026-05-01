@@ -12,6 +12,8 @@ const {
     refreshToken,
     forgotPassword,
     resetPassword,
+    forgotPasswordPhone,
+    resetPasswordPhone,
     changePassword,
     verifyToken, googleCallback, getGoogleAuthURL, googleLogin
 } = require('../controllers/authController');
@@ -104,7 +106,11 @@ router.post('/phone/start', [
         .withMessage('Phone number is required')
         .customSanitizer((value) => value.replace(/[^\d+]/g, ''))
         .matches(/^\+[1-9]\d{6,14}$/)
-        .withMessage('Phone number must be in E.164 format, e.g. +77051234567')
+        .withMessage('Phone number must be in E.164 format, e.g. +77051234567'),
+    body('channel')
+        .optional()
+        .isIn(['sms', 'whatsapp'])
+        .withMessage('Channel must be sms or whatsapp')
 ], validateRequest, startPhoneLogin);
 router.post('/phone/verify', [
     body('phoneNumber')
@@ -119,6 +125,29 @@ router.post('/phone/verify', [
 router.post('/logout', auth, logout);
 router.post('/refresh-token', refreshToken);
 router.post('/forgot-password', body('email').isEmail(), validateRequest, forgotPassword);
+router.post('/forgot-password/phone', [
+    body('phoneNumber')
+        .trim()
+        .notEmpty()
+        .withMessage('Phone number is required')
+        .customSanitizer((value) => value.replace(/[^\d+]/g, ''))
+        .matches(/^\+[1-9]\d{6,14}$/)
+        .withMessage('Phone number must be in E.164 format, e.g. +77051234567')
+], validateRequest, forgotPasswordPhone);
+router.post('/reset-password/phone', [
+    body('phoneNumber')
+        .trim()
+        .notEmpty()
+        .withMessage('Phone number is required')
+        .customSanitizer((value) => value.replace(/[^\d+]/g, ''))
+        .matches(/^\+[1-9]\d{6,14}$/)
+        .withMessage('Phone number must be in E.164 format, e.g. +77051234567'),
+    body('code')
+        .trim()
+        .isLength({ min: 4, max: 10 })
+        .withMessage('Verification code is required'),
+    ...resetPasswordValidation
+], validateRequest, resetPasswordPhone);
 router.post('/reset-password/:token', resetPasswordValidation, validateRequest, resetPassword);
 router.post('/change-password', auth, resetPasswordValidation, validateRequest, changePassword);
 router.get('/verify', auth, verifyToken);

@@ -9,13 +9,6 @@ function normalizePhone(value) {
     return String(value).replace(/[^\d+]/g, '');
 }
 
-function generatePhoneFromId(id) {
-    const hex = String(id).slice(-8);
-    const num = parseInt(hex, 16) % 1e9;
-    const suffix = String(num).padStart(9, '0');
-    return `+7${suffix}`;
-}
-
 function deriveNames({ firstName, lastName, username, email }) {
     const existingFirst = firstName?.trim();
     const existingLast = lastName?.trim();
@@ -76,16 +69,22 @@ async function run() {
             if (normalizedPhone && PHONE_REGEX.test(normalizedPhone)) {
                 if (normalizedPhone !== user.phoneNumber) updates.phoneNumber = normalizedPhone;
             } else if (!normalizedPhone) {
-                updates.phoneNumber = generatePhoneFromId(user._id);
+                updates.$unset = { ...(updates.$unset || {}), phoneNumber: '' };
+                updates.phoneNumberVerified = false;
             } else {
-                updates.phoneNumber = generatePhoneFromId(user._id);
+                updates.$unset = { ...(updates.$unset || {}), phoneNumber: '' };
+                updates.phoneNumberVerified = false;
             }
 
             if (Object.keys(updates).length === 0) continue;
 
             updated += 1;
             if (!dryRun) {
-                await User.updateOne({ _id: user._id }, updates, { runValidators: true });
+                const { $unset, ...$set } = updates;
+                const update = {};
+                if (Object.keys($set).length > 0) update.$set = $set;
+                if ($unset && Object.keys($unset).length > 0) update.$unset = $unset;
+                await User.updateOne({ _id: user._id }, update, { runValidators: true });
             }
         }
 

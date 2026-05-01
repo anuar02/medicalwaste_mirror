@@ -116,7 +116,17 @@ const updateProfile = asyncHandler(async (req, res, next) => {
     if (username) updatedFields.username = username;
     if (email) updatedFields.email = email;
     if (department) updatedFields.department = department;
-    if (phoneNumber !== undefined) updatedFields.phoneNumber = phoneNumber;
+    if (phoneNumber !== undefined) {
+        const existingPhoneUser = await User.findOne({
+            phoneNumber,
+            _id: { $ne: req.user._id }
+        }).select('_id');
+        if (existingPhoneUser) {
+            return next(new AppError('Phone number already in use', 400));
+        }
+        updatedFields.phoneNumber = phoneNumber;
+        updatedFields.phoneNumberVerified = false;
+    }
     if (vehicleInfo) {
         const existing = await User.findById(req.user._id).select('vehicleInfo');
         updatedFields.vehicleInfo = { ...existing?.vehicleInfo?.toObject?.(), ...vehicleInfo };
@@ -169,6 +179,14 @@ const updatePhoneNumber = asyncHandler(async (req, res, next) => {
         });
     }
 
+    const existingPhoneUser = await User.findOne({
+        phoneNumber,
+        _id: { $ne: req.user._id }
+    }).select('_id');
+    if (existingPhoneUser) {
+        return next(new AppError('Phone number already in use', 400));
+    }
+
     const user = await User.findByIdAndUpdate(
         req.user._id,
         { phoneNumber, phoneNumberVerified: false },
@@ -204,6 +222,13 @@ const startPhoneVerificationFlow = asyncHandler(async (req, res, next) => {
     }
 
     if (phoneNumber && phoneNumber !== user.phoneNumber) {
+        const existingPhoneUser = await User.findOne({
+            phoneNumber,
+            _id: { $ne: req.user._id }
+        }).select('_id');
+        if (existingPhoneUser) {
+            return next(new AppError('Phone number already in use', 400));
+        }
         user.phoneNumber = phoneNumber;
         user.phoneNumberVerified = false;
         await user.save();
@@ -295,7 +320,17 @@ const updateDriverDetails = asyncHandler(async (req, res, next) => {
     // Update fields
     if (vehicleInfo) driver.vehicleInfo = { ...driver.vehicleInfo, ...vehicleInfo };
     if (driverLicense) driver.driverLicense = { ...driver.driverLicense, ...driverLicense };
-    if (phoneNumber) driver.phoneNumber = phoneNumber;
+    if (phoneNumber && phoneNumber !== driver.phoneNumber) {
+        const existingPhoneUser = await User.findOne({
+            phoneNumber,
+            _id: { $ne: driver._id }
+        }).select('_id');
+        if (existingPhoneUser) {
+            return next(new AppError('Phone number already in use', 400));
+        }
+        driver.phoneNumber = phoneNumber;
+        driver.phoneNumberVerified = false;
+    }
 
     await driver.save();
 

@@ -26,7 +26,7 @@ export default function LoginScreen() {
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { login, startPhoneLogin, verifyPhoneLogin } = useAuthStore();
 
-  const [mode, setMode] = useState<'phone' | 'email'>('phone');
+  const [mode, setMode] = useState<'phone' | 'whatsapp' | 'email'>('phone');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('+7');
@@ -50,7 +50,7 @@ export default function LoginScreen() {
         return;
       }
       if (!codeSent) {
-        await startPhoneLogin(phoneNumber.trim());
+        await startPhoneLogin(phoneNumber.trim(), mode === 'whatsapp' ? 'whatsapp' : 'sms');
         setCodeSent(true);
         return;
       }
@@ -67,6 +67,7 @@ export default function LoginScreen() {
   const segments = useMemo(
     () => [
       { key: 'phone', label: t('auth.phoneLogin') },
+      { key: 'whatsapp', label: t('auth.whatsappLogin') },
       { key: 'email', label: t('auth.emailLogin') },
     ],
     [t],
@@ -77,7 +78,9 @@ export default function LoginScreen() {
       ? t('auth.signIn')
       : codeSent
         ? t('auth.verifyCode')
-        : t('auth.sendCode');
+        : mode === 'whatsapp'
+          ? t('auth.sendWhatsAppCode')
+          : t('auth.sendCode');
 
   return (
     <View style={styles.root}>
@@ -119,7 +122,7 @@ export default function LoginScreen() {
             <SegmentedControl
               segments={segments}
               activeKey={mode}
-              onSelect={(k) => setMode(k as 'phone' | 'email')}
+              onSelect={(k) => setMode(k as 'phone' | 'whatsapp' | 'email')}
             />
           </Animated.View>
 
@@ -153,7 +156,7 @@ export default function LoginScreen() {
                   value={phoneNumber}
                   onChangeText={(v) => setPhoneNumber(v || '+7')}
                   keyboardType="phone-pad"
-                  hint={!codeSent ? t('auth.phoneHint') : undefined}
+                  hint={!codeSent ? t(mode === 'whatsapp' ? 'auth.whatsappHint' : 'auth.phoneHint') : undefined}
                 />
                 {codeSent ? (
                   <FormField

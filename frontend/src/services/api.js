@@ -138,6 +138,8 @@ const apiService = {
     // Auth endpoints (unchanged interface)
     auth: {
         login: createCompatibleMethod((credentials) => api.post('/auth/login', credentials)),
+        startPhoneLogin: createCompatibleMethod((data) => api.post('/auth/phone/start', data)),
+        verifyPhoneLogin: createCompatibleMethod((data) => api.post('/auth/phone/verify', data)),
         register: createCompatibleMethod((userData) => api.post('/auth/register', userData)),
         logout: createCompatibleMethod(() => api.post('/auth/logout')),
         verifyToken: createCompatibleMethod(() => api.get('/auth/verify')),
