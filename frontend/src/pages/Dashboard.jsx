@@ -63,24 +63,20 @@ const getShortWasteTypeName = (wasteType) => {
 // ===== PERFORMANCE OPTIMIZATIONS =====
 
 // Memoized metric card for better performance
-const MetricCard = React.memo(({
-                                   title, value, icon, color = 'blue', trend, subtitle, onClick,
-                                   prediction, isLoading, className = ''
-                               }) => {
-    const colorClasses = {
-        blue: 'bg-blue-50 text-blue-600 border-blue-200',
-        teal: 'bg-teal-50 text-teal-600 border-teal-200',
-        red: 'bg-red-50 text-red-600 border-red-200',
-        amber: 'bg-amber-50 text-amber-600 border-amber-200',
-        purple: 'bg-purple-50 text-purple-600 border-purple-200',
-        green: 'bg-green-50 text-green-600 border-green-200'
-    };
+const METRIC_COLOR = {
+    blue:   { bar: 'bg-blue-500',    icon: 'bg-blue-50 text-blue-600 border-blue-100',     trendUp: 'bg-green-50 text-green-700 border-green-200',   trendDown: 'bg-red-50 text-red-600 border-red-200' },
+    teal:   { bar: 'bg-teal-500',    icon: 'bg-teal-50 text-teal-600 border-teal-100',     trendUp: 'bg-green-50 text-green-700 border-green-200',   trendDown: 'bg-red-50 text-red-600 border-red-200' },
+    red:    { bar: 'bg-red-500',     icon: 'bg-red-50 text-red-600 border-red-100',        trendUp: 'bg-green-50 text-green-700 border-green-200',   trendDown: 'bg-red-50 text-red-600 border-red-200' },
+    amber:  { bar: 'bg-amber-500',   icon: 'bg-amber-50 text-amber-600 border-amber-100',  trendUp: 'bg-green-50 text-green-700 border-green-200',   trendDown: 'bg-red-50 text-red-600 border-red-200' },
+    purple: { bar: 'bg-purple-500',  icon: 'bg-purple-50 text-purple-600 border-purple-100', trendUp: 'bg-green-50 text-green-700 border-green-200', trendDown: 'bg-red-50 text-red-600 border-red-200' },
+    green:  { bar: 'bg-emerald-500', icon: 'bg-emerald-50 text-emerald-600 border-emerald-100', trendUp: 'bg-green-50 text-green-700 border-green-200', trendDown: 'bg-red-50 text-red-600 border-red-200' },
+};
 
-    const getTrendColor = useCallback((trend) => {
-        if (trend > 0) return 'text-green-600';
-        if (trend < 0) return 'text-red-600';
-        return 'text-slate-500';
-    }, []);
+const MetricCard = React.memo(({
+    title, value, icon, color = 'blue', trend, subtitle, onClick,
+    prediction, isLoading, className = ''
+}) => {
+    const cfg = METRIC_COLOR[color] || METRIC_COLOR.blue;
 
     const handleClick = useCallback(() => {
         if (onClick && !isLoading) onClick();
@@ -88,65 +84,70 @@ const MetricCard = React.memo(({
 
     if (isLoading) {
         return (
-            <div className={`relative overflow-hidden rounded-xl border border-slate-200 p-6 bg-white ${className}`}>
-                <div className="animate-pulse">
-                    <div className="h-4 bg-slate-200 rounded w-3/4 mb-3"></div>
-                    <div className="h-8 bg-slate-200 rounded w-1/2 mb-2"></div>
-                    <div className="h-3 bg-slate-200 rounded w-2/3"></div>
+            <div className={`relative overflow-hidden rounded-xl border border-slate-200 bg-white p-5 ${className}`}>
+                <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl bg-slate-200 animate-pulse" />
+                <div className="pl-3 animate-pulse space-y-2.5">
+                    <div className="h-3 bg-slate-200 rounded-full w-2/3" />
+                    <div className="h-7 bg-slate-200 rounded-lg w-1/2" />
+                    <div className="h-2.5 bg-slate-200 rounded-full w-3/4" />
                 </div>
             </div>
         );
     }
 
+    const CardElement = onClick ? 'button' : 'div';
+    const hasTrend = trend !== undefined && trend !== null;
+
     return (
-        <div
-            className={`relative overflow-hidden rounded-xl border border-slate-200 p-6 bg-white 
-                ${onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5' : ''} 
-                transition-all duration-200 ${className}`}
-            onClick={handleClick}
-            role={onClick ? 'button' : undefined}
-            tabIndex={onClick ? 0 : undefined}
-            onKeyPress={(e) => {
-                if (onClick && (e.key === 'Enter' || e.key === ' ')) {
-                    e.preventDefault();
-                    handleClick();
-                }
-            }}
+        <CardElement
+            type={onClick ? 'button' : undefined}
+            className={`group relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left
+                transition-all duration-200
+                ${onClick ? 'cursor-pointer hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:ring-offset-1' : ''}
+                ${className}`}
+            onClick={onClick ? handleClick : undefined}
         >
-            <div className="flex items-center justify-between">
+            {/* Color accent bar */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${cfg.bar} rounded-l-xl`} />
+
+            <div className="flex items-start justify-between gap-3 pl-5 pr-4 py-4">
+                {/* Left: text content */}
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-600 truncate">{title}</p>
-                    <div className="mt-2 flex items-baseline">
-                        <p className="text-2xl font-bold text-slate-900 truncate">{value}</p>
-                        {trend !== undefined && (
-                            <div className={`ml-2 flex items-center text-sm ${getTrendColor(trend)} shrink-0`}>
-                                {trend > 0 ? (
-                                    <TrendingUp className="h-4 w-4" />
-                                ) : trend < 0 ? (
-                                    <TrendingDown className="h-4 w-4" />
-                                ) : null}
-                                <span className="ml-1">{Math.abs(trend).toFixed(1)}%</span>
-                            </div>
+                    <p className="font-chakra text-[11px] font-medium uppercase tracking-wider text-slate-500 truncate">
+                        {title}
+                    </p>
+
+                    <div className="mt-2 flex items-baseline gap-2 flex-wrap">
+                        <span className="font-data text-2xl font-bold text-slate-800 tabular-nums leading-none">
+                            {value}
+                        </span>
+                        {hasTrend && (
+                            <span className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums
+                                ${trend > 0 ? cfg.trendUp : trend < 0 ? cfg.trendDown : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                                {trend > 0 ? <TrendingUp className="h-2.5 w-2.5" /> : trend < 0 ? <TrendingDown className="h-2.5 w-2.5" /> : null}
+                                {Math.abs(trend).toFixed(1)}%
+                            </span>
                         )}
                     </div>
+
                     {subtitle && (
-                        <p className="mt-1 text-xs text-slate-500 truncate">{subtitle}</p>
+                        <p className="mt-1.5 text-xs text-slate-400 truncate">{subtitle}</p>
                     )}
+
                     {prediction && (
-                        <div className="mt-2 p-2 bg-purple-50 rounded-lg border border-purple-200">
-                            <div className="flex items-center space-x-2">
-                                <Brain className="h-3 w-3 text-purple-600 shrink-0" />
-                                <span className="text-xs font-medium text-purple-700">Прогноз:</span>
-                            </div>
-                            <p className="text-xs text-purple-600 mt-1 line-clamp-2">{prediction}</p>
+                        <div className="mt-2.5 flex items-start gap-1.5 rounded-lg bg-purple-50 border border-purple-100 px-2.5 py-2">
+                            <Brain className="h-3 w-3 text-purple-500 mt-0.5 shrink-0" />
+                            <p className="text-[11px] leading-snug text-purple-600 line-clamp-2">{prediction}</p>
                         </div>
                     )}
                 </div>
-                <div className={`rounded-lg p-3 border ${colorClasses[color]} shrink-0`}>
+
+                {/* Right: icon */}
+                <div className={`flex-shrink-0 rounded-xl p-2.5 border transition-transform duration-200 ${cfg.icon} ${onClick ? 'group-hover:scale-105' : ''}`}>
                     {icon}
                 </div>
             </div>
-        </div>
+        </CardElement>
     );
 });
 
@@ -459,10 +460,12 @@ const Dashboard = () => {
             const predictionPromises = bins.slice(0, 10).map(async (bin) => {
                 try {
                     const predictionResponse = await apiService.wasteBins.predictMaintenance(bin.binId || bin._id);
-                    return {
-                        bin,
-                        prediction: predictionResponse?.data?.data || predictionResponse?.data
-                    };
+                    // backend returns { data: { prediction: {...} } } — extract the inner prediction object
+                    const prediction =
+                        predictionResponse?.data?.data?.prediction ??
+                        predictionResponse?.data?.data ??
+                        predictionResponse?.data;
+                    return { bin, prediction };
                 } catch (error) {
                     console.warn(`Prediction failed for bin ${bin.binId}:`, error);
                     return null;

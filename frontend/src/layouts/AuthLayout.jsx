@@ -15,7 +15,7 @@ const AuthLayout = () => {
             <div className="w-full max-w-5xl">
                 <Outlet />
             </div>
-            <div className="fixed bottom-4 left-0 right-0 text-center text-xs text-slate-400 pointer-events-none">
+            <div className="fixed bottom-4 left-0 right-0 text-center font-data text-[10px] text-slate-400 pointer-events-none tracking-widest uppercase">
                 &copy; {new Date().getFullYear()} MedicalWaste.kz
             </div>
         </div>

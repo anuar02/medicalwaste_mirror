@@ -1,12 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Test style to verify CSS is working at all */
-.test-style {
-    background-color: red;
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+:root {
+  --bg-base:        #f0f4f8;
+  --bg-surface:     #ffffff;
+  --bg-elevated:    #f8fafc;
+  --bg-card:        #ffffff;
+  --border-subtle:  rgba(100,116,139,0.10);
+  --border-mid:     rgba(100,116,139,0.18);
+  --border-strong:  rgba(13,148,136,0.45);
+  --accent:         #0d9488;
+  --accent-bright:  #14b8a6;
+  --glow:           rgba(13,148,136,0.12);
+  --text-primary:   #1e293b;
+  --text-secondary: #64748b;
+  --text-muted:     #94a3b8;
+  --text-accent:    #0d9488;
+  --danger:         #ef4444;
+  --warning:        #f59e0b;
+  --success:        #059669;
 }
 
-.leaflet-container {
-    z-index: 0;
+/* ── Global base ──────────────────────────────────────────────────────────── */
+html, body, #root {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Subtle dot grid for main content ────────────────────────────────────── */
+.bg-grid {
+  background-image: radial-gradient(circle, rgba(100,116,139,0.15) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* ── Line grid ────────────────────────────────────────────────────────────── */
+.bg-lines {
+  background-image:
+    linear-gradient(rgba(100,116,139,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100,116,139,0.06) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── Custom scrollbar ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar            { width: 5px; height: 5px; }
+::-webkit-scrollbar-track      { background: var(--bg-elevated); }
+::-webkit-scrollbar-thumb      { background: rgba(100,116,139,0.25); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover{ background: rgba(13,148,136,0.4); }
+
+/* ── Nav active accent bar ────────────────────────────────────────────────── */
+.nav-active-bar {
+  position: relative;
+}
+.nav-active-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18%;
+  height: 64%;
+  width: 2px;
+  background: var(--accent-bright);
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── Leaflet fix ──────────────────────────────────────────────────────────── */
+.leaflet-container { z-index: 0; }
+
+/* ── Card hover lift ──────────────────────────────────────────────────────── */
+.card-hover {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.14s ease;
+}
+.card-hover:hover {
+  border-color: rgba(13,148,136,0.4);
+  box-shadow: 0 4px 16px rgba(13,148,136,0.1), 0 1px 4px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
+}
+
+/* ── Shadow utilities ─────────────────────────────────────────────────────── */
+.shadow-glow    { box-shadow: 0 0 16px rgba(13,148,136,0.12), 0 4px 16px rgba(0,0,0,0.06); }
+.shadow-glow-sm { box-shadow: 0 0 8px rgba(13,148,136,0.08), 0 2px 8px rgba(0,0,0,0.05); }
+
+/* ── Recharts light theme ─────────────────────────────────────────────────── */
+.recharts-text, .recharts-legend-item-text {
+  fill: var(--text-secondary) !important;
+  color: var(--text-secondary) !important;
+}
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(100,116,139,0.12) !important;
 }

@@ -229,7 +229,7 @@ export default function Login() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, ease: 'easeOut' }}
-            className="flex w-full rounded-2xl overflow-hidden shadow-2xl shadow-black/40 border border-white/5"
+            className="flex w-full rounded-2xl overflow-hidden shadow-2xl shadow-black/20 border border-slate-200"
         >
             {/* ── LEFT PANEL ─────────────────────────────────────────────── */}
             <div className="hidden md:flex md:flex-col relative w-[45%] bg-gradient-to-br from-slate-700 via-slate-600 to-teal-600 p-10 overflow-hidden select-none">
@@ -296,13 +296,13 @@ export default function Login() {
             >
                 {/* mobile logo */}
                 <div className="md:hidden flex items-center gap-2 mb-8">
-                    <ShieldCheck className="text-teal-500" style={{ width: 22, height: 22 }} />
-                    <span className="font-semibold text-slate-800 text-sm">MedicalWaste.kz</span>
+                    <ShieldCheck className="text-teal-400" style={{ width: 20, height: 20 }} />
+                    <span className="font-chakra font-semibold text-teal-300 text-xs tracking-widest uppercase">MedicalWaste.kz</span>
                 </div>
 
                 <div className="mb-7">
-                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Вход в систему</h2>
-                    <p className="mt-1 text-sm text-slate-400">Выберите способ авторизации</p>
+                    <h2 className="font-chakra text-2xl font-bold text-slate-900 tracking-tight">Вход в систему</h2>
+                    <p className="mt-1 text-sm text-slate-500">Выберите способ авторизации</p>
                 </div>
 
                 {/* tab switcher */}
@@ -432,7 +432,7 @@ export default function Login() {
                                             <button
                                                 type="button"
                                                 onClick={() => { setCode(''); setCodeSent(false); setError(''); }}
-                                                className="text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors"
+                                                className="text-sm font-medium text-teal-400 hover:text-teal-300 transition-colors"
                                             >
                                                 Отправить код заново
                                             </button>
@@ -512,7 +512,7 @@ export default function Login() {
                             />
                             Запомнить меня
                         </label>
-                        <Link to="/forgot-password" className="text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors">
+                        <Link to="/forgot-password" className="text-sm font-medium text-teal-400 hover:text-teal-300 transition-colors">
                             Забыли пароль?
                         </Link>
                     </div>
@@ -551,7 +551,7 @@ export default function Login() {
                         <>
                             <div className="relative my-5">
                                 <div className="absolute inset-0 flex items-center">
-                                    <div className="w-full border-t border-slate-100" />
+                                    <div className="w-full border-t border-panel" />
                                 </div>
                                 <div className="relative flex justify-center">
                                     <span className="bg-white px-3 text-xs text-slate-400">или войдите через</span>
@@ -577,7 +577,7 @@ export default function Login() {
 
                 <p className="mt-6 text-center text-sm text-slate-500">
                     Нет аккаунта?{' '}
-                    <Link to="/register" className="font-semibold text-teal-600 hover:text-teal-700 transition-colors">
+                    <Link to="/register" className="font-semibold text-teal-400 hover:text-teal-300 transition-colors">
                         Зарегистрироваться
                     </Link>
                 </p>

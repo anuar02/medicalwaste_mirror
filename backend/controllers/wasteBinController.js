@@ -366,37 +366,81 @@ const predictMaintenance = asyncHandler(async (req, res, next) => {
         return next(new AppError('No waste bin found with that ID', 404));
     }
 
-    // Simple prediction based on current fullness and historical data
     const recentHistory = await History.find({ binId: req.params.id })
         .sort({ timestamp: -1 })
-        .limit(10);
+        .limit(20);
+
+    const now = new Date();
+    const threshold = Number.isFinite(bin.alertThreshold) ? bin.alertThreshold : 80;
 
     let prediction = {
         maintenanceNeeded: false,
         priority: 'low',
         estimatedDays: null,
+        predictedFullDate: null,
+        recommendedCollectionDate: null,
+        confidence: 0.5,
         reasons: []
     };
 
-    // Check if maintenance is due based on fullness
-    if (bin.fullness >= bin.alertThreshold) {
+    // Already at or above threshold — needs immediate collection
+    if (bin.fullness >= threshold) {
         prediction.maintenanceNeeded = true;
         prediction.priority = 'high';
+        prediction.estimatedDays = 0;
+        prediction.predictedFullDate = now.toISOString();
+        prediction.recommendedCollectionDate = now.toISOString();
+        prediction.confidence = 0.95;
         prediction.reasons.push('Bin is at or above alert threshold');
     }
 
-    // Check for rapid filling trend
-    if (recentHistory.length >= 5) {
-        const avgIncrease = recentHistory.slice(0, 5).reduce((sum, h, i) => {
-            if (i === 0) return 0;
-            return sum + (recentHistory[i-1].fullness - h.fullness);
-        }, 0) / 4;
+    // Calculate fill rate from history
+    if (recentHistory.length >= 2) {
+        const oldest = recentHistory[recentHistory.length - 1];
+        const newest = recentHistory[0];
+        const hoursElapsed = (new Date(newest.timestamp) - new Date(oldest.timestamp)) / 3600000;
 
-        if (avgIncrease > 5) {
-            prediction.maintenanceNeeded = true;
-            prediction.priority = 'medium';
-            prediction.reasons.push('Rapid filling trend detected');
+        if (hoursElapsed > 0) {
+            const fillRatePerHour = (newest.fullness - oldest.fullness) / hoursElapsed;
+
+            if (fillRatePerHour > 0 && bin.fullness < 100) {
+                const hoursToFull = (100 - bin.fullness) / fillRatePerHour;
+                const hoursToThreshold = bin.fullness < threshold
+                    ? (threshold - bin.fullness) / fillRatePerHour
+                    : 0;
+
+                prediction.estimatedDays = Math.max(0, Math.round(hoursToFull / 24));
+                prediction.predictedFullDate = new Date(now.getTime() + hoursToFull * 3600000).toISOString();
+                prediction.recommendedCollectionDate = new Date(
+                    now.getTime() + Math.max(0, hoursToThreshold) * 3600000
+                ).toISOString();
+                // Confidence grows with more history data points
+                prediction.confidence = Math.min(0.95, 0.45 + (recentHistory.length / 20) * 0.5);
+
+                if (fillRatePerHour > 5) {
+                    prediction.maintenanceNeeded = true;
+                    if (prediction.priority !== 'high') prediction.priority = 'medium';
+                    prediction.reasons.push('Rapid filling trend detected');
+                } else if (prediction.estimatedDays <= 2 && !prediction.maintenanceNeeded) {
+                    prediction.maintenanceNeeded = true;
+                    if (prediction.priority !== 'high') prediction.priority = 'medium';
+                    prediction.reasons.push('Bin will be full within 2 days');
+                }
+            }
         }
+    }
+
+    // Fallback when no usable history: estimate from current fullness
+    if (!prediction.predictedFullDate) {
+        const remaining = Math.max(1, 100 - bin.fullness);
+        const fallbackDays = Math.round(remaining / 10); // assume ~10%/day
+        prediction.estimatedDays = fallbackDays;
+        prediction.predictedFullDate = new Date(now.getTime() + fallbackDays * 86400000).toISOString();
+        prediction.recommendedCollectionDate = new Date(
+            now.getTime() + Math.max(1, fallbackDays - 1) * 86400000
+        ).toISOString();
+        prediction.confidence = 0.3;
+        prediction.reasons.push('Estimated from current fullness level (no recent history)');
     }
 
     res.status(200).json({

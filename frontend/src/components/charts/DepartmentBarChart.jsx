@@ -2,47 +2,72 @@
 import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
 import {
-    BarChart,
+    ComposedChart,
     Bar,
+    Line,
     XAxis,
     YAxis,
     CartesianGrid,
     Tooltip,
-    Legend,
     ResponsiveContainer,
     Cell,
 } from 'recharts';
 
-// Custom tooltip component with extra safety checks
+// ── helpers (must be declared before the components that reference them) ─────
+
+const SHORT_NAMES = {
+    'Хирургическое Отделение': 'Хирургия',
+    'Терапевтическое Отделение': 'Терапия',
+    'Педиатрическое Отделение': 'Педиатрия',
+    'Акушерское Отделение': 'Акушерство',
+    'Инфекционное Отделение': 'Инфекция',
+    'Реанимация': 'Реанимация',
+    'Лаборатория': 'Лаборатория',
+};
+
+function shortenDepartmentName(name) {
+    if (!name) return 'Unknown';
+    return SHORT_NAMES[name] || name;
+}
+
+function getColorByFullness(fullness) {
+    if (fullness > 80) return 'url(#criticalGradient)';
+    if (fullness > 60) return 'url(#warningGradient)';
+    return 'url(#fullnessGradient)';
+}
+
+// ── CustomTooltip ─────────────────────────────────────────────────────────────
+
 const CustomTooltip = ({ active, payload, label }) => {
-    if (!active || !payload || !payload.length) {
-        return null;
-    }
+    if (!active || !payload || !payload.length) return null;
 
     return (
-        <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
-            <p className="mb-1 text-sm font-semibold text-slate-700">{label || 'Unknown'}</p>
-            <div className="space-y-1">
+        <div className="rounded-xl border border-slate-200 bg-white/95 p-3 shadow-xl shadow-slate-900/10 backdrop-blur">
+            <p className="mb-2 text-sm font-semibold text-slate-800">{label || 'Unknown'}</p>
+            <div className="space-y-1.5">
                 {payload[0] && (
-                    <p className="text-sm text-teal-600">
-                        <span className="inline-block h-2 w-2 rounded-full bg-teal-500 mr-1"></span>
-                        Заполненность: <span className="font-semibold">
+                    <p className="text-sm text-slate-600">
+                        <span className="mr-2 inline-block h-2 w-2 rounded-full bg-teal-500" />
+                        Заполненность:{' '}
+                        <span className="font-semibold">
                             {payload[0].value !== undefined ? `${payload[0].value.toFixed(1)}%` : 'N/A'}
                         </span>
                     </p>
                 )}
                 {payload[1] && (
-                    <p className="text-sm text-blue-600">
-                        <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-1"></span>
-                        Контейнеров: <span className="font-semibold">
+                    <p className="text-sm text-slate-600">
+                        <span className="mr-2 inline-block h-2 w-2 rounded-full bg-blue-500" />
+                        Контейнеров:{' '}
+                        <span className="font-semibold">
                             {payload[1].value !== undefined ? payload[1].value : 'N/A'}
                         </span>
                     </p>
                 )}
                 {payload[2] && (
                     <p className="text-sm text-purple-600">
-                        <span className="inline-block h-2 w-2 rounded-full bg-purple-500 mr-1"></span>
-                        Общий вес: <span className="font-semibold">
+                        <span className="inline-block h-2 w-2 rounded-full bg-purple-500 mr-1" />
+                        Общий вес:{' '}
+                        <span className="font-semibold">
                             {payload[2].value !== undefined ? `${payload[2].value.toFixed(1)} кг` : 'N/A'}
                         </span>
                     </p>
@@ -53,36 +78,33 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 CustomTooltip.propTypes = {
-    active: PropTypes.bool,
+    active:  PropTypes.bool,
     payload: PropTypes.array,
-    label: PropTypes.string,
+    label:   PropTypes.string,
 };
 
-const DepartmentBarChart = ({ data }) => {
-    // Format department names and ensure data integrity
+// ── DepartmentBarChart ────────────────────────────────────────────────────────
+
+export default function DepartmentBarChart({ data }) {
     const chartData = useMemo(() => {
-        if (!data || !Array.isArray(data) || data.length === 0) {
-            return [];
-        }
-
-        return data.map(item => {
-            if (!item) return null;
-
-            return {
-                department: item.department || 'Unknown',
-                shortDepartment: shortenDepartmentName(item.department || 'Unknown'),
-                // Provide defaults for potentially missing data
-                binCount: item.binCount || 0,
-                avgFullness: item.avgFullness || 0,
-                totalWeight: item.totalWeight || 0
-            };
-        }).filter(Boolean); // Remove null items
+        if (!Array.isArray(data) || data.length === 0) return [];
+        return data
+            .map((item) => {
+                if (!item) return null;
+                return {
+                    department:      item.department || 'Unknown',
+                    shortDepartment: shortenDepartmentName(item.department || 'Unknown'),
+                    binCount:        item.binCount    || 0,
+                    avgFullness:     item.avgFullness  || 0,
+                    totalWeight:     item.totalWeight  || 0,
+                };
+            })
+            .filter(Boolean);
     }, [data]);
 
-    // Don't render chart if no data
     if (chartData.length === 0) {
         return (
-            <div className="flex h-full w-full items-center justify-center text-slate-400">
+            <div className="flex h-full w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-slate-400">
                 Нет данных для отображения
             </div>
         );
@@ -90,19 +112,38 @@ const DepartmentBarChart = ({ data }) => {
 
     return (
         <ResponsiveContainer width="100%" height="100%">
-            <BarChart
+            <ComposedChart
                 data={chartData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+                margin={{ top: 18, right: 18, left: 0, bottom: 32 }}
+                barCategoryGap="24%"
             >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <defs>
+                    <linearGradient id="fullnessGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#14b8a6" stopOpacity={0.95} />
+                        <stop offset="100%" stopColor="#99f6e4" stopOpacity={0.55} />
+                    </linearGradient>
+                    <linearGradient id="criticalGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#ef4444" stopOpacity={0.95} />
+                        <stop offset="100%" stopColor="#fecaca" stopOpacity={0.65} />
+                    </linearGradient>
+                    <linearGradient id="warningGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#f59e0b" stopOpacity={0.95} />
+                        <stop offset="100%" stopColor="#fde68a" stopOpacity={0.70} />
+                    </linearGradient>
+                </defs>
+
+                <CartesianGrid strokeDasharray="4 8" stroke="#e2e8f0" vertical={false} />
+
                 <XAxis
                     dataKey="shortDepartment"
                     stroke="#64748b"
-                    tick={{ fontSize: 12 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
                     interval={0}
-                    angle={-45}
+                    angle={-28}
                     textAnchor="end"
-                    height={60}
+                    height={52}
                 />
                 <YAxis
                     yAxisId="left"
@@ -110,13 +151,10 @@ const DepartmentBarChart = ({ data }) => {
                     stroke="#0d9488"
                     domain={[0, 100]}
                     tickCount={6}
-                    tick={{ fontSize: 12 }}
-                    label={{
-                        value: 'Заполненность (%)',
-                        angle: -90,
-                        position: 'insideLeft',
-                        style: { textAnchor: 'middle', fill: '#0d9488', fontSize: 12 }
-                    }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${v}%`}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
                 />
                 <YAxis
                     yAxisId="right"
@@ -124,35 +162,20 @@ const DepartmentBarChart = ({ data }) => {
                     stroke="#3b82f6"
                     domain={[0, 'dataMax + 2']}
                     allowDecimals={false}
-                    tick={{ fontSize: 12 }}
-                    label={{
-                        value: 'Количество',
-                        angle: 90,
-                        position: 'insideRight',
-                        style: { textAnchor: 'middle', fill: '#3b82f6', fontSize: 12 }
-                    }}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend
-                    verticalAlign="top"
-                    height={40}
-                    formatter={(value) => {
-                        const colors = {
-                            'avgFullness': '#0d9488',
-                            'binCount': '#3b82f6',
-                            'totalWeight': '#8b5cf6'
-                        };
-                        return <span style={{ color: colors[value] }}>{getLegendLabel(value)}</span>;
-                    }}
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
                 />
 
-                {/* Bars */}
+                <Tooltip content={<CustomTooltip />} />
+
                 <Bar
                     yAxisId="left"
                     dataKey="avgFullness"
                     name="avgFullness"
-                    fill="#0d9488"
-                    radius={[4, 4, 0, 0]}
+                    fill="url(#fullnessGradient)"
+                    radius={[8, 8, 2, 2]}
+                    maxBarSize={42}
                 >
                     {chartData.map((entry, index) => (
                         <Cell
@@ -161,13 +184,18 @@ const DepartmentBarChart = ({ data }) => {
                         />
                     ))}
                 </Bar>
-                <Bar
+
+                <Line
                     yAxisId="right"
+                    type="monotone"
                     dataKey="binCount"
                     name="binCount"
-                    fill="#3b82f6"
-                    radius={[4, 4, 0, 0]}
+                    stroke="#2563eb"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#ffffff', stroke: '#2563eb', strokeWidth: 2 }}
+                    activeDot={{ r: 6, fill: '#2563eb', stroke: '#ffffff', strokeWidth: 2 }}
                 />
+
                 <Bar
                     yAxisId="right"
                     dataKey="totalWeight"
@@ -176,53 +204,18 @@ const DepartmentBarChart = ({ data }) => {
                     radius={[4, 4, 0, 0]}
                     hide
                 />
-            </BarChart>
+            </ComposedChart>
         </ResponsiveContainer>
     );
-};
+}
 
 DepartmentBarChart.propTypes = {
     data: PropTypes.arrayOf(
         PropTypes.shape({
-            department: PropTypes.string,
-            binCount: PropTypes.number,
+            department:  PropTypes.string,
+            binCount:    PropTypes.number,
             avgFullness: PropTypes.number,
             totalWeight: PropTypes.number,
         })
     ),
 };
-
-// Helper functions
-const shortenDepartmentName = (name) => {
-    if (!name) return 'Unknown';
-
-    const shortNames = {
-        'Хирургическое Отделение': 'Хирургия',
-        'Терапевтическое Отделение': 'Терапия',
-        'Педиатрическое Отделение': 'Педиатрия',
-        'Акушерское Отделение': 'Акушерство',
-        'Инфекционное Отделение': 'Инфекция',
-        'Реанимация': 'Реанимация',
-        'Лаборатория': 'Лаборатория',
-    };
-
-    return shortNames[name] || name;
-};
-
-const getColorByFullness = (fullness) => {
-    if (fullness > 80) return '#ef4444'; // Red
-    if (fullness > 60) return '#f59e0b'; // Amber
-    return '#0d9488'; // Teal
-};
-
-const getLegendLabel = (value) => {
-    const labels = {
-        'avgFullness': 'Средняя заполненность',
-        'binCount': 'Количество контейнеров',
-        'totalWeight': 'Общий вес'
-    };
-
-    return labels[value] || value;
-};
-
-export default DepartmentBarChart;
